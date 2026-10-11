@@ -120,3 +120,64 @@ def test_check_constraint_allows_valid_status(pg_engine) -> None:
             ),
             {"cid": uuid.uuid4(), "uid": user_id, "status": CheckInStatus.SAFE},
         )
+
+
+def test_password_hash_column_exists_and_is_nullable(pg_engine) -> None:
+    """users.password_hash exists on real PostgreSQL and accepts NULL.
+
+    NULL must be allowed so a future Firebase-only account (no local
+    password) can still be stored as a row.
+    """
+    with pg_engine.connect() as connection:
+        row = connection.execute(
+            sa.text(
+                "SELECT is_nullable FROM information_schema.columns "
+                "WHERE table_name = 'users' AND column_name = 'password_hash'"
+            )
+        ).fetchone()
+    assert row is not None, "password_hash column missing from users table"
+    assert row[0] == "YES"
+
+
+def test_password_hash_stores_argon2id_hash(pg_engine) -> None:
+    """A real Argon2id hash round-trips through PostgreSQL."""
+    from app.core.security import hash_password, verify_password
+
+    stored = hash_password("s3cure-Pass!")
+    user = User(
+        display_name="PG Auth",
+        email="pg-auth@example.com",
+        password_hash=stored,
+    )
+    with pg_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, email, password_hash, "
+                "created_at, updated_at) VALUES (:id, :name, :email, :ph, now(), now())"
+            ),
+            {"id": uuid.uuid4(), "name": user.display_name, "email": user.email, "ph": stored},
+        )
+        saved_hash = connection.execute(
+            sa.text("SELECT password_hash FROM users WHERE email = :email"),
+            {"email": user.email},
+        ).scalar()
+    assert saved_hash.startswith("$argon2id$")
+    assert verify_password("s3cure-Pass!", saved_hash) is True
+    assert verify_password("wrong", saved_hash) is False
+
+
+def test_firebase_only_account_allows_null_password(pg_engine) -> None:
+    """A row with firebase_uid and NO local password is storable."""
+    with pg_engine.begin() as connection:
+        connection.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, firebase_uid, password_hash, "
+                "created_at, updated_at) "
+                "VALUES (:id, 'FB User', :uid, NULL, now(), now())"
+            ),
+            {"id": uuid.uuid4(), "uid": f"fb-{uuid.uuid4()}"},
+        )
+        count = connection.execute(
+            sa.text("SELECT count(*) FROM users WHERE password_hash IS NULL")
+        ).scalar()
+    assert count == 1

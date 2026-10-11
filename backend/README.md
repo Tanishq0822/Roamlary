@@ -8,9 +8,9 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phase 2 — PostgreSQL, models & migrations)
+## Current scope (Phase 3 — Authentication & user profiles)
 
-Implemented now (on top of the Phase 1 foundation):
+Implemented now (on top of the Phase 1 foundation + Phase 2 database):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -21,14 +21,19 @@ Implemented now (on top of the Phase 1 foundation):
 - **Five domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
   `CommunityReport` — with UUID keys, timestamps, CHECK constraints and
   `ON DELETE RESTRICT` foreign keys
-- **Alembic migrations** (initial schema generated and applied to `roamlary_dev`)
-- Automated test suite: **35 tests** (31 offline + 4 real-PostgreSQL integration)
+- **Alembic migrations** (initial schema + `password_hash` column)
+- **Local authentication**: `POST /auth/register`, `POST /auth/login`
+  (Argon2id password hashing + HS256 JWT access tokens)
+- **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
+- Automated test suite: **69 tests** (auth + profiles + models + migrations +
+  real-PostgreSQL integration)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
-them to exist): API CRUD endpoints for these models, authentication and user
-profiles, trusted-contact/check-in/SOS/report workflows, AI companion,
-notifications, production deployment. Phase 2 built the database *foundation*
-only — the tables exist but nothing exposes them over HTTP yet.
+them to exist): Firebase Authentication, refresh tokens, password reset, email
+verification, roles/permissions, trusted-contact/check-in/SOS/report **workflow
+endpoints**, AI companion, notifications, production deployment. Authentication
+here is a **local prototype** — it needs real security work (HTTPS, rate
+limiting, token revocation) before any production claim.
 
 ## Prerequisites
 
@@ -60,10 +65,26 @@ Copy-Item .env.example .env
 | `APP_HOST` / `APP_PORT` | Bind address (keep in sync with the uvicorn flags) | `127.0.0.1` / `8000` |
 | `CORS_ORIGINS` | Comma-separated origins allowed by the browser CORS policy | `http://localhost:3000,http://10.0.2.2:3000` |
 | `DATABASE_URL` | SQLAlchemy URL: `postgresql+psycopg://USER:PASSWORD@localhost:5432/DBNAME` | `.../roamlary_dev` |
+| `JWT_SECRET_KEY` | Secret used to sign/verify access tokens (HS256). **Empty by default → auth returns 503 (fail-closed)** | *(empty)* |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Access-token lifetime in minutes (short; no refresh tokens) | `60` |
 
-> **Credentials:** the real `DATABASE_URL` (with the container password) lives
-> only in `.env`, which is gitignored. `.env.example` holds a placeholder. Never
-> commit the real `.env`, and never paste the real URL into chat, docs, or logs.
+> **Credentials:** the real `DATABASE_URL` (with the container password) and the
+> real `JWT_SECRET_KEY` live only in `.env`, which is gitignored. `.env.example`
+> holds placeholders. Never commit the real `.env`, and never paste the real URL
+> or secret into chat, docs, or logs.
+
+### Generating a safe JWT secret (never commit it)
+
+Produce a random value locally and paste it into your `.env` as
+`JWT_SECRET_KEY=...`. Do **not** use a guessable or reused string. On PowerShell:
+
+```powershell
+-join ((33..126) | Get-Random -Count 48 | ForEach-Object { [char]$_ })
+```
+
+The empty default is deliberate: if the secret is missing, `create/decode_access_token`
+refuse to run (503) rather than sign with a weak built-in value. The public
+`/api/v1/health` endpoint still works with an empty secret.
 
 ## Database architecture
 
@@ -136,10 +157,58 @@ This is a **liveness** check only: it confirms the process is running. It does
 **not** claim database, AI, or notification connectivity — those phases do not
 exist yet. Unknown routes return HTTP 404.
 
+## Authentication (local prototype)
+
+Four endpoints. Register and login are public; the two `/users/me` routes need a
+bearer token.
+
+| Method + Path | Auth | Body | Success |
+| --- | --- | --- | --- |
+| `POST /api/v1/auth/register` | none | `display_name`, `email`, `password` | `201` → `{access_token, token_type}` |
+| `POST /api/v1/auth/login` | none | `email`, `password` | `200` → `{access_token, token_type}` |
+| `GET /api/v1/users/me` | Bearer | — | `200` → public profile |
+| `PATCH /api/v1/users/me` | Bearer | `display_name` (only) | `200` → public profile |
+
+**Public profile shape** (the only fields ever returned — never `password_hash`):
+
+```json
+{ "id": "…", "display_name": "Asha", "email": "asha@example.com",
+  "created_at": "…", "updated_at": "…" }
+```
+
+Errors: duplicate email → `409`; wrong password **or** unknown email → `401`
+(same message, so accounts can't be enumerated); missing/bad/expired token →
+`401`; `PATCH` with a protected field (`password_hash`, `id`, `firebase_uid`) →
+`422`. Emails are normalized (trimmed + lowercased), so `Asha@Example.COM` and
+`asha@example.com` are the same account.
+
+### Try it in the Swagger UI
+
+1. Start the server and open <http://127.0.0.1:8000/docs>.
+2. Expand `POST /auth/register` → **Try it out** → fill `display_name`, `email`,
+   `password` (min 8 chars) → **Execute**. Copy the `access_token` from the 201
+   response.
+3. Expand `GET /users/me` → **Try it out** → set **Value** to `Bearer <paste the token>`
+   (or click **Authorize** at the top and paste the raw token) → **Execute**.
+4. `PATCH /users/me` works the same way; send `{"display_name": "New Name"}`.
+
+### Using the token from a client (high level)
+
+Send it on every protected request as a header:
+`Authorization: Bearer <access_token>`. Store it securely on-device (e.g. the
+platform keystore/keychain), **not** in plain logs. The token expires after
+`ACCESS_TOKEN_EXPIRE_MINUTES`; because there are **no refresh tokens**, the user
+simply logs in again to get a new one. Real token storage is the frontend
+workstream's job — no Flutter screens exist yet.
+
 ## Migrations (Alembic)
 
 Alembic creates and evolves the schema. The migration files live in
 `alembic/versions/` and are committed as source code.
+
+Applied migrations on `roamlary_dev`:
+- `cc78d54068bb` — initial schema (Phase 2): the five tables.
+- `d9841015aec7` — adds the nullable `users.password_hash` column (Phase 3).
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -179,13 +248,13 @@ Then put the matching `DATABASE_URL` in `.env`.
 
 Two test layers exist. Do not confuse them:
 
-- **Offline unit tests** (31) — use an in-memory SQLite database and the FastAPI
-  `TestClient`. No PostgreSQL, no network. They prove model behaviour and route
-  contracts.
-- **PostgreSQL integration tests** (4) — run against a **disposable** database
+- **Offline unit tests** (62) — use an in-memory SQLite database and the FastAPI
+  `TestClient`. No PostgreSQL, no network. They prove model behaviour, auth
+  flows (register/login/JWT/profile), and route contracts.
+- **PostgreSQL integration tests** (7) — run against a **disposable** database
   and prove real PostgreSQL behaviour (native `uuid` columns, CHECK
-  constraint enforcement, timezone-aware timestamps). They are **skipped**
-  unless you point them at a throwaway database.
+  constraint enforcement, timezone-aware timestamps, and the `password_hash`
+  column). They are **skipped** unless you point them at a throwaway database.
 
 ```powershell
 # Default run (PostgreSQL integration tests will be SKIPPED)
@@ -221,6 +290,12 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `alembic ... Can't locate revision` | Bad/empty `alembic/versions/` | Confirm migration files exist; check `alembic current` |
 | PostgreSQL integration tests skipped | `ROAMLARY_TEST_DATABASE_URL` not set | Set it to a **disposable** database URL (see Tests above) |
 | `CREATE DATABASE cannot run inside a transaction` | DDL run on a transactional connection | Use a real `createdb`/`docker exec`, not a plain SQL session |
+| Auth endpoints return `503` | `JWT_SECRET_KEY` is empty (auth fails closed by design) | Generate a secret (see Environment config) and set `JWT_SECRET_KEY=` in `.env`, restart |
+| `401` on `/users/me` right after login | Token missing/expired, or sent without the `Bearer ` prefix | Send `Authorization: Bearer <token>`; re-login if it expired (`ACCESS_TOKEN_EXPIRE_MINUTES`) |
+| `401 Invalid email or password` when the account exists | Wrong password — or the account has no `password_hash` (Firebase-only) | Confirm the password; local login only works for accounts that set a password at register |
+| `409` on register | That email already has an account | Log in instead, or use a different email |
+| `422` on `PATCH /users/me` | Body contains a protected/unknown field | Send **only** `display_name`; `id`, `email`, `password_hash`, `firebase_uid` are not editable here |
+| Pydantic error mentioning `email-validator` | `EmailStr` needs the `email-validator` package | Re-run `.venv\Scripts\python -m pip install -e ".[dev]"` |
 
 ## Development log
 

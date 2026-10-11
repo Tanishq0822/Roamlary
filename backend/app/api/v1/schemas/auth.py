@@ -1,0 +1,95 @@
+"""Request and response schemas for authentication (Phase 3).
+
+Plain language: Pydantic schemas are the "shapes" of the data the API
+accepts and returns. They do three jobs: they validate and normalize
+incoming data, they document the API, and - just as important here - they
+decide which fields are VISIBLE to a client. `UserProfile` deliberately
+omits `password_hash`, so the hash can never leak in a response.
+"""
+
+from datetime import datetime
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+
+
+class RegisterRequest(BaseModel):
+    """Body for POST /auth/register."""
+
+    display_name: str = Field(..., min_length=1, max_length=80)
+    email: EmailStr
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("display_name")
+    @classmethod
+    def strip_display_name(cls, value: str) -> str:
+        """Trim surrounding whitespace from the display name."""
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("display_name must not be blank")
+        return stripped
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        """Normalize email: trim + lowercase, so 'A@B.com' == 'a@b.com'."""
+        return value.strip().lower()
+
+
+class LoginRequest(BaseModel):
+    """Body for POST /auth/login."""
+
+    email: EmailStr
+    password: str = Field(..., min_length=1, max_length=128)
+
+    @field_validator("email")
+    @classmethod
+    def normalize_email(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class TokenResponse(BaseModel):
+    """Successful login/register response."""
+
+    access_token: str
+    token_type: str = "bearer"
+
+
+class UserProfile(BaseModel):
+    """The PUBLIC profile shape returned by the API.
+
+    Notice what is missing: `password_hash` and `firebase_uid`. Fields are
+    only exposed here if the client is meant to see them. `model_config`
+    with from_attributes lets FastAPI build this from a SQLAlchemy object.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    display_name: str
+    email: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class UserProfileUpdate(BaseModel):
+    """Body for PATCH /users/me - only fields a user may self-edit.
+
+    `extra="forbid"` makes any unknown field (e.g. `id`, `password_hash`,
+    `firebase_uid`) a 422 validation error instead of being silently
+    ignored, so protected fields cannot be smuggled in.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None = Field(None, min_length=1, max_length=80)
+
+    @field_validator("display_name")
+    @classmethod
+    def strip_display_name(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("display_name must not be blank")
+        return stripped

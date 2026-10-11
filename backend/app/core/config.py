@@ -44,6 +44,17 @@ class Settings(BaseSettings):
     # actually used, so the app and its tests still run without PostgreSQL.
     database_url: str = "postgresql+psycopg://roamlary:change-me@localhost:5432/roamlary_dev"
 
+    # Authentication (Phase 3). Local JWT signing.
+    # jwt_secret_key: the server-side secret used to sign access tokens
+    # (HS256). EMPTY by default on purpose - auth endpoints FAIL CLOSED
+    # (503) until a real secret is set, so a usable signing key is never
+    # hard-coded. The public health endpoint does not depend on this and
+    # still starts. Set it in .env via the generation command in README.
+    jwt_secret_key: str = ""
+    # Short access-token lifetime for the prototype. Refresh tokens are
+    # NOT implemented (out of scope for Phase 3).
+    access_token_expire_minutes: int = 60
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def split_cors_origins(cls, value: object) -> object:

@@ -1,9 +1,11 @@
 """User profile table.
 
-Plain language: one row = one Roamlary account. No passwords are stored
-here. `firebase_uid` is an optional external reference: when Firebase
-Authentication is integrated in a later phase, this column stores the
-identifier Firebase gives the user. It stays empty until then.
+Plain language: one row = one Roamlary account. Local accounts store only a
+securely hashed password (never the plaintext). `firebase_uid` is an optional
+external reference: when Firebase Authentication is integrated in a later
+phase, this column stores the identifier Firebase gives the user. A
+Firebase-only account may have a NULL password_hash because it never uses a
+local password.
 """
 
 from __future__ import annotations
@@ -33,9 +35,16 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     display_name: Mapped[str] = mapped_column(String(80), nullable=False)
 
-    # Optional and unique: emails are optional in Phase 2 (no auth yet),
-    # but if present they must not collide between accounts.
+    # Local email/password accounts always have an email, but the column
+    # stays nullable so a future Firebase-only account can exist without one.
+    # Unique: one account per email. Values are normalized (trimmed +
+    # lowercased) in the application layer before saving.
     email: Mapped[str | None] = mapped_column(String(254), unique=True)
+
+    # Argon2id hash of the password for LOCAL accounts only. Nullable so a
+    # future Firebase-only account (no local password) can still be a row.
+    # NEVER returned by any API response - it is excluded from every schema.
+    password_hash: Mapped[str | None] = mapped_column(String(255))
 
     # Relationships ("one user has many X"). Deleting a user who still
     # has safety records is deliberately BLOCKED at the database level

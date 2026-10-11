@@ -35,14 +35,15 @@ the project owner; the backend lead implements only assigned phases.**
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (created with owner approval; local only, never pushed) |
-| History | `4761b41` initial setup → `c06d092` scaffolding → `11f2d7e` report → *(Phase 1 delta uncommitted, see §7)* |
+| Branch | `backend` (Phases 1–2 pushed to `origin/backend`; Phase 3 uncommitted in working tree) |
+| History | `4761b41` initial setup → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → *(Phase 3 delta uncommitted, see §9)* |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
 | PostgreSQL | **Running locally** — server 16.15 in the Docker container `roamlary-postgres-dev` (databases: `roamlary_dev`, `roamlary_test`). No system-wide install | 
 | Docker | Engine started for Phase 2 (image `postgres:16-alpine`). Stop it when not needed: `docker stop roamlary-postgres-dev` |
 | Flutter | 3.47.7 stable (frontend untouched by backend work) |
-| Secrets in repo | **None found** — only `.env.example` templates exist |
+| Secrets in repo | **None found** — only `.env.example` templates exist (the real `JWT_SECRET_KEY` lives only in the gitignored `.env`) |
+| Auth libraries | `argon2-cffi==25.1.0` (Argon2id password hashing) + `PyJWT==2.15.1` (HS256 JWTs), added in Phase 3 |
 | Frontend project | `frontend/roamlary_app` — default Flutter template, no app logic, no HTTP package |
 
 ## 3. Development phases and status
@@ -55,7 +56,7 @@ lead waits for each phase assignment):
 | 0 | Repository inspection & planning | ✅ Complete (approved by owner: "ok you can do that") |
 | 1 | FastAPI foundation | ✅ **Complete — implemented & verified** (this report §7) |
 | 2 | PostgreSQL connection, models, migrations | ✅ **Complete — implemented & verified** (this report §8) |
-| 3 | Authentication & user profiles | ⏳ Not started — awaiting owner assignment |
+| 3 | Authentication & user profiles | 🔄 **In progress** — being implemented now (this report §9) |
 | 4 | Trusted contacts & safety check-ins | ⏳ Not started |
 | 5 | SOS & emergency workflow (simulated) | ⏳ Not started |
 | 6 | Community safety reports & location data | ⏳ Not started |
@@ -79,16 +80,20 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-11 | Phase 0 / Task 002 (pre-Phase-1 approval) | Owner approved scaffolding: created `backend` branch + FastAPI skeleton, config, `/api/v1/health` v1 response, 3 tests, gitignores, README | commit `c06d092` (local) |
 | 2026-10-12 | REPORT.md | Owner requested development log file → created `backend/REPORT.md` | commit `11f2d7e` (local) |
 | 2026-10-12 | Phase 0 (formal) | Formal read-only re-inspection & plan delivered (architecture, proposed API, proposed DB, Phases 0–11 plan, reporting standard). Zero changes made | no changes |
-| 2026-10-12 | **Phase 1** | Owner assigned Phase 1 → aligned health contract to owner-specified format, removed premature `database_url` setting, expanded tests 3→7, updated README, renamed `REPORT.md`→`report.md`, rewrote this report | **uncommitted working-tree changes** (owner rule: no commits during phases) |
-| 2026-10-12 | **Phase 2** | Owner assigned Phase 2 → started Docker engine (approved K4), ran `postgres:16-alpine` container, added `DATABASE_URL` config, engine/session/get_db, 5 models, Alembic + initial migration (applied to `roamlary_dev`), 28 new tests, README + this report | **uncommitted working-tree changes** (Phase 1 + Phase 2 both uncommitted; still no commits) |
+| 2026-10-12 | **Phase 1** | Owner assigned Phase 1 → aligned health contract to owner-specified format, removed premature `database_url` setting, expanded tests 3→7, updated README, renamed `REPORT.md`→`report.md`, rewrote this report | committed as `5ea9b59`, pushed to `origin/backend` (owner later said "commit and push") |
+| 2026-10-12 | **Phase 2** | Owner assigned Phase 2 → started Docker engine (approved K4), ran `postgres:16-alpine` container, added `DATABASE_URL` config, engine/session/get_db, 5 models, Alembic + initial migration (applied to `roamlary_dev`), 28 new tests, README + this report | committed as `eb8e709`, pushed to `origin/backend` (owner approval) |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
-**Implemented and verified (Phase 1):**
+**Implemented and verified (Phase 1 + Phase 3):**
 
 | Method + Path | Purpose | Auth | Response |
 |---|---|---|---|
 | `GET /api/v1/health` | Liveness check (process is running). Does NOT check database/AI/notifications | none | see below |
+| `POST /api/v1/auth/register` | Create a local account; returns a bearer token (auto-login) | none | `{access_token, token_type}` (HTTP 201) |
+| `POST /api/v1/auth/login` | Authenticate with email + password; returns a bearer token | none | `{access_token, token_type}` (HTTP 200) |
+| `GET /api/v1/users/me` | Return the authenticated user's public profile | Bearer JWT | `UserProfile` (see §9.6) |
+| `PATCH /api/v1/users/me` | Update the authenticated user's `display_name` | Bearer JWT | `UserProfile` |
 
 ```json
 GET /api/v1/health  →  HTTP 200
@@ -102,20 +107,33 @@ GET /api/v1/health  →  HTTP 200
 Unknown routes return HTTP 404. Interactive documentation at `/docs`, machine
 contract at `/api/v1/openapi.json`.
 
+Auth error behaviour: `POST /auth/register` returns **409** for a duplicate
+email; `POST /auth/login` returns **401** with the *same* message for "unknown
+email" and "wrong password" (so an attacker cannot enumerate accounts); a
+missing/invalid/expired token on `/users/me` returns **401**; a request body
+containing protected fields (e.g. `password_hash`, `id`, `firebase_uid`) on
+`PATCH /users/me` returns **422**.
+
 **Proposed for future phases — NOT IMPLEMENTED, do not call these:**
-`POST /auth/login`, `GET/PATCH /users/me`, `GET/POST/DELETE /contacts…`,
-`POST /check-ins`, `POST /check-ins/{id}/response`, `POST/GET/PATCH /sos/events…`,
-`POST /reports`, `GET /reports?lat&lon&radius`, `POST /ai/companion/messages`.
-(To be formalized with the owner during Phase 9 frontend alignment.)
+`GET/POST/DELETE /contacts…`, `POST /check-ins`,
+`POST /check-ins/{id}/response`, `POST/GET/PATCH /sos/events…`, `POST /reports`,
+`GET /reports?lat&lon&radius`, `POST /ai/companion/messages`.
+Refresh tokens, password reset, and email verification are also **not**
+implemented. (To be formalized with the owner during Phase 9 frontend
+alignment.)
 
 ## 6. Database design — IMPLEMENTED (Phase 2)
 
-Schema is now real: Alembic migration `cc78d54068bb` ("initial schema")
-applied to `roamlary_dev`. Full design rationale in §8.4.
+Schema is real and now spans Phase 2 + Phase 3 migrations, all applied to
+`roamlary_dev`:
+
+- `cc78d54068bb` — "initial schema" (Phase 2): the five tables below.
+- `d9841015aec7` — "add password_hash to users" (Phase 3): adds a nullable
+  `password_hash` (varchar 255) to `users`. Full rationale in §9.10.
 
 | Table | Purpose | Owner / deletion rule |
 |---|---|---|
-| `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, timestamps) | — |
+| `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, `password_hash` nullable, timestamps) | — |
 | `trusted_contacts` | Nominated safety contact (`name`, `phone`, `email` nullable) | `users` · `ON DELETE RESTRICT` |
 | `check_ins` | "Ping me by time T" (`status`, `due_at`, `completed_at`) | `users` · `ON DELETE RESTRICT` |
 | `sos_events` | **Simulated** incident (`status`, lat/lon, `resolved_at`) | `users` · `ON DELETE RESTRICT` |
@@ -653,30 +671,262 @@ foundation only.
 
 **Recommended next step:** the owner reviews this phase (report + working-tree
 diff) and, when satisfied, **assigns Phase 3** (authentication & user
-profiles). Because Phase 1 and Phase 2 are both still uncommitted, the owner
-may also ask for them to be committed first — the backend lead will not commit
-or push without that instruction.
+profiles). Phase 1 and Phase 2 are already committed (`5ea9b59`, `eb8e709`) and
+pushed to `origin/backend`, so they are safely backed up before Phase 3.
 
-## 9. Known limitations (current)
+## 9. Phase 3 record — Authentication & user profiles ✅
+
+### 9.1 Phase information
+
+- **Phase:** 3 — Local authentication (register/login) + protected user-profile
+  endpoints · **Status:** Complete, awaiting owner review
+- **Objective:** let a person create an account, log in, and read/edit their own
+  profile — securely, locally, with **no** Firebase and no later-phase
+  workflows.
+- **Approved decisions applied:** *local JWT first, Firebase-ready later.*
+  Email/password registration & login; only securely hashed passwords stored
+  (Argon2id); signed JWT access tokens (HS256); the existing `firebase_uid`
+  column stays optional/unused so future Firebase accounts fit; **no** Firebase
+  Authentication, refresh tokens, password reset, or email verification.
+- **Owner rules applied:** work only on verified `backend` branch; no commits,
+  no pushes; preserve the health contract & DB foundation; document here.
+
+### 9.2 How an auth request travels (actual implementation)
+
+```
+POST /api/v1/auth/register  {display_name, email, password}
+  → schemas/auth.py RegisterRequest validates + normalizes email (trim+lower)
+  → endpoints/auth.py register(): reject 409 if email taken
+  → security.py hash_password() = Argon2id hash (plaintext never stored)
+  → INSERT user, COMMIT
+  → security.py create_access_token(user.id) = HS256 JWT {sub, iat, exp}
+  → 201 {access_token, token_type:"bearer"}
+
+POST /api/v1/auth/login  {email, password}
+  → look up user by normalized email
+  → security.py verify_password() constant-time check against the hash
+  → success: 200 {access_token,...}   failure: 401 "Invalid email or password."
+     (same message for unknown-email and wrong-password → no account enumeration)
+
+GET /api/v1/users/me   Authorization: Bearer <jwt>
+  → deps.py get_current_user: OAuth2PasswordBearer extracts the token
+  → security.py decode_access_token(): verify HS256 signature + exp + sub
+  → load User by the sub UUID from the DB; if gone → 401
+  → handlers return ONLY the public UserProfile (no password_hash)
+```
+
+Identity ALWAYS comes from the verified token's `sub` claim — never from a
+client-supplied user id — so one user cannot read or edit another's profile.
+
+### 9.3 File-by-file change log (Phase 3)
+
+| Path | Created / Modified | Why it exists & how it works (simple language) | What breaks without it |
+|---|---|---|---|
+| `app/core/security.py` | **Created** | The two "security verbs": `hash_password`/`verify_password` (Argon2id via `argon2-cffi`, OWASP params time_cost=3, memory_cost=64 MiB, parallelism=4) and `create_access_token`/`decode_access_token` (HS256 via `PyJWT`). The algorithm is a **constant**, never read from the token (blocks algorithm-confusion). `_require_secret()` **fails closed** (503) if `JWT_SECRET_KEY` is empty, so no token is ever signed with a weak/default secret. Tokens carry only `sub`+`iat`+`exp` — no password/hash/PII | Without it: endpoints would hold crypto logic; a usable secret could leak into code; "none"-algorithm attacks possible |
+| `app/api/v1/schemas/auth.py` | **Created** | Pydantic shapes for the API. `RegisterRequest`/`LoginRequest` (EmailStr + password 8–128), a `normalize_email` validator (trim+lower), `TokenResponse`, and crucially `UserProfile` — the PUBLIC shape that **omits `password_hash`** so it can never be returned. `UserProfileUpdate` has `extra="forbid"` so `PATCH` with `id`/`password_hash`/`firebase_uid` is a 422, not silently ignored | Without it: unvalidated input; the password hash could leak in a response; protected fields could be smuggled in |
+| `app/api/v1/deps.py` | **Created** | `get_current_user` — the gatekeeper. `OAuth2PasswordBearer` pulls the bearer token (auto-401 if missing); `decode_access_token` validates it; then loads the User by `sub`. A valid token for a deleted user still gets 401. Exports `CurrentUser`/`DbSession` type aliases so handlers stay short | Without it: no reusable way to say "this route needs a logged-in user"; identity could be taken from the request body |
+| `app/api/v1/endpoints/auth.py` | **Created** | `POST /auth/register` (409 on duplicate, incl. a race caught by the unique constraint via `IntegrityError`→rollback→409) and `POST /auth/login` (identical 401 for unknown-email vs wrong-password). Both stay thin; crypto lives in `security.py` | Without it: no way to create an account or obtain a token |
+| `app/api/v1/endpoints/users.py` | **Created** | `GET /users/me` and `PATCH /users/me`. Identity from the token only. PATCH edits `display_name`, bumps `updated_at`, commits, and relies on `extra="forbid"` to reject protected fields | Without it: no protected profile to prove the token works and that hashes stay private |
+| `app/models/user.py` | **Modified** | Added `password_hash: Mapped[str \| None]` (varchar 255). **Nullable** so a future Firebase-only account needs no local password; local registration always sets it. Never in any public schema | Without it: no place to store the hash → local login impossible |
+| `app/core/config.py` | **Modified** | Added `jwt_secret_key` (empty by default → auth fails closed) and `access_token_expire_minutes` (60, short for the prototype). Both read from env/`.env` like every other setting | Without it: the signing secret & lifetime would be hard-coded |
+| `.env.example` | **Modified** | Added `JWT_SECRET_KEY=` (empty) + `ACCESS_TOKEN_EXPIRE_MINUTES=60` with a PowerShell command to generate a random secret. Placeholders only | Without it: the owner wouldn't know these settings exist or how to make a secret safely |
+| `app/api/v1/router.py` | **Modified** | Registered `auth.router` and `users.router` alongside `health` | Without it: the new routes would 404 |
+| `pyproject.toml` | **Modified** | Pinned `argon2-cffi==25.1.0`, `PyJWT==2.15.1`, `email-validator==2.3.0` (needed by Pydantic's `EmailStr`). One library per job; no duplicates | Without it: reproducible installs break; `EmailStr` wouldn't validate |
+| `alembic/versions/d9841015aec7_add_password_hash_to_users.py` | **Created (autogenerated, reviewed, applied)** | Adds nullable `users.password_hash`; `downgrade()` drops it. Review below | Without it: the DB has no hash column |
+| `tests/test_auth.py` | **Created** | 21 tests: register (creates user / hashed-not-plaintext / no-hash-in-response / 409 duplicate / case-insensitive 409 / invalid email 422 / short password 422), login (success / wrong password 401 / identical error for unknown-vs-wrong / safe claims), JWT validation (missing/malformed/expired/bad-signature/`alg=none`/deleted-user all 401), plus hash round-trip & per-hash salt | Without it: auth could regress silently |
+| `tests/test_users_profile.py` | **Created** | 10 tests: GET returns own profile / requires token / never exposes hash; PATCH updates+persists / rejects protected fields (422) / rejects blank / requires token; two users can't cross-read; email normalized | Without it: profile privacy & self-edit rules unproven |
+| `tests/test_postgres_integration.py` | **Modified** | 3 new real-PostgreSQL tests: `password_hash` column exists & nullable, an Argon2id hash round-trips, and a Firebase-only row with NULL hash is storable | Without it: SQLite wouldn't prove the real column behaviour |
+
+**Unchanged on purpose:** `app/api/v1/endpoints/health.py` (contract byte-identical),
+`app/main.py`, the other four models, all `__init__.py` files, both `.gitignore`.
+
+### 9.4 JWT configuration & security decisions
+
+- **Algorithm fixed to HS256** in `security.py` — `decode` passes
+  `algorithms=[ALGORITHM]`, so a token claiming `alg: none` or `RS256` is
+  rejected (verified by `test_algorithm_confusion_none_rejected`).
+- **Fail-closed:** an empty `JWT_SECRET_KEY` makes `create/decode_access_token`
+  raise **503** before any token is issued or trusted. A usable secret is
+  therefore never hard-coded and never defaulted.
+- **Secret hygiene:** the real 48-char secret lives only in the gitignored
+  `.env` (generated locally, never printed, never committed). `.env.example`
+  shows the generation command, not a value.
+- **Claims:** only `sub` (user UUID), `iat`, `exp`. No password, hash, email, or
+  other PII inside the token.
+- **Lifetime:** `ACCESS_TOKEN_EXPIRE_MINUTES=60` — deliberately short. **Known
+  limitation:** there are **no refresh tokens**, so a user re-logs-in when the
+  token expires. Acceptable for a hackathon prototype, not for production.
+- **Public `/health` is independent of JWT config** — it starts and answers
+  even with an empty secret (verified by `test_health_still_works_with_auth_configured`).
+- **Password storage:** Argon2id, a modern memory-hard algorithm. It is
+  intentionally slow/memory-heavy so a leaked hash database is expensive to
+  crack. Each hash embeds a fresh random salt (two identical passwords →
+  different hashes, verified by a test).
+
+### 9.5 Registration & login — request/response examples
+
+```jsonc
+// POST /api/v1/auth/register  →  HTTP 201
+// request
+{ "display_name": "Asha", "email": "  Asha@Example.COM ", "password": "s3cure-Pass!" }
+// response  (email is normalized to "asha@example.com"; NO password/hash returned)
+{ "access_token": "eyJhbGciOiJIUzI1NiIs...", "token_type": "bearer" }
+
+// duplicate email  →  409 { "detail": "An account with this email already exists." }
+// weak password / bad email  →  422 (validation error)
+
+// POST /api/v1/auth/login  →  HTTP 200
+// request
+{ "email": "asha@example.com", "password": "s3cure-Pass!" }
+// response
+{ "access_token": "eyJhbGciOiJIUzI1NiIs...", "token_type": "bearer" }
+// wrong password OR unknown email  →  401 { "detail": "Invalid email or password." }
+```
+
+### 9.6 User-profile endpoints & the public shape
+
+```jsonc
+// GET /api/v1/users/me   Authorization: Bearer <jwt>  →  200
+// The ONLY fields ever returned — password_hash & firebase_uid are absent:
+{ "id": "3f1a…", "display_name": "Asha", "email": "asha@example.com",
+  "created_at": "2026-10-12T…", "updated_at": "2026-10-12T…" }
+
+// PATCH /api/v1/users/me   Bearer <jwt>   { "display_name": "Asha K" }  →  200 (UserProfile)
+// PATCH with a protected field, e.g. { "display_name":"X", "password_hash":"evil" }  →  422
+// no token / bad token  →  401
+```
+
+`PATCH` accepts **only** `display_name`. Changing `email` through this endpoint
+is intentionally not supported in Phase 3 (the owner's spec limits self-edit to
+display name), so the duplicate-email-on-change case does not arise here.
+
+### 9.7 Commands executed (from `backend/`)
+
+```powershell
+.venv\Scripts\python -m pip install argon2-cffi PyJWT email-validator
+.venv\Scripts\python -m alembic revision --autogenerate -m "add password_hash to users"
+.venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m pytest tests/ -q
+$env:ROAMLARY_TEST_DATABASE_URL = "<roamlary_test URL>"   # value read from .env, never printed
+.venv\Scripts\python -m pytest tests/test_postgres_integration.py -q
+.venv\Scripts\python -m ruff check app/ tests/
+.venv\Scripts\python -m ruff format app/ tests/
+.venv\Scripts\python -m uvicorn app.main:app --port 8017   # live end-to-end run
+```
+
+### 9.8 Actual test results (2026-10-12, real output)
+
+- **Full suite (SQLite + PostgreSQL integration enabled): `69 passed`** in 13.0s.
+  Breakdown: 21 auth + 10 profile + the earlier Phase 1/2 tests + 7 PostgreSQL
+  integration tests. Zero failures, zero skipped when the test DB is provided.
+- **Offline (no `ROAMLARY_TEST_DATABASE_URL`):** the 4→7 integration tests
+  self-skip; the rest pass.
+- **Live end-to-end against real PostgreSQL (uvicorn, port 8017):** register →
+  token issued; `GET /users/me` returned the profile with `password_hash`
+  **absent**; `PATCH` updated the name; login again worked; **no token → 401**;
+  **wrong password → 401**; **duplicate register → 409**; `/api/v1/health`
+  still returned the exact contract. The throwaway user was deleted afterwards
+  (dev DB left with 0 users).
+
+### 9.9 Database changes & migration status
+
+- **Model:** `users.password_hash` added (`String(255)`, nullable).
+- **Migration:** `d9841015aec7` ("add password_hash to users"), autogenerated
+  then **reviewed** — `upgrade()` adds the nullable column, `downgrade()`
+  drops it. It does **not** touch or rewrite the applied initial migration
+  `cc78d54068bb`.
+- **Applied:** yes, `alembic upgrade head` ran against `roamlary_dev`;
+  `alembic current` → `d9841015aec7 (head)`. Existing user rows are preserved
+  (the column is nullable, so old rows simply get NULL). Dev DB confirmed empty
+  of leaked test users afterwards.
+- **PostgreSQL verified:** the 7 integration tests run against the disposable
+  `roamlary_test` database (never the dev DB) and prove the real column
+  exists, accepts NULL, and round-trips an Argon2id hash.
+
+### 9.10 Security decisions & known limitations
+
+Decisions: Argon2id hashing; constant-time verification (library-provided);
+HS256 pinned; signature + expiry + required-claim checks; fail-closed on
+missing secret; identity only from the token `sub`; identical login error for
+unknown-vs-wrong password; `password_hash` absent from every public schema;
+`extra="forbid"` on PATCH; `IntegrityError` handled safely (rollback + 409);
+no password/token logging; no secrets in source control.
+
+**This is a local hackathon prototype, NOT production-grade auth.** Still
+missing / needs real security work before production: refresh tokens, password
+reset, email verification, rate limiting/lockout, HTTPS, token revocation or a
+denylist, Argon2 parameter tuning under load, and secret rotation. No roles or
+permission system was added (out of scope).
+
+### 9.11 Deviations from the approved plan
+
+- Added `email-validator` (not named in the spec) — it is required by
+  Pydantic's `EmailStr` for real email validation. Documented in §9.3.
+- `PATCH /users/me` does **not** allow changing `email`. The spec said "normally
+  display_name and any other profile fields justified by the current model";
+  since the schema keeps `email` optional+unique and self-service email change
+  introduces confirmation/ownership questions, it is deferred to a later phase
+  with the owner's sign-off. Documented in §9.6.
+- No `docs/api-contract.md` was created: no `docs/` contract file exists and the
+  approved plan does not require one for Phase 3, so the auth contract was
+  written into README.md and this report instead (per Task I's "only if it fits
+  the current scope").
+
+### 9.12 Phase completion checklist
+
+| Requirement | Status |
+|---|---|
+| Registration + login work (local auth) | ✅ |
+| Passwords securely hashed (Argon2id) | ✅ |
+| JWTs signed (HS256) & validated (sig+exp) | ✅ |
+| Protected profile endpoints work | ✅ |
+| Unauthorized requests rejected (401/422/409) | ✅ |
+| User-model change recorded in a new migration | ✅ (`d9841015aec7`) |
+| Existing DB records preserved | ✅ (nullable column; dev DB verified) |
+| Phase 1 & 2 functionality intact | ✅ (health contract re-verified live) |
+| Tests + migration reported honestly | ✅ (69 passed; live E2E run) |
+| README + this report updated | ✅ |
+| Git status reviewed; no commits/pushes this phase | ✅ |
+| No later-phase workflows implemented | ✅ (see §9.13) |
+
+### 9.13 Scope confirmation
+
+Phase 3 implemented **no** Firebase authentication or linking, **no** password
+reset, email verification, refresh tokens, OAuth/social login, roles or
+advanced permissions, **no** trusted-contact / check-in / SOS / community-report
+/ AI / notification endpoints, no background workers, no Flutter screens, and no
+production deployment. Only local auth + the two `/users/me` profile routes were
+added on top of the existing health + DB foundation.
+
+**Recommended next step:** the owner reviews this phase (report + `git diff` on
+`backend`) and, when satisfied, **assigns Phase 4** (trusted contacts & safety
+check-ins). Phase 3 is **not committed** — it sits in the working tree until the
+owner says to commit/push, exactly like Phases 1 and 2 did.
+
+## 10. Known limitations (current)
 
 - No API CRUD endpoints yet — the tables exist but nothing exposes them over
-  HTTP; only `GET /api/v1/health` is served.
-- No authentication, contacts, check-ins, SOS workflow, reports, AI, or
-  notifications — all belong to later phases.
-- Dev-grade CORS and configuration only; no HTTPS, no rate limiting.
+  HTTP; only `GET /api/v1/health`, `POST /api/v1/auth/register`,
+  `POST /api/v1/auth/login`, and `GET/PATCH /api/v1/users/me` are served.
+- Authentication is a **local prototype**: Argon2id password hashing + HS256
+  JWTs. No refresh tokens, password reset, email verification, rate limiting,
+  or account recovery yet — all belong to later phases.
+- No trusted contacts, check-ins, SOS workflow, community reports, AI, or
+  notifications — those belong to later phases.
+- Dev-grade CORS and configuration only; no HTTPS.
 - Runs only on this laptop, local machine, port 8000.
-- Branch is local — nothing is backed up to GitHub until the owner approves a
-  push. Phase 1 + Phase 2 changes are both still uncommitted.
+- The `backend` branch is pushed to GitHub (`origin/backend`) as of Phase 2
+  (`eb8e709`). Phase 3 changes are still uncommitted in the working tree.
 - Database lives in a Docker container; if that container's volume is removed,
-  recreate the (currently empty) schema with `alembic upgrade head`.
-- Frontend cannot integrate beyond the health contract until Phase 9.
+  recreate the schema with `alembic upgrade head`.
+- Frontend cannot integrate beyond the health + auth contract until Phase 9.
 
-## 10. Pending tasks and next steps
+## 11. Pending tasks and next steps
 
-1. Owner reviews Phase 1 **and** Phase 2 (this report + `git diff` on `backend`).
-2. Decide whether to commit Phase 1 + Phase 2 before Phase 3 — the backend
-   lead will not commit or push until explicitly instructed.
-3. Owner assigns Phase 3 (authentication & user profiles).
+1. Owner reviews Phase 3 (this report + `git diff` on `backend`).
+2. Owner decides whether to commit Phase 3 — the backend lead will not commit
+   or push without explicit instruction.
+3. Owner assigns Phase 4 (trusted contacts & safety check-ins).
 4. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
    planning and the `docs/merge-report.md` integration document.
 5. Laptop 3 to publish the AI contract before Phase 7 can be real (stub until
