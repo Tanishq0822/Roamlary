@@ -11,6 +11,10 @@ class Settings(BaseSettings):
 
     Values come from environment variables (or an optional .env file).
     See .env.example for the documented keys.
+
+    Phase 1 scope: application metadata and CORS only. Database and
+    Firebase settings are intentionally absent - they belong to later
+    phases and will be added only when actually used.
     """
 
     model_config = SettingsConfigDict(
@@ -21,7 +25,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Roamlary API"
     app_env: str = "development"
-    app_version: str = "0.1.0"
+    app_version: str = "1.0.0"
     app_host: str = "127.0.0.1"
     app_port: int = 8000
 
@@ -33,8 +37,12 @@ class Settings(BaseSettings):
         "http://10.0.2.2:3000",
     ]
 
-    # Wired up in Milestone 2 (PostgreSQL via Docker); documented now.
-    database_url: str = "postgresql+psycopg://roamlary:roamlary@localhost:5432/roamlary_dev"
+    # Database (Phase 2). SQLAlchemy URL format:
+    #   postgresql+psycopg://USER:PASSWORD@localhost:5432/DATABASE_NAME
+    # Real credentials live in .env (gitignored). The default below uses a
+    # placeholder password; nothing connects until the database layer is
+    # actually used, so the app and its tests still run without PostgreSQL.
+    database_url: str = "postgresql+psycopg://roamlary:change-me@localhost:5432/roamlary_dev"
 
     @field_validator("cors_origins", mode="before")
     @classmethod
