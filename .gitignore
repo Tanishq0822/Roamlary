@@ -1,0 +1,14 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# Python (applies to backend/ and any future Python tooling)
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Local environment files (placeholders like .env.example stay tracked)
+.env
+.env.*
+!.env.example

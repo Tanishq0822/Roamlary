@@ -1,0 +1,29 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python bytecode / tool caches
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Packaging
+*.egg-info/
+build/
+dist/
+
+# Local environment (never commit real secrets)
+.env
+.env.*
+!.env.example
+
+# Coverage / tooling
+.coverage
+htmlcov/
+coverage.xml
+
+# Logs & local database files
+*.log
+*.sqlite3
