@@ -97,3 +97,72 @@ class ReportCategory(StrEnum):
     ROAD_HAZARD = "road_hazard"
     POOR_LIGHTING = "poor_lighting"
     OTHER = "other"
+
+
+class VerificationStatus(StrEnum):
+    """Account-level identity-verification state (Phase 6, second assignment).
+
+    This is the state OF THE ACCOUNT, not of any single submission:
+
+        unverified -> the account has never completed (or never started)
+                      the verification workflow. Every new account starts
+                      here (database default).
+        pending    -> a verification request was submitted and is waiting
+                      for a human reviewer.
+        verified   -> a reviewer approved the request. The ONLY value that
+                      unlocks social features (when the policy requires
+                      verification).
+        rejected   -> a reviewer declined the latest request; the user may
+                      submit a new one (rejected -> pending).
+
+    Deliberately distinct from registration, email verification, and phone
+    verification - none of which exist here or imply identity verification.
+    `expired`/`requires_review` are NOT modelled yet: there is no
+    background-job infrastructure and no verification provider to time out
+    (documented deferral, not an oversight).
+
+    No API path sets this column directly from client input - only the
+    submit/review workflow moves it, server-side.
+    """
+
+    UNVERIFIED = "unverified"
+    PENDING = "pending"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
+class VerificationRequestStatus(StrEnum):
+    """State of ONE submitted verification request (the history table).
+
+    Distinct from the account-level VerificationStatus: a request is
+    `approved`, while the account becomes `verified` - the names differ on
+    purpose so "one request was approved" is never confused with "the
+    account is verified" during reviews and audits.
+
+        pending  -> submitted, waiting for a reviewer
+        approved -> reviewer accepted it (moves the account to `verified`)
+        rejected -> reviewer declined it (moves the account to `rejected`)
+    """
+
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class UserRole(StrEnum):
+    """Authorization role on the account (Phase 6, second assignment).
+
+    `user` is the default for every account - registration, email
+    ownership, or signup order NEVER grant `owner`. The only supported
+    way to become `owner` is the server-side CLI
+    (`python -m app.cli make-owner <email>`), which requires shell access
+    to the machine holding the database credentials. No API endpoint can
+    set or change a role.
+
+    `owner` authorizes the policy-management and verification-review
+    endpoints (defense: any role value other than `owner` is denied -
+    unknown/corrupt values fail closed).
+    """
+
+    USER = "user"
+    OWNER = "owner"

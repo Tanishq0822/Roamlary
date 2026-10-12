@@ -18,10 +18,20 @@ from tests.conftest import (
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
+    insert_raw_user_and_verification,
 )
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-EXPECTED_TABLES = {"users", "trusted_contacts", "check_ins", "sos_events", "community_reports"}
+EXPECTED_TABLES = {
+    "users",
+    "trusted_contacts",
+    "check_ins",
+    "sos_events",
+    "community_reports",
+    "identity_verifications",
+    "app_settings",
+    "setting_changes",
+}
 
 
 def _run_alembic(args: list[str], database_url: str) -> subprocess.CompletedProcess:
@@ -350,4 +360,153 @@ def test_phase6_upgrade_downgrade_roundtrip_with_valid_data(tmp_path) -> None:
     assert version == "ab32047c8481"
     assert category == "road_hazard"
     assert "category_valid" in table_sql
+    engine.dispose()
+
+
+# ----------------------- Phase 6b verification foundation migration tests
+
+
+def test_phase6b_upgrade_backfills_existing_users_with_secure_defaults(tmp_path) -> None:
+    """A user created BEFORE the Phase 6b columns existed must come out of
+    the upgrade as `unverified` + `user` - the secure starting point for
+    pre-existing accounts (no conversion of historical data happens)."""
+    db_file = tmp_path / "migration_phase6b_backfill.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "ab32047c8481"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_checkin(engine, "pending")  # plain pre-Phase-6b user
+
+    upgrade_again = _run_alembic(["upgrade", "3e285edb0896"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    with engine.connect() as conn:
+        row = conn.execute(sa.text("SELECT verification_status, role FROM users")).one()
+    assert row.verification_status == "unverified"  # backfilled, not NULL
+    assert row.role == "user"  # nobody is silently promoted
+    engine.dispose()
+
+
+def test_phase6b_downgrade_refuses_when_verification_data_exists(tmp_path) -> None:
+    """DATA-DEPENDENT DOWNGRADE (regression): existing verification
+    requests must make the Phase 6b downgrade REFUSE cleanly instead of
+    silently dropping the history. The refusal happens BEFORE any schema
+    change - schema and records must both be left exactly as they were."""
+    db_file = tmp_path / "migration_phase6b_guard.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "3e285edb0896"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_verification(engine, request_status="pending")
+
+    downgrade = _run_alembic(["downgrade", "ab32047c8481"], url)
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while verification requests exist, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    # The refusal must leave EVERYTHING unchanged.
+    inspector = sa.inspect(engine)
+    names = {t for t in inspector.get_table_names() if t != "alembic_version"}
+    assert "identity_verifications" in names  # table NOT dropped
+    assert "verification_status" in {
+        c["name"] for c in inspector.get_columns("users")
+    }  # column NOT dropped
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(
+            sa.text("SELECT status FROM identity_verifications")
+        ).scalar_one()
+    assert version == "3e285edb0896"  # still at the Phase 6b revision
+    assert status_value == "pending"  # the record itself is untouched
+    engine.dispose()
+
+
+def test_phase6b_downgrade_refuses_when_roles_or_states_are_non_default(
+    tmp_path,
+) -> None:
+    """Even with NO request rows, one verified account or one owner role
+    must make the downgrade REFUSE: rolling back would erase that state."""
+    db_file = tmp_path / "migration_phase6b_guard_state.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "3e285edb0896"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_verification(
+        engine, request_status=None, verification_status="verified", role="owner"
+    )
+
+    downgrade = _run_alembic(["downgrade", "ab32047c8481"], url)
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while non-default verification states "
+        f"or roles exist, but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        row = conn.execute(sa.text("SELECT verification_status, role FROM users")).one()
+    assert version == "3e285edb0896"
+    assert row.verification_status == "verified"  # state untouched
+    assert row.role == "owner"  # role untouched
+    engine.dispose()
+
+
+def test_phase6b_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> None:
+    """NORMAL PATH: with defaults everywhere and no verification rows the
+    downgrade succeeds (columns + tables removed); upgrading again restores
+    the exact Phase 6b schema."""
+    db_file = tmp_path / "migration_phase6b_roundtrip.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "3e285edb0896"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_verification(engine, request_status=None)  # secure defaults only
+
+    downgrade = _run_alembic(["downgrade", "ab32047c8481"], url)
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(engine)
+    assert "identity_verifications" not in set(inspector.get_table_names())
+    user_cols = {c["name"] for c in inspector.get_columns("users")}
+    assert "verification_status" not in user_cols
+    assert "role" not in user_cols
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        # The user row itself survives the schema revert (Phase 6b columns
+        # never existed before, so it just has no such fields anymore).
+        count = conn.execute(sa.text("SELECT count(*) FROM users")).scalar_one()
+    assert version == "ab32047c8481"
+    assert count == 1
+
+    upgrade_again = _run_alembic(["upgrade", "3e285edb0896"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(engine)
+    assert {"identity_verifications", "app_settings", "setting_changes"} <= set(
+        inspector.get_table_names()
+    )
+    user_cols = {c["name"] for c in inspector.get_columns("users")}
+    assert {"verification_status", "role"} <= user_cols
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        # Backfilled again to the secure defaults after the round trip.
+        row = conn.execute(sa.text("SELECT verification_status, role FROM users")).one()
+    assert version == "3e285edb0896"
+    assert row.verification_status == "unverified"
+    assert row.role == "user"
     engine.dispose()

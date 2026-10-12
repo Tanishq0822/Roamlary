@@ -3,13 +3,16 @@
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
+    admin,
     auth,
     check_ins,
     community_reports,
     health,
+    social,
     sos_events,
     trusted_contacts,
     users,
+    verification,
 )
 
 api_router = APIRouter()
@@ -20,3 +23,6 @@ api_router.include_router(trusted_contacts.router)
 api_router.include_router(check_ins.router)
 api_router.include_router(sos_events.router)
 api_router.include_router(community_reports.router)
+api_router.include_router(verification.router)
+api_router.include_router(admin.router)
+api_router.include_router(social.router)

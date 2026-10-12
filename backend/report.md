@@ -35,7 +35,7 @@ the project owner; the backend lead implements only assigned phases.**
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (all work pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; **Phase 6 committed and pushed after the owner's instruction, 2026-10-12** as `9029047` — see `git log`; working tree clean). **Owner also decided (2026-10-12) to fast-forward `main` to this branch and add `docs/README.md`** — both done, see §14 |
+| Branch | `backend` (all work pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; **Phase 6 committed and pushed after the owner's instruction, 2026-10-12** as `9029047` — see `git log`; working tree clean). **Owner also decided (2026-10-12) to fast-forward `main` to this branch and add `docs/README.md`** — both done, see §15 |
 | History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → `9029047` Phase 6 (+ docs placeholder commit) → **`main` fast-forwarded to match** (2026-10-12, owner-instructed) |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
@@ -60,7 +60,8 @@ started — the backend lead waits for each phase assignment):
 | 4 | Trusted contacts & safety check-ins | ✅ **Complete — implemented & verified** (this report §10); owner's rules forbid commits during the phase, so it stayed uncommitted through the owner-assigned migration-safety fix round (§10.15) — later **committed and pushed together with Phase 5** after owner approval (see `git log`) |
 | 5 | SOS & emergency workflow (simulated) | ✅ **Complete — implemented & verified** (this report §11); uncommitted during the phase per the same rule; **committed and pushed together with Phase 4** after owner approval (see `git log`) |
 | 6 | Community safety reports & location data | ✅ **Complete — implemented & verified** (this report §12); stayed uncommitted during the phase per the owner's rule, then the owner instructed commit & push (2026-10-12) — **committed and pushed to `origin/backend`** (see `git log`) |
-| 7 | AI companion & safety signals | ⏳ Not started (needs Laptop 3 contract) |
+| 6 (second assignment) | Identity verification & social access foundation | ✅ **Complete — implemented & verified** (this report §13); uncommitted working-tree changes awaiting owner review (owner rule: no commits during the phase) |
+| 7 | AI companion & safety signals | ⏳ Not started (needs Laptop 3 contract + review of Phase 6 second assignment) |
 | 8 | Notifications & background-job interfaces | ⏳ Not started |
 | 9 | Flutter integration & API contract alignment | ⏳ Not started (needs frontend report) |
 | 10 | Automated testing, security checks, QA | ⏳ Not started |
@@ -88,10 +89,11 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-12 | **Phase 4 migration-safety fix** | Owner assigned a targeted fix round (§10.15): the Phase 4 migration's `downgrade()` now detects `cancelled` check-ins **before** any schema change and refuses with an actionable error instead of failing mid-migration; 4 new regression tests (2 SQLite + 2 real-PostgreSQL), live refusal + normal path proven on `roamlary_dev`, docs corrected (the earlier "reversible" wording implied it always succeeds regardless of data) | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phases 4 and 5** (see `git log`) |
 | 2026-10-12 | **Phase 5** | Owner assigned Phase 5 → extended the Phase 2 `sos_events` table (`description`, `location_recorded_at`, `cancelled_at`, `cancelled` status; migration `0dd8995649b4` with the same downgrade data-safety guard), 5 SOS endpoints (activate/list/get/cancel/resolve) with strict schemas, owner-only queries, identical-404s and server-only timestamps; 30 new tests (24 endpoint + 2 SQLite migration + 4 PostgreSQL), live E2E 35/35 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE5_CHANGES.md` | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phase 4** (see `git log`) |
 | 2026-10-12 | **Phase 6** | Owner assigned Phase 6 → reused the Phase 2 `community_reports` table; added a closed 6-value `ReportCategory` set (+ DB CHECK, migration `ab32047c8481` with an **upgrade-side** data guard), 4 report endpoints (create/list with filters+pagination/nearby haversine search/get-by-id) with `ReportRead` (identity-free, UTC); 35 new tests (28 endpoint + 2 SQLite migration + 3 PostgreSQL + 2 model-contract), live E2E 51/51 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE6_CHANGES.md` | **uncommitted working-tree changes** during the phase → owner instructed commit & push (2026-10-12) → **committed and pushed to `origin/backend`** (see `git log`) |
+| 2026-10-12 | **Phase 6 (second assignment)** | Owner assigned a second Phase 6 brief (identity verification & social access foundation) → `users.verification_status` + `users.role` columns, `identity_verifications` request history, `app_settings` policy row + append-only `setting_changes` audit (fail-closed `get_policy`), `require_owner` / `require_verified_user` server-side gates, 7 new routes (verification status/submit, owner queue approve/reject, owner policy read/patch with 5/hour rate limit, gated social discovery placeholder), server CLI `python -m app.cli make-owner <email>`, migration `3e285edb0896` (downgrade guarded by data), 52 new tests; live E2E 54/54 + live guard-refusal + live downgrade/upgrade roundtrip on `roamlary_dev`, README + this report + `PHASE6_IDENTITY_CHANGES.md` | **uncommitted working-tree changes** (owner rule: no commits during the phase) → awaiting owner review |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
-**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5 + Phase 6):**
+**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5 + Phase 6 + Phase 6 second assignment):**
 
 | Method + Path | Purpose | Auth | Response |
 |---|---|---|---|
@@ -100,6 +102,14 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | `POST /api/v1/auth/login` | Authenticate with email + password; returns a bearer token | none | `{access_token, token_type}` (HTTP 200) |
 | `GET /api/v1/users/me` | Return the authenticated user's public profile | Bearer JWT | `UserProfile` (see §9.6) |
 | `PATCH /api/v1/users/me` | Update the authenticated user's `display_name` | Bearer JWT | `UserProfile` |
+| `GET /api/v1/verification/status` | The caller's OWN verification picture: `verification_status`, `role`, live `social_access_required`, latest request | Bearer JWT | `VerificationStatusResponse` |
+| `POST /api/v1/verification/requests` | Submit a manual-review verification request (`pending`, server-chosen; optional `note` ≤200 chars; only from `unverified`/`rejected`) | Bearer JWT | `VerificationRequestSummary` (HTTP 201) |
+| `GET /api/v1/admin/verification-requests` | Review queue, oldest first (`?status=pending\|approved\|rejected`, `?offset=`/`?limit=` 1–100) | Bearer JWT + **owner role** | `[VerificationRequestReview]` |
+| `POST /api/v1/admin/verification-requests/{id}/approve` | Approve a `pending` request → applicant becomes `verified` (optional `review_note` ≤200) | Bearer JWT + **owner role** | `VerificationRequestReview` |
+| `POST /api/v1/admin/verification-requests/{id}/reject` | Reject a `pending` request → applicant becomes `rejected` (optional `review_note` ≤200) | Bearer JWT + **owner role** | `VerificationRequestReview` |
+| `GET /api/v1/admin/policy/social-verification` | Read the effective policy (fail-closed reporting) | Bearer JWT + **owner role** | `PolicyResponse` |
+| `PATCH /api/v1/admin/policy/social-verification` | Change `requires_verification` (validated boolean; rate limited 5/hour/owner; audited who/when/old/new) | Bearer JWT + **owner role** | `PolicyResponse` |
+| `GET /api/v1/social/discovery` | Travel-buddy discovery — **gated placeholder**: empty `profiles` + honest message until Phase 7 | Bearer JWT + verified while policy requires it | `DiscoveryResponse` |
 | `POST /api/v1/trusted-contacts/` | Save a contact for the token's user | Bearer JWT | `TrustedContactRead` (HTTP 201) |
 | `GET /api/v1/trusted-contacts/` | List the token user's contacts (oldest first) | Bearer JWT | `[TrustedContactRead]` |
 | `GET /api/v1/trusted-contacts/{contact_id}` | Read one contact (404 if missing **or** not yours) | Bearer JWT | `TrustedContactRead` |
@@ -124,7 +134,9 @@ Phase 4 request/response examples, field rules, status transitions, and
 timestamp policy: **§10.6** (details) and `README.md` (client-facing).
 Phase 5 (SOS) equivalents: **§11.6** and the README's "SOS incidents"
 section. Phase 6 (reports): **§12.6** and the README's "Community safety
-reports" section. Note the SOS and report paths have no trailing slash
+reports" section. Phase 6 second assignment (verification/social):
+**§13.6** and the README's "Identity verification & social gate" section.
+Note the SOS and report paths have no trailing slash
 (`/sos`, `/reports`, per their specs) while the Phase 4 collections use
 one (`/check-ins/`).
 
@@ -174,6 +186,19 @@ out-of-range coordinate, an injected server-controlled field (`user_id`,
 1–100, `offset` < 0, or a `radius_m` outside 1–50000 (meters) → **422**;
 an integrity failure while saving → **409**.
 
+Phase 6 second assignment (verification/social) error behaviour: any
+verification/admin/social route without a valid bearer token → **401**; a
+non-owner (or an owner reviewing their OWN request) → **403**/**409**
+respectively; a nonexistent or already-decided verification request →
+**404**/**409**; submitting while `pending` or `verified`, or re-approving
+a decided request → **409**; an injected server-controlled field on any
+strict body (`status`, `role`, `verification_status`, `user_id`, an
+unknown policy field, a non-boolean `requires_verification`, a >200-char
+note, a bad queue `?status=` filter, `limit` outside 1–100, `offset` < 0)
+→ **422**; unverified/pending/rejected accounts on a gated social route
+while the policy requires verification → **403** with a status-specific
+message; a 6th policy change within an hour → **429**.
+
 **Proposed for future phases — NOT IMPLEMENTED, do not call these:**
 `POST /ai/companion/messages`.
 *(A report workflow now exists at `/api/v1/reports` — §12 — but it only
@@ -188,7 +213,8 @@ alignment.)
 ## 6. Database design — IMPLEMENTED (Phase 2)
 
 Schema is real and now spans Phase 2 + Phase 3 + Phase 4 + Phase 5 +
-Phase 6 migrations, all applied to `roamlary_dev`:
+Phase 6 + Phase 6 second assignment migrations, all applied to
+`roamlary_dev`:
 
 - `cc78d54068bb` — "initial schema" (Phase 2): the five tables below.
 - `d9841015aec7` — "add password_hash to users" (Phase 3): adds a nullable
@@ -209,14 +235,28 @@ Phase 6 migrations, all applied to `roamlary_dev`:
   `poor_lighting`, `other`). The **upgrade** is guarded (refuses while any
   out-of-set category exists); the **downgrade** just drops the constraint
   (always data-safe). Full rationale in §12.4.
+- `3e285edb0896` — "add identity verification foundation" (Phase 6 second
+  assignment): adds two NOT NULL `users` columns with one-time server
+  defaults (`verification_status` default `unverified`, `role` default
+  `user`, each with a CHECK constraint) plus three new tables
+  (`identity_verifications` request history with `user_id`/`reviewed_by`
+  RESTRICT FKs, `app_settings` keyed runtime config with a unique index,
+  `setting_changes` append-only audit). The **upgrade** needs no data
+  guard (new columns are backfilled to the secure defaults; no existing
+  value can violate the new CHECKs); the **downgrade** is guarded and
+  refuses while any verification/setting/audit row or any non-default
+  user state/role exists. Full rationale in §13.4.
 
 | Table | Purpose | Owner / deletion rule |
 |---|---|---|
-| `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, `password_hash` nullable, timestamps) | — |
+| `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, `password_hash` nullable, `verification_status` ∈ unverified/pending/verified/rejected, `role` ∈ user/owner, timestamps) | — |
 | `trusted_contacts` | Nominated safety contact (`name`, `phone`, `relationship` nullable, `email` nullable) | `users` · `ON DELETE RESTRICT` |
 | `check_ins` | "Ping me by time T" (`status` ∈ pending/safe/needs_help/expired/**cancelled**, `due_at`, `note` nullable, `completed_at`) | `users` · `ON DELETE RESTRICT` |
 | `sos_events` | **Simulated** incident (`status` ∈ active/acknowledged/resolved/false_alarm/**cancelled**, lat/lon, `description` nullable, `location_recorded_at`, `resolved_at`, `cancelled_at`) | `users` · `ON DELETE RESTRICT` |
 | `community_reports` | Crowd-sourced note (`category` ∈ 6-value Phase 6 set, `description`, lat/lon, `status` ∈ pending/approved/rejected) | `users` · `ON DELETE RESTRICT` |
+| `identity_verifications` | One row per verification **request** (`status` ∈ pending/approved/rejected, `applicant_note` nullable, `review_note` nullable, `reviewed_at`/`reviewed_by` nullable) — history, never edited by clients | `users` (applicant + reviewer) · `ON DELETE RESTRICT` |
+| `app_settings` | Runtime configuration (currently the single key `social_requires_verification`; unique index on `key`) | `users` (`updated_by` nullable) · `ON DELETE RESTRICT` |
+| `setting_changes` | Append-only audit of policy changes (`setting_key`, `old_value` nullable, `new_value`, `changed_by`) | `users` · `ON DELETE RESTRICT` |
 
 All Phase 4 and Phase 5 schema changes were additive and nullable — no
 existing row was altered or dropped (verified by downgrade→re-upgrade on
@@ -1033,7 +1073,7 @@ listed with the fix actually applied.
 | 3 | Register created the database row **before** the fail-closed secret check ran, so a missing `JWT_SECRET_KEY` could leave a half-created, unusable account. | Low | New public `ensure_auth_configured()` in `security.py`; register now calls it **before any database write**, so 503 happens with no row created. |
 | 4 | `PATCH /users/me` with an empty body (`{}`) still bumped `updated_at`, so the timestamp did not mean "last real change". | Low | `updated_at` is now bumped only when `display_name` actually changed; `{}` is a valid no-op returning the profile unchanged. |
 | 5 | Tests used the **real dev secret** from `.env` — not hermetic, and it exercised the actual signing key. | Low | New autouse fixture in `conftest.py` pins a fixed TEST-ONLY secret for every test (`TEST_JWT_SECRET`); the real `.env` secret is never used by tests. |
-| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. *(Note: "§10, §11" here means Known limitations / Pending tasks **as numbered at that time**; inserting the Phase 4 record as §10 shifted them to §11/§12 in the Phase 4 round, and inserting the Phase 5 record as §11 shifted them again — §10 is the Phase 4 record, §11 the Phase 5 record. Inserting the Phase 6 record as §12 shifted them once more: **Known limitations is now §13, Pending tasks §14**.)* |
+| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. *(Note: "§10, §11" here means Known limitations / Pending tasks **as numbered at that time**; inserting the Phase 4 record as §10 shifted them to §11/§12 in the Phase 4 round, and inserting the Phase 5 record as §11 shifted them again — §10 is the Phase 4 record, §11 the Phase 5 record. Inserting the Phase 6 record as §12 shifted them once more: **Known limitations is now §13, Pending tasks §14**. Inserting the **Phase 6 (second assignment)** record as §13 (2026-10-12) shifted them a final time: **Known limitations is §14, Pending tasks §15**.)* |
 
 #### 9.14.3 New tests added (12)
 
@@ -1952,13 +1992,441 @@ secrets, `frontend/` untouched.
 > `docs/` folder is **empty**, and git cannot track or push an empty
 > directory (nothing was lost — it never had contents).
 
-## 13. Known limitations (current)
+## 13. Phase 6 (second assignment) record — Identity verification & social access foundation ✅
+
+### 13.1 Mandatory preflight (audit + gaps/plan before any code)
+
+Audited the whole repository before writing anything:
+
+- **Zero pre-existing infrastructure** for verification, roles, policy, or
+  gates: no such columns, tables, enums, endpoints, schemas, CLI, or
+  tests anywhere (`users` had neither `verification_status` nor `role`;
+  no `identity_verifications`/`app_settings`/`setting_changes` tables).
+- **Baseline test suite: 193 passed** (the exact Phase 6 number) before
+  the first edit.
+- Identified gaps and planned the file set (models → migration →
+  policy/rate-limit core → schemas → gates → endpoints → CLI → router →
+  tests → docs), then asked the owner the two design questions this
+  brief left open.
+
+**Owner answered before any code was written:**
+
+1. *Gated surface* → **one placeholder route**
+   (`GET /api/v1/social/discovery`: empty `profiles` + honest "Phase 7"
+   message) instead of pretending discovery exists.
+2. *Owner provisioning* → **`users.role` column + server-side CLI**
+   (`python -m app.cli make-owner <email>`), the only path that grants
+   `owner` — no API surface for privilege changes.
+
+### 13.2 Summary of the implementation & design decisions
+
+- **Two kinds of state, kept apart on purpose.** *Account state* lives on
+  the user (`users.verification_status`, `users.role`) — what you ARE
+  right now. *Request history* lives in `identity_verifications` — what
+  you ASKED and what the owner DECIDED. Conflating them would let a
+  client "edit history"; keeping them apart means history rows are
+  append-only facts.
+- **Exactly four account states** — `unverified / pending / verified /
+  rejected` — and three request states — `pending / approved / rejected`.
+  Two separate enums (not one shared "status") because an account being
+  `verified` and its request being `approved` are different words for a
+  reason; one shared enum would allow nonsense combinations to compile.
+- **Every write is server-chosen.** Submitting sets `pending`; only the
+  owner's approve/reject sets `verified`/`rejected` (request →
+  `approved`/`rejected`), always in the **same transaction** as
+  `reviewed_at`/`reviewed_by`. Any client-supplied
+  `status`/`role`/`verification_status`/`user_id` is **422** (strict
+  schemas, `extra="forbid"`), with the DB CHECKs as a second layer.
+- **No self-service elevation anywhere:** no route, body, profile field,
+  or header can set a state or role; a reviewer (even the owner) cannot
+  decide their own request (**409**); registration always creates
+  `role="user"`.
+- **Owner role via CLI only** (behind shell access to the database
+  machine — the strongest boundary the project has). No email-list, no
+  registration-order, no hardcoded credentials, no secret answers.
+- **The gate is a reusable server-side dependency** (`require_verified_user`
+  in `deps.py`), applied to a real (placeholder) endpoint — not
+  copy-pasted per route. `require_owner` similarly gates all four admin
+  routes with an exact role match (unknown/corrupt role → denied, never
+  elevated).
+- **Policy is runtime configuration in the database** (`app_settings`
+  row), because it must be changeable without a restart and audited.
+  `get_policy()` **fails closed**: missing/corrupt/unreadable → "verification
+  required". Read live on every gated request (no stale JWT claim).
+- **Policy changes are owner-only, validated, rate-limited (5/hour/owner,
+  in-process), and audited** (`setting_changes`: who/when/old→new, same
+  transaction; first write audits `old_value=NULL`; no-op writes touch
+  nothing). A policy change **never** verifies anyone or rewrites
+  history.
+- **Safety/account workflows stay open while unverified** — the gate is
+  applied ONLY to the social placeholder; a dedicated test proves
+  contacts/check-ins/SOS/profile/verification routes all still work.
+- **No identity data, anywhere.** The submit body accepts at most an
+  optional ≤200-char note; no schema, column, fixture, log line, or doc
+  contains Aadhaar/ID numbers or document fields (a live check asserts no
+  identity-document columns exist).
+- **`UserProfile` (Phase 3) untouched** — verification state is exposed
+  only via `GET /verification/status`, so existing clients are unaffected;
+  **auth/JWT untouched** — role and status are read live from the
+  database on each request, so a token never carries stale privileges.
+- **`server_default`s on both new columns** (`unverified`, `user`) so the
+  ORM, raw-SQL inserts, and Alembic backfill all agree — a Python-only
+  default leaves raw SQL failing on NOT NULL (caught during testing).
+- Statuses `expired` / `requires_review` were **deliberately deferred**
+  (the brief fixes the state set; adding states later is a migration).
+
+### 13.3 File-by-file change log (files created and modified)
+
+**Created (15):**
+
+| File | What it contains |
+|---|---|
+| `alembic/versions/3e285edb0896_add_identity_verification_foundation.py` | the one migration (2 columns + 3 tables; downgrade data guard) |
+| `app/models/identity_verification.py` | request-history model (`identity_verifications`) |
+| `app/models/app_setting.py` | runtime-config model (`app_settings`, unique key) |
+| `app/models/setting_change.py` | append-only audit model (`setting_changes`) |
+| `app/core/policy.py` | `get_policy()` (fail-closed) + `set_policy()` (audited, transactional) |
+| `app/core/rate_limit.py` | in-process fixed-window limiter (policy PATCH 5/hour/owner) |
+| `app/api/v1/schemas/verification.py` | 7 strict schemas (submit, summaries, status, review, policy) |
+| `app/api/v1/schemas/social.py` | `DiscoveryResponse` (empty list + honest message) |
+| `app/api/v1/endpoints/verification.py` | 2 routes: status (own only), submit request |
+| `app/api/v1/endpoints/admin.py` | 4 owner routes: queue, approve, reject, policy read/patch |
+| `app/api/v1/endpoints/social.py` | 1 gated placeholder: discovery |
+| `app/cli.py` | `python -m app.cli make-owner <email>` (exit 0/1, no secrets printed) |
+| `tests/test_verification.py` | 20 endpoint tests (states, gate, no self-verify, workflows stay open) |
+| `tests/test_admin.py` | 19 endpoint tests (queue, review, policy, audit, rate limit, fail-closed) |
+| `PHASE6_IDENTITY_CHANGES.md` | standalone review inventory (owner-facing) |
+
+**Modified (11):**
+
+| File | Change |
+|---|---|
+| `app/models/enums.py` | + `VerificationStatus` (4), `VerificationRequestStatus` (3), `UserRole` (2) |
+| `app/models/user.py` | + `verification_status`/`role` columns (NOT NULL, CHECKs, secure `server_default`s) + request-history relationship |
+| `app/models/__init__.py` | + 3 model imports/registrations |
+| `app/api/v1/deps.py` | + `require_owner`, `require_verified_user` (status-specific 403s), `OwnerUser`/`SocialUser` aliases |
+| `app/api/v1/router.py` | + 3 router registrations (7 new routes; OpenAPI verified) |
+| `tests/conftest.py` | + `insert_raw_user_and_verification` raw-SQL probe helper |
+| `tests/test_migrations.py` | +4 tests (columns/CHECKs, downgrade guard refusal, roundtrip) + expected-tables +3 |
+| `tests/test_models.py` | +4 tests (enum contracts, user CHECKs in metadata) + expected-tables +3 |
+| `tests/test_postgres_integration.py` | +5 real-PostgreSQL tests (CHECK enforcement, guard refusal, roundtrip) |
+| `README.md` | new "Identity verification & social gate" section, scope block, eight-tables list, migration bullet, counts 245/221/24, +8 troubleshooting rows |
+| `report.md` | this §13 + PART 1 updates (§2/§3/§4/§5/§6/§9.14 note; old §13/§14 renumbered to §14/§15) |
+
+**Deliberately untouched:** `frontend/`, `app/core/security.py` and the
+whole auth/JWT flow, `UserProfile`, SOS/report/check-in/contact endpoints,
+all older migrations (historical — never edited), `.env` (gitignored,
+never printed).
+
+### 13.4 Database & migration details
+
+Migration **`3e285edb0896`** ("add identity verification foundation",
+revises `ab32047c8481`) — hand-written:
+
+- **`upgrade()` — deliberately unguarded (unlike Phase 4/5/6):** adds
+  `users.verification_status VARCHAR(20) NOT NULL` (CHECK ∈ the 4 values,
+  `server_default 'unverified'`) and `users.role VARCHAR(10) NOT NULL`
+  (CHECK ∈ `user`/`owner`, `server_default 'user'`), then creates
+  `identity_verifications`, `app_settings` (unique index on `key`), and
+  `setting_changes`. No data guard is *needed*: the columns are new, so
+  every existing row is backfilled to the secure defaults in the same
+  statement that adds the column — no pre-existing value can violate the
+  new CHECKs (the opposite situation from Phase 6's category CHECK, where
+  legacy *data* could violate a *new constraint*).
+- **`downgrade()` — guarded first (Phase 4/5 discipline):** counts
+  verification requests, policy rows, audit rows, and users with a
+  non-default state/role *before any schema change*; if anything exists it
+  raises `RuntimeError: Refusing to downgrade migration 3e285edb0896: 4
+  verification request(s), 1 setting row(s), 2 audit row(s) and 3 user(s)
+  with a non-default verification state or role exist … no schema changes
+  were made …` (the census is live, the numbers above are from the real
+  run). Dropping the columns/tables underneath that data would orphan it,
+  so the refusal forces an explicit data-handling decision instead.
+- **Ownership/privacy at the schema layer:** both FKs on
+  `identity_verifications` (`user_id`, `reviewed_by`) are `ON DELETE
+  RESTRICT` (history and reviewer identity can never silently vanish);
+  `user_id` is indexed; `app_settings.updated_by` and
+  `setting_changes.changed_by` are RESTRICT FKs too.
+- **Applied to `roamlary_dev`** (`alembic current` → `3e285edb0896
+  (head)`), refused-downgrade + clean roundtrip demonstrated live
+  (§13.10), roundtrip also proven on SQLite **and** real PostgreSQL
+  (§13.9). No production database was touched (only `roamlary_dev` +
+  disposable `roamlary_test`).
+
+### 13.5 How verification, roles & policy work (plain language)
+
+1. **You sign up** → `unverified`, `role=user` — chosen by the server,
+   not you.
+2. **You ask for verification** (`POST /verification/requests`, optional
+   short note — nothing else is collected) → your account becomes
+   `pending` and a history row appears, atomically.
+3. **The owner reviews** (`GET /admin/verification-requests`, oldest
+   first) and approves or rejects → your account becomes `verified` or
+   `rejected`; the row remembers who decided, when, and their note.
+   Rejected? You may submit again (that's a new row; the old one stays as
+   history).
+4. **Social features check a live switch:** `get_policy()` reads
+   `app_settings` on every request. Switch on (the default) → only
+   `verified` accounts pass; anyone else gets a 403 that says exactly
+   where they stand and what to do. Switch off (owner's choice, audited
+   and rate-limited) → everyone authenticated passes. Missing/corrupt
+   switch → treated as ON (fail closed).
+5. **Nothing else changes:** your trusted contacts, check-ins, SOS, and
+   profile keep working the whole time — verification only guards social
+   features.
+
+### 13.6 API endpoints and request/response examples
+
+| Method + path | Purpose | Success / errors |
+|---|---|---|
+| `GET /api/v1/verification/status` | Caller's OWN status + role + live policy + latest request | `200` · `401` |
+| `POST /api/v1/verification/requests` | Submit (optional `{"note": "≤200 chars"}`) | `201` · `401` · `409` already pending/verified · `422` |
+| `GET /api/v1/admin/verification-requests` | Queue, oldest first; `?status=pending\|approved\|rejected`, `?offset=`, `?limit=` | `200` · `401` · `403` not owner · `422` |
+| `POST /api/v1/admin/verification-requests/{id}/approve` | Request → `approved`, account → `verified` (optional `review_note`) | `200` · `401` · `403` · `404` · `409` not-pending/own-request · `422` |
+| `POST /api/v1/admin/verification-requests/{id}/reject` | Request → `rejected`, account → `rejected` (same errors) | `200` · `401` · `403` · `404` · `409` · `422` |
+| `GET /api/v1/admin/policy/social-verification` | Effective policy + `updated_at`/`updated_by` | `200` · `401` · `403` |
+| `PATCH /api/v1/admin/policy/social-verification` | `{"requires_verification": bool}` — audited, rate-limited | `200` · `401` · `403` · `422` · `429` |
+| `GET /api/v1/social/discovery` | **Gated placeholder**: empty list + Phase 7 message | `200` · `401` · `403` (status-specific) |
+
+The full happy path, exercised live (§13.10):
+
+```text
+POST /api/v1/verification/requests          (applicant, {"note": " trip organiser "})
+→ 201 { "id": "…", "status": "pending", "applicant_note": "trip organiser",
+        "review_note": null, "reviewed_at": null,
+        "created_at": "2026-10-12T17:40:02Z" }
+
+GET  /api/v1/admin/verification-requests?status=pending   (owner)
+→ 200 [ { "id": "…", "user_id": "…", "display_name": "Live Applicant",
+          "status": "pending", "applicant_note": "trip organiser",
+          "reviewed_at": null, "reviewed_by": null, "review_note": null,
+          "created_at": "…" } ]
+
+POST /api/v1/admin/verification-requests/{id}/approve     (owner)
+→ 200 { …, "status": "approved", "reviewed_by": "<owner user id>",
+        "reviewed_at": "…" }
+   (applicant's GET /verification/status now says "verified")
+
+GET  /api/v1/social/discovery               (verified applicant)
+→ 200 { "profiles": [],
+        "message": "Travel-buddy discovery is not implemented yet
+                    (planned for Phase 7+) …" }
+```
+
+Field rules: submit accepts **only** an optional `note` (≤200, trimmed,
+blank collapses to none) — injected `status`/`user_id` → 422; register
+with `role` → 422; profile PATCH with `role`/`verification_status` →
+422; queue `?status=` outside the 3 values → 422, `limit` 1–100
+(default 20), `offset` ≥ 0; policy body must be exactly one boolean →
+otherwise 422; the 6th accepted-policy-attempt within an hour → 429.
+Full client-facing docs: README's "Identity verification & social gate".
+
+### 13.7 Authorization, privacy & audit behavior
+
+- **401 everywhere** without a valid bearer token (all 7 routes).
+- **403 owner gate:** all four `/admin/*` routes for any role ≠ `owner`
+  (exact match — corrupt/unknown role is denied, never elevated).
+- **403 social gate** with actionable, status-specific text (unverified →
+  "submit a verification request first (POST /api/v1/verification/
+  requests)"; pending → "under review"; rejected → "you may submit a new
+  one"; corrupt status → generic fail-closed message).
+- **Ownership/privacy on verification records:** the status route has no
+  user-id parameter at all (structurally cannot read someone else);
+  applicant-facing summaries expose 6 fields without `user_id`/`display_
+  name`; `user_id`+`display_name`+`reviewed_by` appear **only** in
+  owner-gated queue/review responses (exact-field-set asserted by tests);
+  no email or password hash appears in any verification response.
+- **Self-review refused for everyone** (409, owner included) — verified
+  live: the owner's own submitted request stayed `pending` and
+  unverified.
+- **Compare-and-set review update** (re-assert `pending` in the WHERE
+  clause) so two racing reviewers cannot double-decide.
+- **Audit:** every accepted policy change appends `setting_changes`
+  (who/when/old→new) in the same transaction; the first-ever change
+  audits `old_value=NULL`; no-op changes append nothing; review outcomes
+  record `reviewed_at`/`reviewed_by` alongside the decision.
+- **No hardcoded credentials / no secrets in output:** the CLI prints only
+  email + role result (live-checked: output contains no `DATABASE_URL`);
+  no token, password, or secret appears in any new file (diff reviewed).
+
+### 13.8 Commands executed (Windows PowerShell, from `backend/`)
+
+```powershell
+# Migrations (real roamlary_dev; DATABASE_URL only from gitignored .env)
+.venv\Scripts\python -m alembic upgrade head            # -> 3e285edb0896 (head)
+.venv\Scripts\python -m alembic current
+.venv\Scripts\python -m alembic downgrade ab32047c8481  # guard demo (exit 1 with data); later exit 0 clean
+
+# Server-side owner provisioning (the only owner-grant path)
+.venv\Scripts\python -m app.cli make-owner <email>      # exit 0; unknown email -> exit 1
+
+# Tests + lint (ROAMLARY_TEST_DATABASE_URL derived from .env, never printed)
+.venv\Scripts\python -m pytest                          # 245 passed, 0 failed, 0 skipped
+.venv\Scripts\python -m ruff check .
+.venv\Scripts\python -m ruff format --check .
+
+# Live verification against the dev server on 127.0.0.1:8000
+.venv\Scripts\python <temp E2E script>                  # 54/54; a second run in "cleanup" mode -> 1/1
+```
+
+### 13.9 Tests & actual results (real output, nothing fabricated)
+
+| Run | Output |
+|---|---|
+| `pytest --collect-only -q` | **245 collected** (193 baseline + 52 new) |
+| `pytest tests/test_verification.py -q` | **20 passed** |
+| `pytest tests/test_admin.py -q` | **19 passed** |
+| Full suite (SQLite + real PostgreSQL via `ROAMLARY_TEST_DATABASE_URL`) | **245 passed, 0 failed, 0 skipped** in 120.83s (221 offline + 24 PG) — final run after all documentation edits |
+| `ruff check .` / `ruff format --check .` | All checks passed! / 64 files already formatted |
+| Blocked/skipped tests | **none** — 0 skipped; no skipped test is ever counted as passed |
+
+New tests by file (52 = 20 + 19 + 4 + 4 + 5):
+
+| File | New | Covers |
+|---|---|---|
+| `tests/test_verification.py` | 20 | default state + gate on; status auth/shape; **no self-verify** via register/profile/submit (422); submit → pending (atomic), duplicate/verified 409, resubmit-after-rejection; per-status discovery 403s; **owner role does NOT bypass gate**; verified passes after real approval; **safety/account workflows stay open while unverified**; no cross-user leak via status |
+| `tests/test_admin.py` | 19 | admin auth 401/403; queue oldest-first + exact shape + filter/pagination bounds; approve/reject recording reviewer identity; 404 unknown; 409 invalid transitions; **409 self-review (owner included)**; reject visible to applicant; **policy default on**; **audit who/when/old→new**; no-op writes nothing; 422 invalid bodies; **rate limit 429**; **no auto-verify/rewrite on policy change**; policy off/on flips the gate; **corrupt policy fails closed** |
+| `tests/test_migrations.py` | +4 | columns exist with CHECKs + secure defaults; **downgrade guard refuses with data**; clean roundtrip; expected tables +3 |
+| `tests/test_models.py` | +4 | three enums' exact values; both `users` CHECKs in metadata; expected tables +3 |
+| `tests/test_postgres_integration.py` | +5 | role/status CHECK enforcement on real PG (bogus value → `IntegrityError`); downgrade guard refusal with data; clean downgrade→upgrade roundtrip |
+
+Every requirement the brief listed is covered by named tests above —
+including the fail-closed policy read, the audit-row content, the rate
+limit, the no-self-verification paths (request/profile/client value), the
+safety-workflow exemption, and the ownership/privacy checks; none of them
+is skipped or xfailed.
+
+**Fixed during the phase (recorded honestly):** one intermediate full-suite
+run showed "221 passed, 24 errors" — all 24 errors were *setup* errors in
+my one-off PowerShell command, which had left a stray `=` at the front of
+`ROAMLARY_TEST_DATABASE_URL` (an off-by-one while parsing `.env`). The
+tests themselves were fine; with the variable parsed correctly the final
+run is the 245/0/0 above. No application code or test was changed to
+obtain it.
+
+**Checks NOT performed (honest difference):** no real identity provider
+or external API of any kind; no email/SMS/push delivery (none claimed);
+no multi-process rate-limit behaviour (single dev process only); no load
+or penetration testing; no frontend integration; tests ran only against
+SQLite (fast), disposable `roamlary_test` (integration), and the local
+`roamlary_dev` server (live E2E).
+
+### 13.10 Live verification on `roamlary_dev` (real output, 2026-10-12)
+
+A `--reload` dev server was already running on `127.0.0.1:8000`
+(`python -m uvicorn app.main:app --reload`, started earlier that day; it
+had reloaded into the current code — its OpenAPI listed all 7 new routes
+and unauthenticated calls returned 401 as designed). A second uvicorn I
+launched to be independent exited immediately because the port was
+already held, so **all live checks ran against that existing server**,
+which serves the same code and the same `roamlary_dev` database.
+
+- **Health contract exact:** `{"status": "ok", "service":
+  "roamlary-backend", "version": "1.0.0"}`.
+- **Live E2E (stdlib `urllib`, no extra dependencies): 54 passed, 0
+  failed.** Highlights: three accounts registered (each new account
+  `unverified`/`user`/gate-required); unverified denied discovery with
+  status-specific guidance; anonymous discovery/admin → 401; submit →
+  `pending` with trimmed note; duplicate submit 409; injected
+  `status`/`role` on register/profile/submit → 422; ordinary user → 403
+  on the whole admin surface; CLI `make-owner` exit 0 **without printing
+  `DATABASE_URL`**, unknown email exit 1; owner role visible while
+  verification stays `unverified`; owner role does NOT bypass the social
+  gate; queue shape + "no email/password in queue"; approve records
+  `reviewed_at`/`reviewed_by` and flips the account to `verified`;
+  re-approve 409, unknown id 404; second applicant rejected → denied →
+  allowed to resubmit; owner's own request stays `pending` (self-review
+  impossible); bad queue filter/limit → 422; policy off opens the gate,
+  policy on closes it again; invalid policy body → 422; **rate limit:
+  exactly 5 allowed then 429 (attempt #8)**; unverified accounts can
+  still trigger SOS, save a contact, and file a report; **no
+  identity-document columns exist**.
+- **First E2E attempt failed — a bug in my script, not the app:** the
+  script passed a header dict where a raw token string was expected,
+  sending `Authorization: Bearer {'Authorization': …}` (invalid JWT →
+  401). A standalone probe proved register → `/users/me` → login →
+  local decode with the `.env` secret all work; I fixed the script's
+  `call()` helper (no application code changed) and the run was 54/54.
+- **Live migration-guard demo (data present):** `alembic downgrade
+  ab32047c8481` → **exit 1** with *"Refusing to downgrade migration
+  3e285edb0896 (add identity verification foundation): 4 verification
+  request(s), 1 setting row(s), 2 audit row(s) and 3 user(s) with a
+  non-default verification state or role exist … no schema changes were
+  made …"*. Verified unchanged immediately after: `alembic current` still
+  `3e285edb0896 (head)`; counts identical (4/1/2/5).
+- **Clean roundtrip:** my test data deleted (scoped to this run's own
+  `live-*` accounts + their policy/audit rows) → `alembic downgrade
+  ab32047c8481` **exit 0** → `alembic upgrade head` **exit 0**.
+- **Final state:** `alembic current` → `3e285edb0896 (head)`; phase tables
+  present and empty (requests 0, settings 0, audit 0); the one
+  pre-existing dev row survived with backfilled defaults
+  (`unverified`/`user`).
+- **Data note (owner was asked):** a single account
+  (`user@example.com`) appeared in `roamlary_dev` during setup at 22:22
+  (origin unknown to me; zero dependent data, untouched since creation).
+  The owner chose **"leave it, adapt the E2E"** — so all isolation and
+  cleanup checks were scoped to this phase's own `live-*` data, that row
+  was never touched, and it is honestly reflected in the final counts
+  above.
+
+### 13.11 Known limitations & follow-up work
+
+- Manual review only — no real identity provider; "verified" = an owner
+  read a short note. No ID data is (or may ever be, in this prototype)
+  collected.
+- Single-owner deployments cannot API-approve the owner's own account
+  (self-review refused by rule) — needs a second reviewer or a deliberate
+  server-side action.
+- Rate limiter is in-process (resets on restart, per-process) — revisit
+  before multi-process deployment.
+- No `expired`/`requires_review` states; no client UI (Phase 9); no
+  verification notifications (none claimed).
+- Social surface is a gated placeholder until Phase 7; report moderation
+  still untouched (reports stay `pending`-only).
+- (Also listed in §14.)
+
+### 13.12 Scope confirmation — no identity documents, no external services
+
+- ❌ Aadhaar/ID numbers, document uploads, scans, or any sensitive
+  identity data — in requests, tables, fixtures, logs, tests, or docs
+- ❌ real identity-provider integration (or any external API call)
+- ❌ discovery/chat/events/AI implementation — one gated **placeholder**
+  route only, per the owner's explicit decision
+- ❌ Flutter changes (`frontend/` untouched) · ❌ SOS lifecycle changes
+- ❌ report-moderation changes · ❌ email/SMS/push notifications, and no
+  claim that anything was delivered
+- ❌ self-verification paths of any kind; email/registration-order
+  privilege grants; hardcoded credentials
+- ❌ commits, pushes, merges, resets, stashes, or branch switches during
+  the phase (HEAD stayed `9939515`)
+
+### 13.13 Documentation updated & git state
+
+**Docs:** README (scope block, eight-tables list, new "Identity
+verification & social gate" section with states/endpoints/gate/CLI/policy,
+migration bullet for `3e285edb0896`, counts 245/221/24, +8 Common-problems
+rows, report-moderation clarification), this report (§2, §3, §4, §5, §6 +
+this §13; Known limitations and Pending tasks **renumbered to §14/§15**
+with the §9.14 note annotated), and the new
+**`PHASE6_IDENTITY_CHANGES.md`** standalone review (26-row inventory,
+migration proof, test results, scope list, git state).
+
+**Git:** no commits, pushes, merges, resets, stashes, or branch switches
+**during the phase**; HEAD stayed **`9939515`** (= `origin/backend`).
+Working tree: **11 modified + 15 new = 26 files** (all this phase), no
+secrets, `frontend/` untouched. `git status` output recorded at review
+time in §13.13's companion doc.
+
+## 14. Known limitations (current)
 
 - Served endpoints: health, register/login, `GET/PATCH /users/me`, the five
   **trusted-contact** routes, the five **check-in** routes (Phase 4, §10),
-  the five **SOS** routes (Phase 5, §11), and the four **community-report**
-  routes (Phase 6, §12: create, list, nearby, get-by-id). Nothing else
-  exposes the database over HTTP.
+  the five **SOS** routes (Phase 5, §11), the four **community-report**
+  routes (Phase 6, §12: create, list, nearby, get-by-id), and the seven
+  **identity-verification/social** routes (Phase 6 second assignment, §13:
+  status, submit, owner queue list/approve/reject, owner policy read/patch,
+  gated social discovery placeholder). Nothing else exposes the database
+  over HTTP.
 - Authentication is a **local prototype**: Argon2id password hashing + HS256
   JWTs. No refresh tokens, password reset, email verification, rate limiting,
   or account recovery yet — all belong to later phases.
@@ -1977,6 +2445,25 @@ secrets, `frontend/` untouched.
   notifies no one, submitter identity is never exposed, reports have no
   owner edit/delete actions, and the nearby search is an O(n) SQL haversine
   (no index/PostGIS, radius ≤ 50 km, <1% error at city scale).
+  *(Amended by Phase 6 second assignment (§13): `users.role`/verification
+  now exist, but report moderation is still untouched — `community_reports`
+  status remains `pending`-only, as scoped.)*
+- Phase 6 second assignment (§13) verification is **manual review only**:
+  no Aadhaar/ID documents or any sensitive identity data are accepted,
+  stored, logged, or displayed anywhere; no real identity-provider
+  integration; request statuses are exactly
+  `unverified/pending/verified/rejected` (no `expired`/`requires_review`
+  yet); there is exactly **one** owner role with a server-side CLI grant
+  (`python -m app.cli make-owner <email>` — no self-service ownership, no
+  email/registration-order privilege); a reviewer cannot decide their own
+  request (409); the owner-only policy rate limiter is **in-process**
+  (resets on restart, per-process — fine on one dev machine, revisit
+  before multi-process deployment); the social surface is a **gated
+  placeholder** (empty list) until Phase 7; account/safety workflows
+  (trusted contacts, check-ins, SOS, profile) stay reachable while
+  unverified, by design.
+- The identity-verification feature has **no client UI** yet (Phase 9) and
+  no email/verification notifications (none are claimed to work).
 - Pagination exists **only** on the report endpoints (offset/limit,
   1–100); contact/check-in/SOS lists remain unbounded arrays (fine at
   prototype scale, revisit before real traffic).
@@ -1986,20 +2473,24 @@ secrets, `frontend/` untouched.
 - The `backend` branch is pushed to GitHub (`origin/backend`) through
   **Phases 1–6**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
   `f26536e`, Phases 4 + 5 as `f602505`, and **Phase 6 committed and pushed
-  after the owner's instruction, 2026-10-12** (see `git log`). The working
-  tree is **clean**; every push of this branch contains the full tree
-  (`backend/`, `frontend/`, `.gitignore`, and — since the owner's decision
-  of 2026-10-12 — `docs/README.md`, so the `docs/` folder now exists on
-  GitHub). GitHub's **`main` branch was fast-forwarded to this branch**
-  the same day (owner decision, §14), so the GitHub homepage shows all of
-  Phases 1–6.
+  after the owner's instruction, 2026-10-12** (see `git log`, HEAD
+  `9029047`…later `9939515` as annotated in §12.13). The working tree now
+  carries the **uncommitted Phase 6 (second assignment) change set**
+  awaiting owner review (owner rule: no commits during a phase); every
+  push of this branch contains the full tree (`backend/`, `frontend/`,
+  `.gitignore`, and — since the owner's decision of 2026-10-12 —
+  `docs/README.md`, so the `docs/` folder now exists on GitHub). GitHub's
+  **`main` branch was fast-forwarded to this branch** the same day (owner
+  decision, §15), so the GitHub homepage shows all of Phases 1–6 as
+  committed so far.
 - Database lives in a Docker container; if that container's volume is removed,
   recreate the schema with `alembic upgrade head`.
 - Frontend cannot integrate beyond the health + auth + Phase 4 + Phase 5
-  contract until Phase 9 (the Phase 6 report contract is new and
+  contract until Phase 9 (the Phase 6 report contract is committed; the
+  Phase 6 second assignment verification/social contract is new and
   uncommitted).
 
-## 14. Pending tasks and next steps
+## 15. Pending tasks and next steps
 
 1. ✅ **Settled (2026-10-12):** owner reviewed Phases 4 + 5 (§10/§11 +
    `PHASE4_CHANGES.md`/`PHASE5_CHANGES.md`) and approved commit & push.
@@ -2020,11 +2511,16 @@ secrets, `frontend/` untouched.
    **`docs/`** folder → `docs/README.md` explains the folder's purpose
    and lists the planned future contents (e.g. `docs/merge-report.md`
    from Phase 9); the folder now exists on GitHub.
-6. Owner assigns the next phase (per the roadmap: Phase 7, AI companion —
+6. ⏳ **Awaiting owner review (2026-10-12):** Phase 6 (second assignment)
+   §13 + `PHASE6_IDENTITY_CHANGES.md` + test results (245 passed,
+   0 skipped) are ready for the owner's review; the change set stays
+   **uncommitted** until that approval (owner rule: no commits during a
+   phase). Phase 7 must not start before this review.
+7. Owner assigns the next phase (per the roadmap: Phase 7, AI companion —
    blocked until Laptop 3 publishes the AI contract).
-7. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
+8. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
    planning and the `docs/merge-report.md` integration document.
-8. Laptop 3 to publish the AI contract before Phase 7 can be real (stub until
+9. Laptop 3 to publish the AI contract before Phase 7 can be real (stub until
    then).
 
 ---
