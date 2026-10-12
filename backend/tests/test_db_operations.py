@@ -107,15 +107,24 @@ def test_sos_event_out_of_range_location_rejected(db_session: Session) -> None:
 
 
 def test_community_report_created_pending(db_session: Session) -> None:
+    """A fresh report is stored as `pending` with its category intact.
+
+    The sample category is `poor_lighting`: Phase 6 turned the Phase 2
+    loose category string into a closed set (ReportCategory) enforced by
+    a CHECK constraint, so values like the old "lighting" sample are now
+    rejected by the database.
+    """
     user = User(display_name="Asha")
     db_session.add(
-        CommunityReport(user=user, category="lighting", description="Dark square near the station")
+        CommunityReport(
+            user=user, category="poor_lighting", description="Dark square near the station"
+        )
     )
     db_session.commit()
 
     saved = db_session.query(CommunityReport).one()
     assert saved.status == ReportStatus.PENDING
-    assert saved.category == "lighting"
+    assert saved.category == "poor_lighting"
 
 
 def test_deleting_user_with_safety_records_is_restricted(db_session: Session) -> None:

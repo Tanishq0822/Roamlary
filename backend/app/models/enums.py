@@ -57,8 +57,43 @@ class SosStatus(StrEnum):
 
 
 class ReportStatus(StrEnum):
-    """Moderation state of a community safety report."""
+    """Moderation state of a community safety report.
+
+    Phase 6 note: NO moderation system exists yet, so nothing can move a
+    report out of PENDING. `approved` and `rejected` are RESERVED for the
+    future moderation phase — the API never accepts a status from
+    clients, and ordinary users cannot mark their own reports approved.
+    Until then, every submitted report is user-submitted content
+    (`pending`), and only `rejected` rows are hidden from the public API.
+    """
 
     PENDING = "pending"  # submitted, not yet reviewed
     APPROVED = "approved"  # visible to the community
     REJECTED = "rejected"  # declined during review
+
+
+class ReportCategory(StrEnum):
+    """Allowed categories for community safety reports (Phase 6).
+
+    The Phase 2 model deliberately kept `category` as a loose string
+    ("categories are a Phase 6 product decision"). Phase 6 makes that
+    decision: six machine-friendly values, enforced by the API schema AND
+    a database CHECK constraint (added by migration). Short snake_case
+    keeps every value inside the column's VARCHAR(40).
+
+        unsafe_area         -> general "do not linger here" observation
+        harassment          -> someone was harassed at/near this place
+        suspicious_activity -> unusual or unsettling behaviour observed
+        road_hazard         -> roads/transport danger (potholes, blocked
+                               roads, aggressive driving hotspots)
+        poor_lighting       -> dark streets, broken lamps, blind corners
+        other               -> genuine safety concern that fits nowhere
+                               above (description carries the detail)
+    """
+
+    UNSAFE_AREA = "unsafe_area"
+    HARASSMENT = "harassment"
+    SUSPICIOUS_ACTIVITY = "suspicious_activity"
+    ROAD_HAZARD = "road_hazard"
+    POOR_LIGHTING = "poor_lighting"
+    OTHER = "other"

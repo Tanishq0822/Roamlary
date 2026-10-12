@@ -28,7 +28,11 @@ import app.models  # noqa: F401  (registers all tables)
 from app.db.base_class import Base
 from app.models import TrustedContact, User
 from app.models.enums import CheckInStatus
-from tests.conftest import insert_raw_user_and_checkin, insert_raw_user_and_sos
+from tests.conftest import (
+    insert_raw_user_and_checkin,
+    insert_raw_user_and_report,
+    insert_raw_user_and_sos,
+)
 
 PG_TEST_URL = os.environ.get("ROAMLARY_TEST_DATABASE_URL")
 BACKEND_DIR = Path(__file__).resolve().parents[1]
@@ -524,3 +528,94 @@ def test_pg_phase5_downgrade_upgrade_roundtrip_without_cancelled_sos(pg_engine) 
     # downgrade behaviour); the ROW and its status survive.
     assert row.description is None
     assert "'cancelled'" in constraint  # 5-value constraint restored
+
+
+# -------------------------------- Phase 6 category constraint checks (PG)
+
+
+def test_phase6_category_constraint_enforced_on_pg(pg_engine) -> None:
+    """The Phase 6 CHECK (created by migration ab32047c8481) accepts
+    in-set categories and rejects anything else on REAL PostgreSQL."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "ab32047c8481"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_report(pg_engine, "poor_lighting")  # in-set: accepted
+    with pg_engine.connect() as connection:
+        category = connection.execute(
+            sa.text("SELECT category FROM community_reports")
+        ).scalar_one()
+    assert category == "poor_lighting"
+
+    with pytest.raises(IntegrityError):
+        insert_raw_user_and_report(pg_engine, "theft")  # out-of-set: rejected
+
+
+def test_pg_phase6_upgrade_refuses_when_unknown_categories_exist(pg_engine) -> None:
+    """Data-dependent upgrade on REAL PostgreSQL: a pre-Phase-6 category
+    must make the upgrade REFUSE, leaving schema and record untouched."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "0dd8995649b4"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_report(pg_engine, "theft")  # pre-Phase-6: any string allowed
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "ab32047c8481"])
+    assert upgrade_again.returncode != 0, (
+        "upgrade must be REFUSED while unknown categories exist, "
+        f"but it succeeded:\n{upgrade_again.stdout}\n{upgrade_again.stderr}"
+    )
+    output = upgrade_again.stdout + upgrade_again.stderr
+    assert "Refusing to upgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(pg_engine)
+    names = {c["name"] for c in inspector.get_check_constraints("community_reports")}
+    assert "ck_community_reports_category_valid" not in names
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        category = conn.execute(sa.text("SELECT category FROM community_reports")).scalar_one()
+    assert version == "0dd8995649b4"  # unchanged
+    assert category == "theft"  # the record itself is untouched
+
+
+def test_pg_phase6_downgrade_upgrade_roundtrip(pg_engine) -> None:
+    """Normal path on REAL PostgreSQL: downgrade drops the constraint
+    without touching stored data; upgrading again restores it."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "ab32047c8481"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_report(pg_engine, "unsafe_area")
+
+    downgrade = _run_alembic_on_pg(["downgrade", "0dd8995649b4"])
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    with pg_engine.connect() as conn:
+        constraint_count = conn.execute(
+            sa.text(
+                "SELECT count(*) FROM pg_constraint "
+                "WHERE conname = 'ck_community_reports_category_valid'"
+            )
+        ).scalar_one()
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        category = conn.execute(sa.text("SELECT category FROM community_reports")).scalar_one()
+    assert constraint_count == 0  # constraint dropped
+    assert version == "0dd8995649b4"
+    assert category == "unsafe_area"  # stored value survives
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "ab32047c8481"])
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    with pg_engine.connect() as conn:
+        constraint_count = conn.execute(
+            sa.text(
+                "SELECT count(*) FROM pg_constraint "
+                "WHERE conname = 'ck_community_reports_category_valid'"
+            )
+        ).scalar_one()
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        category = conn.execute(sa.text("SELECT category FROM community_reports")).scalar_one()
+    assert constraint_count == 1  # constraint restored
+    assert version == "ab32047c8481"
+    assert category == "unsafe_area"

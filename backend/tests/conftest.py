@@ -184,3 +184,43 @@ def insert_raw_user_and_sos(engine, status: str, description: str | None = None)
             ),
             {"id": sos_id, "user_id": user_id, "status": status, "description": description},
         )
+
+
+def insert_raw_user_and_report(
+    engine, category: str, status: str = "pending", description: str = "Migration probe"
+) -> None:
+    """Insert one user + one community report with RAW SQL, bypassing the ORM.
+
+    Same purpose as the other raw helpers: migration tests need rows
+    that already sit in the database no matter who wrote them - exactly
+    the situation an Alembic upgrade/downgrade guard faces. The
+    `category` is a plain string on purpose, so tests can insert values
+    the Phase 6 CHECK constraint would reject.
+    """
+    if engine.dialect.name == "postgresql":
+        user_id, report_id = uuid.uuid4(), uuid.uuid4()
+    else:
+        user_id, report_id = str(uuid.uuid4()), str(uuid.uuid4())
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'Migration Probe', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": user_id},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO community_reports "
+                "(id, user_id, category, description, status, created_at, updated_at) "
+                "VALUES (:id, :user_id, :category, :description, :status, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {
+                "id": report_id,
+                "user_id": user_id,
+                "category": category,
+                "description": description,
+                "status": status,
+            },
+        )

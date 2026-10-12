@@ -14,7 +14,11 @@ from pathlib import Path
 
 import sqlalchemy as sa
 
-from tests.conftest import insert_raw_user_and_checkin, insert_raw_user_and_sos
+from tests.conftest import (
+    insert_raw_user_and_checkin,
+    insert_raw_user_and_report,
+    insert_raw_user_and_sos,
+)
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 EXPECTED_TABLES = {"users", "trusted_contacts", "check_ins", "sos_events", "community_reports"}
@@ -260,4 +264,90 @@ def test_phase5_downgrade_upgrade_roundtrip_without_cancelled_sos(tmp_path) -> N
     # ROW and its status survive.
     assert row.description is None
     assert "'cancelled'" in table_sql  # 5-value constraint restored
+    engine.dispose()
+
+
+def test_phase6_upgrade_refuses_when_unknown_categories_exist(tmp_path) -> None:
+    """DATA-DEPENDENT UPGRADE (regression): a report with a category
+    outside the Phase 6 closed set (any string was allowed by the Phase 2
+    schema) must make the upgrade REFUSE cleanly, instead of failing
+    mid-schema-change against the new CHECK constraint.
+
+    The refusal happens BEFORE any schema change, so schema and records
+    must both be left exactly as they were - nothing deleted or converted.
+    """
+    db_file = tmp_path / "migration_category_guard.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "0dd8995649b4"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_report(engine, "theft")  # pre-Phase-6: any string allowed
+
+    upgrade_again = _run_alembic(["upgrade", "ab32047c8481"], url)
+    assert upgrade_again.returncode != 0, (
+        "upgrade must be REFUSED while unknown categories exist, "
+        f"but it succeeded:\n{upgrade_again.stdout}\n{upgrade_again.stderr}"
+    )
+    output = upgrade_again.stdout + upgrade_again.stderr
+    assert "Refusing to upgrade" in output
+    assert "data-handling decision" in output
+
+    # The refusal must leave EVERYTHING unchanged.
+    inspector = sa.inspect(engine)
+    names = {c["name"] for c in inspector.get_check_constraints("community_reports")}
+    assert "ck_community_reports_category_valid" not in names
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        category = conn.execute(sa.text("SELECT category FROM community_reports")).scalar_one()
+    assert version == "0dd8995649b4"  # still at the Phase 5 revision
+    assert category == "theft"  # the record itself is untouched
+    engine.dispose()
+
+
+def test_phase6_upgrade_downgrade_roundtrip_with_valid_data(tmp_path) -> None:
+    """NORMAL PATH: with only in-set categories the upgrade succeeds; the
+    downgrade drops the constraint WITHOUT touching any stored category
+    value; upgrading again restores the exact Phase 6 schema."""
+    db_file = tmp_path / "migration_category_roundtrip.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "ab32047c8481"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_report(engine, "road_hazard")
+
+    with engine.connect() as conn:
+        table_sql = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='community_reports'")
+        ).scalar_one()
+    assert "category_valid" in table_sql and "'unsafe_area'" in table_sql
+
+    downgrade = _run_alembic(["downgrade", "0dd8995649b4"], url)
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        category = conn.execute(sa.text("SELECT category FROM community_reports")).scalar_one()
+        table_sql = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='community_reports'")
+        ).scalar_one()
+    assert version == "0dd8995649b4"
+    assert category == "road_hazard"  # stored value survives a constraint drop
+    assert "category_valid" not in table_sql
+
+    upgrade_again = _run_alembic(["upgrade", "ab32047c8481"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        category = conn.execute(sa.text("SELECT category FROM community_reports")).scalar_one()
+        table_sql = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='community_reports'")
+        ).scalar_one()
+    assert version == "ab32047c8481"
+    assert category == "road_hazard"
+    assert "category_valid" in table_sql
     engine.dispose()

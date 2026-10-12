@@ -8,10 +8,10 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phase 5 — SOS & emergency workflow, simulated)
+## Current scope (Phase 6 — Community safety reports & location search)
 
 Implemented now (on top of the Phase 1 foundation + Phase 2 database +
-Phase 3 authentication + Phase 4 contacts/check-ins):
+Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -25,7 +25,8 @@ Phase 3 authentication + Phase 4 contacts/check-ins):
 - **Alembic migrations** (initial schema + `password_hash` column +
   Phase 4 contact/check-in columns & `cancelled` status +
   Phase 5 SOS description/location-timestamp/cancellation columns &
-  `cancelled` status)
+  `cancelled` status + Phase 6 `community_reports.category` CHECK
+  constraint)
 - **Local authentication**: `POST /auth/register`, `POST /auth/login`
   (Argon2id password hashing + HS256 JWT access tokens)
 - **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
@@ -35,18 +36,25 @@ Phase 3 authentication + Phase 4 contacts/check-ins):
   `GET/PATCH /check-ins/{checkin_id}`, `POST /check-ins/{checkin_id}/complete`
 - **SOS incidents (simulated)**: `POST/GET /sos`,
   `GET /sos/{sos_id}`, `POST /sos/{sos_id}/cancel`, `POST /sos/{sos_id}/resolve`
-- Automated test suite: **158 tests** (142 offline + 16 real-PostgreSQL
-  integration; contacts + check-ins + SOS + auth + profiles + models +
-  migrations)
+- **Community safety reports**: `POST /reports`, `GET /reports`,
+  `GET /reports/nearby`, `GET /reports/{report_id}` — with category/status
+  filters, bounded offset/limit pagination, and a haversine radius search
+- Automated test suite: **193 tests** (174 offline + 19 real-PostgreSQL
+  integration; contacts + check-ins + SOS + reports + auth + profiles +
+  models + migrations)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
 them to exist): Firebase Authentication, refresh tokens, password reset, email
-verification, roles/permissions, community **report workflow endpoints**, AI
-companion, notifications, **overdue-check-in alerts**, pagination, production
-deployment. Phase 5 only *records* SOS incidents locally — it never contacts
-emergency services, never messages a contact, and never shares a location.
-Authentication here is a **local prototype** — it needs real security work
-(HTTPS, rate limiting, token revocation) before any production claim.
+verification, roles/permissions, report **moderation/approval workflow** (the
+`approved`/`rejected` states are reserved — no endpoint can set them yet), AI
+companion, notifications, **overdue-check-in alerts**, pagination on the
+non-report endpoints, production deployment. Phase 5 only *records* SOS
+incidents locally — it never contacts emergency services, never messages a
+contact, and never shares a location. Phase 6 only *stores and searches*
+reports — every report is an **unverified user submission**, no moderation or
+verification exists, and filing one sends nothing to anyone. Authentication
+here is a **local prototype** — it needs real security work (HTTPS, rate
+limiting, token revocation) before any production claim.
 
 ## Prerequisites
 
@@ -122,12 +130,13 @@ reviewed, replayable file.
 | `trusted_contacts` | People to notify in an SOS | `user_id` (FK→users), `name`, `phone`, `email` |
 | `check_ins` | "Ping me by time T" promises | `user_id` (FK), `status`, `due_at`, `completed_at` |
 | `sos_events` | **Simulated** emergency incidents | `user_id` (FK), `status`, `latitude`/`longitude`, `resolved_at` |
-| `community_reports` | Crowd-sourced safety notes | `user_id` (FK), `category`, `description`, `latitude`/`longitude`, `status` |
+| `community_reports` | Crowd-sourced safety notes | `user_id` (FK), `category` (6-value set, Phase 6), `description`, `latitude`/`longitude`, `status` |
 
 All children use **`ON DELETE RESTRICT`**: deleting a user who still has safety
 records is blocked at the database level, so safety history can never vanish by
-accident. Status columns are protected by CHECK constraints, and lat/long are
-range-guarded (−90..90 / −180..180).
+accident. Status columns are protected by CHECK constraints, report `category`
+is a closed 6-value set enforced by a CHECK constraint (Phase 6), and lat/long
+are range-guarded (−90..90 / −180..180).
 
 ### What CORS is and when it matters
 
@@ -408,6 +417,101 @@ Responses always return UTC timestamps.
 > no location with anyone. Do not present this as an emergency-response
 > system; real delivery needs integrations and safeguards from later phases.
 
+## Community safety reports (Phase 6)
+
+One traveller's observation about a **place** — "dark street behind the
+station" — filed by an authenticated user and searchable by the community.
+
+| Method & path | Purpose | Auth | Success |
+| --- | --- | --- | --- |
+| `POST /api/v1/reports` | File a report (created as `pending`) | Bearer | `201` |
+| `GET /api/v1/reports` | List visible reports, newest first (filters + pagination) | Bearer | `200` |
+| `GET /api/v1/reports/nearby` | Reports within `radius_m` meters of a position, nearest first | Bearer | `200` |
+| `GET /api/v1/reports/{report_id}` | One visible report | Bearer | `200` / `404` |
+
+**Create** — only these four fields are accepted (`422` on anything else):
+
+```powershell
+curl -X POST http://127.0.0.1:8000/api/v1/reports `
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" `
+  -d '{"category":"poor_lighting","description":"dark street behind the station",
+       "latitude":28.6139,"longitude":77.2090}'
+```
+
+```json
+{
+  "id": "3f6a…", "category": "poor_lighting", "status": "pending",
+  "description": "dark street behind the station",
+  "latitude": 28.6139, "longitude": 77.2090,
+  "created_at": "2026-10-12T14:03:11Z", "updated_at": "2026-10-12T14:03:11Z"
+}
+```
+
+- **Categories (closed set):** `unsafe_area`, `harassment`,
+  `suspicious_activity`, `road_hazard`, `poor_lighting`, `other`.
+  Unknown values → `422` at the API **and** a database CHECK constraint.
+- **Coordinates are required** (the feature is location-based): lat
+  −90…90, lon −180…180, both or neither (both are always sent).
+- **Description** required, trimmed, 1–500 chars; blank → `422`.
+- **No `user_id` in responses.** The submitter is stored in the table for
+  accountability, but reports are about places, not people — no email,
+  phone, or identity field can appear in any report response.
+- `user_id`, `status`, `id`, `created_at`, `updated_at` are
+  server-controlled — sending any of them → `422`.
+
+**Status & visibility (read this before trusting a report):**
+
+- Every report is created **`pending`** — a plain, **unverified user
+  submission**. Filing one proves nothing about the place.
+- **No moderation exists yet**: nothing can set `approved` or `rejected`,
+  and no endpoint accepts a status — ordinary users can never mark their
+  own reports "verified". `approved`/`rejected` are reserved for a future
+  moderation phase with roles.
+- Public reads return everything **except** `status='rejected'` (hidden);
+  a rejected report's ID returns the same `404` as one that never
+  existed. Because `status` travels in every response, clients can always
+  distinguish `pending` (unverified) from `approved` (moderated).
+- Reports have **no owner lifecycle actions**: no `PATCH`, no `DELETE`,
+  no status transitions — the status column belongs to the future
+  moderation system, not the submitter.
+
+**List filters & pagination** (first paginated endpoint in this API):
+
+- `?category=<one of the six>` and `?status=pending|approved` (optional;
+  `status=rejected` → `422` — rejected is hidden, not filterable).
+- `?offset=` (≥ 0, default 0), `?limit=` (1–100, default 20); stable order
+  `created_at DESC, id DESC`. Responses are plain JSON arrays, like every
+  other list endpoint.
+
+**Nearby search** — `GET /api/v1/reports/nearby`:
+
+- Required: `latitude` (−90…90), `longitude` (−180…180), `radius_m`
+  (**meters**, `0 < radius_m ≤ 50000` i.e. max 50 km). Optional:
+  `category`, `offset`, `limit` (same bounds as the list).
+- **Method: a plain SQL haversine distance query** (Earth radius
+  6,371,000 m), **not** PostGIS and **not** a geospatial index — adding
+  that infrastructure was not justified for a hackathon prototype. The
+  formula uses trig of the half-differences, so it wraps correctly across
+  the antimeridian and stays accurate at high latitudes (no flat-map
+  approximation). Practical limitations: it **scans the whole table**
+  (O(n), fine for thousands of rows, revisit before real traffic), has no
+  index support, is accurate to well under 1% at city scale (spherical
+  vs. ellipsoidal Earth), and rows with `NULL` coordinates are skipped.
+- Rejected reports are excluded, ordering is nearest-first (stable ties
+  by `created_at DESC, id DESC`), results are paginated and capped at 100.
+
+```powershell
+# Reports within 2 km of a map position (radius unit is METERS)
+curl "http://127.0.0.1:8000/api/v1/reports/nearby?latitude=28.61&longitude=77.20&radius_m=2000" `
+  -H "Authorization: Bearer <token>"
+```
+
+> **Safety boundary:** a report is an **opinion**, not verified truth —
+> the API never claims a place is dangerous or safe. Filing one sends
+> nothing to anyone: no notifications, no emergency services, no
+> nearby-user alerts, no moderation. Reports are read-only public content
+> for authenticated users in this phase.
+
 ## Migrations (Alembic)
 
 Alembic creates and evolves the schema. The migration files live in
@@ -433,6 +537,19 @@ Applied migrations on `roamlary_dev`:
   exist; if any exist, `downgrade` deliberately **refuses** before
   touching anything (data-safety guard — see Common problems).
   `alembic current` → `0dd8995649b4 (head)`.
+- `ab32047c8481` — Phase 6: turns `community_reports.category` from a
+  loose string into a closed 6-value set by adding the
+  `ck_community_reports_category_valid` CHECK constraint
+  (`unsafe_area`, `harassment`, `suspicious_activity`, `road_hazard`,
+  `poor_lighting`, `other`). The **upgrade** checks existing rows first:
+  if any report carries an out-of-set category, it deliberately
+  **refuses** with an actionable error before touching anything (an
+  explicit data-handling decision is needed first — see Common
+  problems). The **downgrade** only drops the constraint, which cannot
+  lose or alter data, so it always proceeds and every stored category
+  value survives. Round-trip verified (`upgrade` → `downgrade` →
+  `upgrade`) on SQLite and PostgreSQL. `alembic current` →
+  `ab32047c8481 (head)`.
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -472,20 +589,25 @@ Then put the matching `DATABASE_URL` in `.env`.
 
 Two test layers exist. Do not confuse them:
 
-- **Offline unit tests** (142) — use an in-memory SQLite database and the
+- **Offline unit tests** (174) — use an in-memory SQLite database and the
   FastAPI `TestClient`. No PostgreSQL, no network. They prove model
   behaviour, auth flows (register/login/JWT/profile), contact & check-in
   endpoint contracts (ownership, transitions, timestamps), SOS endpoint
-  contracts (activation validation, ownership, lifecycle), fail-closed
-  behaviour, route contracts, and the migration chain (including the
-  Phase 4 and Phase 5 downgrade data-safety guards). They always run with
-  a fixed TEST-ONLY JWT secret (never the real `.env` value).
-- **PostgreSQL integration tests** (16) — run against a **disposable**
+  contracts (activation validation, ownership, lifecycle), community-report
+  endpoint contracts (strict creation, privacy, visibility, filters,
+  pagination bounds, nearby radius/antimeridian/high-latitude behaviour),
+  fail-closed behaviour, route contracts, and the migration chain
+  (including the Phase 4 downgrade guard, the Phase 5 downgrade guard, and
+  the Phase 6 **upgrade** guard). They always run with a fixed TEST-ONLY
+  JWT secret (never the real `.env` value).
+- **PostgreSQL integration tests** (19) — run against a **disposable**
   database and prove real PostgreSQL behaviour (native `uuid` columns, CHECK
-  constraint enforcement — including the Phase 4/5 `cancelled` values and
-  new columns — timezone-aware timestamps, the `password_hash` column, and
-  both downgrade guards: refused with `cancelled` rows, allowed without
-  them). They are **skipped** unless you point them at a throwaway database.
+  constraint enforcement — including the Phase 4/5 `cancelled` values,
+  Phase 6 category constraint, and new columns — timezone-aware
+  timestamps, the `password_hash` column, both downgrade guards: refused
+  with `cancelled` rows, allowed without them, and the Phase 6 upgrade
+  guard: refused with out-of-set categories). They are **skipped** unless
+  you point them at a throwaway database.
 
 ```powershell
 # Default run (PostgreSQL integration tests will be SKIPPED)
@@ -537,6 +659,10 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `RuntimeError: Refusing to downgrade migration 0dd8995649b4 …` | At least one SOS incident has `status='cancelled'`, which the older constraint would reject | Intentional data-safety guard: nothing was changed. Decide what to do with those rows (delete them, or move them to an allowed status), then re-run the downgrade — or keep the Phase 5 schema |
 | `409` on `POST /sos/{id}/cancel` or `…/resolve` | The incident is already `cancelled` or `resolved` (terminal states are locked; repeats always conflict — SOS transitions are deliberately not idempotent) | Read the incident first (`GET /sos/{id}`); only `active` incidents can transition |
 | `422` on `POST /sos` with coordinates | Only one of `latitude`/`longitude` sent, a value out of range, a blank `description`, or an injected server-controlled field (`user_id`, `status`, `cancelled_at`, …) | Send both coordinates together (lat −90…90, lon −180…180), non-blank `description` or none, and only the documented fields |
+| `422` on `POST /reports` | Unknown `category`, missing coordinates, out-of-range lat/lon, blank/overlong `description`, or an injected server-controlled field (`user_id`, `status`, `id`, timestamps) | Send exactly `category` (one of the six: `unsafe_area`, `harassment`, `suspicious_activity`, `road_hazard`, `poor_lighting`, `other`), `description` (1–500 non-blank chars), `latitude`, `longitude` |
+| `422` on `GET /reports/nearby` | Missing/invalid `latitude`/`longitude`, missing `radius_m`, `radius_m` ≤ 0 or > 50000, or `limit`/`offset` out of bounds | Send `latitude` (−90…90), `longitude` (−180…180), `radius_m` in **meters** (1–50000), plus optional `limit` (1–100) / `offset` (≥ 0) |
+| `404` on `GET /reports/{id}` | The report is missing **or** `rejected` (both return the identical `404` by design — hidden reports can't be probed) | Rejected reports are invisible to the public API; check with an admin/DBA if moderation ever lands |
+| `RuntimeError: Refusing to upgrade migration ab32047c8481 …` | At least one `community_reports` row carries a category outside the Phase 6 closed set (any string was legal in the Phase 2 schema) | Intentional data-safety guard: nothing was changed. Decide what to do with those rows (map each to an allowed category such as `other`, or delete them), then re-run `alembic upgrade head` |
 
 ## Development log
 

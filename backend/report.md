@@ -35,8 +35,8 @@ the project owner; the backend lead implements only assigned phases.**
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (Phases 1–5 pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; **Phases 4 + 5 (incl. the migration-safety fix round) committed together after owner approval, 2026-10-12** — see `git log`; working tree clean) |
-| History | `4761b41` initial setup → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → *(next commit: Phases 4 + 5 incl. the fix round — committed & pushed after owner approval, 2026-10-12; see `git log`)* |
+| Branch | `backend` (all work pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; **Phase 6 committed and pushed after the owner's instruction, 2026-10-12** — see `git log`; working tree clean) |
+| History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → **Phase 6 commit (2026-10-12, owner-instructed)** — see `git log` for its hash |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
 | PostgreSQL | **Running locally** — server 16.15 in the Docker container `roamlary-postgres-dev` (databases: `roamlary_dev`, `roamlary_test`). No system-wide install | 
@@ -48,7 +48,7 @@ the project owner; the backend lead implements only assigned phases.**
 
 ## 3. Development phases and status
 
-Roadmap assigned by the project owner (Phases 0–5 complete; Phases 6+ are NOT
+Roadmap assigned by the project owner (Phases 0–6 complete; Phases 7+ are NOT
 started — the backend lead waits for each phase assignment):
 
 | Phase | Name | Status |
@@ -59,7 +59,7 @@ started — the backend lead waits for each phase assignment):
 | 3 | Authentication & user profiles | ✅ **Complete** — committed `3d728ac`, pushed; owner-assigned audit & fix round (§9.14) later committed as `f26536e` and pushed after the owner said "commit and push it" |
 | 4 | Trusted contacts & safety check-ins | ✅ **Complete — implemented & verified** (this report §10); owner's rules forbid commits during the phase, so it stayed uncommitted through the owner-assigned migration-safety fix round (§10.15) — later **committed and pushed together with Phase 5** after owner approval (see `git log`) |
 | 5 | SOS & emergency workflow (simulated) | ✅ **Complete — implemented & verified** (this report §11); uncommitted during the phase per the same rule; **committed and pushed together with Phase 4** after owner approval (see `git log`) |
-| 6 | Community safety reports & location data | ⏳ Not started |
+| 6 | Community safety reports & location data | ✅ **Complete — implemented & verified** (this report §12); stayed uncommitted during the phase per the owner's rule, then the owner instructed commit & push (2026-10-12) — **committed and pushed to `origin/backend`** (see `git log`) |
 | 7 | AI companion & safety signals | ⏳ Not started (needs Laptop 3 contract) |
 | 8 | Notifications & background-job interfaces | ⏳ Not started |
 | 9 | Flutter integration & API contract alignment | ⏳ Not started (needs frontend report) |
@@ -87,10 +87,11 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-12 | **Phase 4** | Owner assigned Phase 4 → trusted-contact CRUD (5 routes) + check-in lifecycle (5 routes incl. `/complete`), added `TrustedContact.relationship` + `CheckIn.note` columns and the `cancelled` status, migration `ccd362671e07` (applied to `roamlary_dev`), 40 new tests (37 endpoint + 3 PostgreSQL integration), README + this report + `PHASE4_CHANGES.md` | **uncommitted working-tree changes** (owner rule: no commits during this phase) → owner later approved → **committed and pushed together with Phase 5** (see `git log`) |
 | 2026-10-12 | **Phase 4 migration-safety fix** | Owner assigned a targeted fix round (§10.15): the Phase 4 migration's `downgrade()` now detects `cancelled` check-ins **before** any schema change and refuses with an actionable error instead of failing mid-migration; 4 new regression tests (2 SQLite + 2 real-PostgreSQL), live refusal + normal path proven on `roamlary_dev`, docs corrected (the earlier "reversible" wording implied it always succeeds regardless of data) | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phases 4 and 5** (see `git log`) |
 | 2026-10-12 | **Phase 5** | Owner assigned Phase 5 → extended the Phase 2 `sos_events` table (`description`, `location_recorded_at`, `cancelled_at`, `cancelled` status; migration `0dd8995649b4` with the same downgrade data-safety guard), 5 SOS endpoints (activate/list/get/cancel/resolve) with strict schemas, owner-only queries, identical-404s and server-only timestamps; 30 new tests (24 endpoint + 2 SQLite migration + 4 PostgreSQL), live E2E 35/35 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE5_CHANGES.md` | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phase 4** (see `git log`) |
+| 2026-10-12 | **Phase 6** | Owner assigned Phase 6 → reused the Phase 2 `community_reports` table; added a closed 6-value `ReportCategory` set (+ DB CHECK, migration `ab32047c8481` with an **upgrade-side** data guard), 4 report endpoints (create/list with filters+pagination/nearby haversine search/get-by-id) with `ReportRead` (identity-free, UTC); 35 new tests (28 endpoint + 2 SQLite migration + 3 PostgreSQL + 2 model-contract), live E2E 51/51 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE6_CHANGES.md` | **uncommitted working-tree changes** during the phase → owner instructed commit & push (2026-10-12) → **committed and pushed to `origin/backend`** (see `git log`) |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
-**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5):**
+**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5 + Phase 6):**
 
 | Method + Path | Purpose | Auth | Response |
 |---|---|---|---|
@@ -114,12 +115,18 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | `GET /api/v1/sos/{sos_id}` | Read one incident (404 if missing **or** not yours) | Bearer JWT | `SosEventRead` |
 | `POST /api/v1/sos/{sos_id}/cancel` | Retract an `active` incident (`cancelled_at`, server clock; no body) | Bearer JWT | `SosEventRead` |
 | `POST /api/v1/sos/{sos_id}/resolve` | Close an `active` incident (`resolved_at`, server clock; no body) | Bearer JWT | `SosEventRead` |
+| `POST /api/v1/reports` | File a community safety report (`pending`, server-chosen; category + description + coordinates required) | Bearer JWT | `ReportRead` (HTTP 201) |
+| `GET /api/v1/reports` | List **visible** reports, newest first (optional `?category=`/`?status=` filters, `?offset=`/`?limit=` pagination) | Bearer JWT | `[ReportRead]` |
+| `GET /api/v1/reports/nearby` | Visible reports within `radius_m` **meters** of a position (haversine; nearest first) | Bearer JWT | `[ReportRead]` |
+| `GET /api/v1/reports/{report_id}` | Read one visible report (404 if missing **or** `rejected`) | Bearer JWT | `ReportRead` |
 
 Phase 4 request/response examples, field rules, status transitions, and
 timestamp policy: **§10.6** (details) and `README.md` (client-facing).
 Phase 5 (SOS) equivalents: **§11.6** and the README's "SOS incidents"
-section. Note the SOS paths have no trailing slash (`/sos`, per the
-Phase 5 spec) while the Phase 4 collections use one (`/check-ins/`).
+section. Phase 6 (reports): **§12.6** and the README's "Community safety
+reports" section. Note the SOS and report paths have no trailing slash
+(`/sos`, `/reports`, per their specs) while the Phase 4 collections use
+one (`/check-ins/`).
 
 ```json
 GET /api/v1/health  →  HTTP 200
@@ -158,19 +165,30 @@ any injected server-controlled field (`user_id`, `status`, `id`,
 `created_at`, `cancelled_at`, `resolved_at`, `location_recorded_at`) →
 **422**.
 
+Phase 6 (reports) error behaviour: every report route without a valid
+bearer token → **401**; a report that does not exist **or** is
+`rejected`/hidden → the **same 404** (no way to probe hidden reports); an
+unknown `category`, a blank/overlong `description`, a missing or
+out-of-range coordinate, an injected server-controlled field (`user_id`,
+`status`, `id`, timestamps), `status=rejected` as a filter, `limit` outside
+1–100, `offset` < 0, or a `radius_m` outside 1–50000 (meters) → **422**;
+an integrity failure while saving → **409**.
+
 **Proposed for future phases — NOT IMPLEMENTED, do not call these:**
-`POST /reports`,
-`GET /reports?lat&lon&radius`, `POST /ai/companion/messages`.
-*(An SOS workflow now exists at `/api/v1/sos` — §11 — but it only stores
-rows; nothing about it notifies anyone.)*
+`POST /ai/companion/messages`.
+*(A report workflow now exists at `/api/v1/reports` — §12 — but it only
+stores and searches rows; every report is an unverified user submission,
+nothing is moderated, and filing one notifies no one. An SOS workflow
+exists at `/api/v1/sos` — §11 — but it too only stores rows; nothing about
+it notifies anyone.)*
 Refresh tokens, password reset, and email verification are also **not**
 implemented. (To be formalized with the owner during Phase 9 frontend
 alignment.)
 
 ## 6. Database design — IMPLEMENTED (Phase 2)
 
-Schema is real and now spans Phase 2 + Phase 3 + Phase 4 + Phase 5
-migrations, all applied to `roamlary_dev`:
+Schema is real and now spans Phase 2 + Phase 3 + Phase 4 + Phase 5 +
+Phase 6 migrations, all applied to `roamlary_dev`:
 
 - `cc78d54068bb` — "initial schema" (Phase 2): the five tables below.
 - `d9841015aec7` — "add password_hash to users" (Phase 3): adds a nullable
@@ -184,6 +202,13 @@ migrations, all applied to `roamlary_dev`:
   `sos_events.location_recorded_at`, and `sos_events.cancelled_at`
   (timezone-aware), and relaxes the `sos_events` status CHECK constraint to
   allow `cancelled`. Full rationale in §11.4.
+- `ab32047c8481` — "add community report category check" (Phase 6): adds
+  the `ck_community_reports_category_valid` CHECK constraint so
+  `community_reports.category` becomes a closed 6-value set
+  (`unsafe_area`, `harassment`, `suspicious_activity`, `road_hazard`,
+  `poor_lighting`, `other`). The **upgrade** is guarded (refuses while any
+  out-of-set category exists); the **downgrade** just drops the constraint
+  (always data-safe). Full rationale in §12.4.
 
 | Table | Purpose | Owner / deletion rule |
 |---|---|---|
@@ -191,16 +216,22 @@ migrations, all applied to `roamlary_dev`:
 | `trusted_contacts` | Nominated safety contact (`name`, `phone`, `relationship` nullable, `email` nullable) | `users` · `ON DELETE RESTRICT` |
 | `check_ins` | "Ping me by time T" (`status` ∈ pending/safe/needs_help/expired/**cancelled**, `due_at`, `note` nullable, `completed_at`) | `users` · `ON DELETE RESTRICT` |
 | `sos_events` | **Simulated** incident (`status` ∈ active/acknowledged/resolved/false_alarm/**cancelled**, lat/lon, `description` nullable, `location_recorded_at`, `resolved_at`, `cancelled_at`) | `users` · `ON DELETE RESTRICT` |
-| `community_reports` | Crowd-sourced note (`category`, `description`, lat/lon, `status`) | `users` · `ON DELETE RESTRICT` |
+| `community_reports` | Crowd-sourced note (`category` ∈ 6-value Phase 6 set, `description`, lat/lon, `status` ∈ pending/approved/rejected) | `users` · `ON DELETE RESTRICT` |
 
 All Phase 4 and Phase 5 schema changes were additive and nullable — no
 existing row was altered or dropped (verified by downgrade→re-upgrade on
 `roamlary_dev`, §10.5 and §11.5). The reverse direction is **guarded, not
 assumed**: a downgrade now refuses while any `cancelled` check-in (Phase 4,
 §10.15) or `cancelled` SOS incident (Phase 5, §11.4) exists rather than
-alter data.
+alter data. Phase 6's change is one **added CHECK constraint** whose
+*upgrade* carries the same discipline: it refuses (before any schema
+change) while any pre-existing out-of-set category exists rather than
+convert or delete those rows (§12.4); its downgrade only drops the
+constraint and therefore cannot lose data.
 
-Status values are enforced by CHECK constraints; lat/lon are range-guarded.
+Status values are enforced by CHECK constraints; lat/lon are range-guarded;
+`community_reports.category` is a closed set enforced by a CHECK
+constraint (Phase 6).
 Deletion is deliberately **RESTRICT** (not cascade) so safety history can never
 disappear by accident — revisit with the owner in the phase that owns account
 deletion.
@@ -1002,7 +1033,7 @@ listed with the fix actually applied.
 | 3 | Register created the database row **before** the fail-closed secret check ran, so a missing `JWT_SECRET_KEY` could leave a half-created, unusable account. | Low | New public `ensure_auth_configured()` in `security.py`; register now calls it **before any database write**, so 503 happens with no row created. |
 | 4 | `PATCH /users/me` with an empty body (`{}`) still bumped `updated_at`, so the timestamp did not mean "last real change". | Low | `updated_at` is now bumped only when `display_name` actually changed; `{}` is a valid no-op returning the profile unchanged. |
 | 5 | Tests used the **real dev secret** from `.env` — not hermetic, and it exercised the actual signing key. | Low | New autouse fixture in `conftest.py` pins a fixed TEST-ONLY secret for every test (`TEST_JWT_SECRET`); the real `.env` secret is never used by tests. |
-| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. *(Note: "§10, §11" here means Known limitations / Pending tasks **as numbered at that time**; inserting the Phase 4 record as §10 shifted them to §11/§12 in the Phase 4 round, and inserting the Phase 5 record as §11 shifted them again — §10 is the Phase 4 record, §11 the Phase 5 record, Known limitations is now §12, Pending tasks §13.)* |
+| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. *(Note: "§10, §11" here means Known limitations / Pending tasks **as numbered at that time**; inserting the Phase 4 record as §10 shifted them to §11/§12 in the Phase 4 round, and inserting the Phase 5 record as §11 shifted them again — §10 is the Phase 4 record, §11 the Phase 5 record. Inserting the Phase 6 record as §12 shifted them once more: **Known limitations is now §13, Pending tasks §14**.)* |
 
 #### 9.14.3 New tests added (12)
 
@@ -1622,13 +1653,312 @@ secrets, `frontend/` untouched.
 > **Later (2026-10-12):** owner reviewed and approved ("Commit and push
 > Phases 4+5") → all 24 files were **committed as one commit and pushed to
 > `origin/backend`**; working tree clean afterwards. See `git log`.
+> *(Numbering note: inserting the Phase 6 record as §12 later shifted
+> Known limitations / Pending tasks to §13 / §14.)*
 
-## 12. Known limitations (current)
+## 12. Phase 6 record — Community safety reports & location search ✅
+
+### 12.1 Mandatory preflight (all gates cleared before any code)
+
+| Gate | Result |
+|---|---|
+| Branch / HEAD / tree | `backend` · `f602505` (= `origin/backend`) · clean before Phase 6 ✓ |
+| One anomaly found first | `PHASE5_CHANGES.md` had a stray keyboard-mash fragment on line 250 (accidental input, not content) → restored to the committed state and reported to the owner; tree clean again ✓ |
+| Migration baseline | `alembic current` → `0dd8995649b4 (head)` ✓ |
+| Green baseline | full suite **158 passed** (142 offline + 16 PG), ruff clean ✓ |
+| Existing report artifacts | table `community_reports` exists since Phase 2 (`cc78d54068bb`); `ReportStatus` enum exists; **no** schemas, endpoints, or router entries exist → nothing to duplicate ✓ |
+| Phase 0–5 architecture read | conventions re-verified against actual code: strict `extra="forbid"` schemas, token-only identity, identical-404 helper pattern, `Annotated[..., Query(alias=...)]` filters, UTC serializer, `batch_alter_table` migrations, PG-gated integration tests ✓ |
+| Known conflict points | none destructive: Phase 2's model comment explicitly said *"categories are a Phase 6 product decision"* — the deferred decision is this phase's to make ✓ |
+
+### 12.2 Summary of the implementation & design decisions
+
+Travelers can now file location-based safety reports and search reports
+for an area. Everything reuses the Phase 2 `community_reports` table —
+**no new tables, no duplicate models** — and adds exactly one CHECK
+constraint. Decisions (brief-compatible options chosen and documented):
+
+| # | Decision | Rationale |
+|---|---|---|
+| D1 | **Closed category set** — new `ReportCategory` StrEnum with 6 values + DB CHECK (two-layer validation like status/lat-lon) | The Phase 2 model explicitly deferred this product decision to Phase 6; loose strings would let `theft`/typos through the DB layer |
+| D2 | **No moderation exists → no owner lifecycle endpoints**; `status` is server-set `pending`; visibility = `status != 'rejected'` everywhere | The brief allows only actions the existing design permits, and that design reserves `status` for a future moderation system with roles (adding roles here was explicitly out of scope). Hiding-by-`rejected` is implemented *and tested* now, so the day moderation lands nothing else must change |
+| D3 | **Privacy: `user_id` stored, never returned** — public read schema is a closed 8-field set | Accountability/abuse follow-up needs the submitter in the table; public responses must not expose who filed a report (reports are about places, not people) |
+| D4 | **Coordinates required on create** (range-checked at schema 422 *and* DB CHECK) | A location-based report without a location is useless; Phase 2 left the columns nullable for other reasons, so the API layer enforces presence |
+| D5 | **Paths `/api/v1/reports`** (no trailing slash, `/nearby` declared before `/{report_id}`); **plain-array responses**; **offset/limit pagination** (0≤offset, 1–100 limit, default 20, stable `created_at desc, id desc`) | Follows the most recent path convention (Phase 5), route order prevents `nearby` being parsed as a UUID, arrays match every other list response in this API, pagination is new but bounded per the brief |
+| D6 | **Nearby = plain SQL haversine in meters** (Earth radius 6,371,000 m; radius 1–50000 m), **no PostGIS** | The container has no PostGIS and adding a major infra dependency for a hackathon is unjustified; haversine is wrap-safe at the antimeridian, accurate at high latitudes, and correct for city-scale radii |
+| D7 | `status` filter accepts only `pending`/`approved`; `?status=rejected` → 422 | "Hidden" must not be a queryable filter value |
+
+### 12.3 File-by-file change log (files created and modified)
+
+**Created (5):**
+
+| File | What it contains |
+|---|---|
+| `alembic/versions/ab32047c8481_add_community_report_category_check.py` | the one Phase 6 migration (upgrade-side data guard + CHECK) |
+| `app/api/v1/schemas/community_report.py` | `ReportCreate` (strict, 4 required fields) + `ReportRead` (8-field, identity-free, UTC) |
+| `app/api/v1/endpoints/community_reports.py` | 4 routes: create, list (filters+pagination), nearby (haversine), get-by-id |
+| `tests/test_reports.py` | 28 endpoint tests |
+| `PHASE6_CHANGES.md` | standalone review inventory (owner-facing) |
+
+**Modified (10):**
+
+| File | Change |
+|---|---|
+| `app/models/enums.py` | `+ ReportCategory` (6 values); `ReportStatus` docstring documents the no-moderation reality |
+| `app/models/community_report.py` | `+ category_valid` CHECK constraint; Phase 6 docstring (visibility + privacy) |
+| `app/api/v1/router.py` | register the reports router (+1 import, +1 include) |
+| `tests/conftest.py` | `+ insert_raw_user_and_report` raw-SQL probe helper |
+| `tests/test_migrations.py` | `+2` SQLite tests (upgrade guard refusal, upgrade/downgrade/upgrade roundtrip) |
+| `tests/test_postgres_integration.py` | `+3` real-PostgreSQL tests (constraint enforcement, upgrade guard, roundtrip) |
+| `tests/test_models.py` | `+2` tests (`ReportCategory` contract, category CHECK exists in metadata) |
+| `tests/test_db_operations.py` | sample category `lighting` → `poor_lighting` (same assertion strength; the old sample is now rejected by the DB — see §12.9) |
+| `README.md` | Phase 6 scope block, new "Community safety reports" section, migration bullet, counts 193/174/19, 4 new troubleshooting rows |
+| `report.md` | this §12 + PART 1 status updates |
+
+**Deliberately untouched:** `frontend/`, all other endpoint/schema files,
+`app/core/*`, older migrations (historical — never edited), `.env`
+(gitignored, never printed).
+
+### 12.4 Database & migration details
+
+Migration **`ab32047c8481`** ("add community report category check",
+revises `0dd8995649b4`) — hand-written, because Alembic autogenerate does
+not compare CHECK constraints:
+
+- **`upgrade()` guard first (the Phase 4/5 discipline, mirrored to the
+  upgrade direction):** counts rows whose `category` is outside the 6
+  values *before any schema change*. The Phase 2 schema allowed **any**
+  string, so legacy rows may exist; creating the CHECK against them would
+  fail mid-migration (or tempt a silent convert/delete). Instead it
+  raises `RuntimeError: Refusing to upgrade migration ab32047c8481: …
+  data-handling decision …` — nothing is altered, the database stays at
+  `0dd8995649b4`. Only when all rows are in-set does
+  `batch_alter_table` add `ck_community_reports_category_valid`
+  (cross-dialect, short logical name expanded by the naming convention).
+- **`downgrade()`** drops the constraint — dropping a CHECK can neither
+  lose nor alter stored data (every category value survives; the loose
+  Phase 2 rules return), so this direction is unconditionally safe and
+  deliberately carries **no** guard.
+- **Reversibility reviewed:** upgrade = refuse-or-add (data-protected);
+  downgrade = always-safe drop; roundtrip proven on SQLite **and** real
+  PostgreSQL (§12.9), and live on `roamlary_dev` (§12.10).
+- No rows, columns, or tables were deleted anywhere; no production
+  database was touched (only `roamlary_dev` + disposable `roamlary_test`).
+- `alembic current` on `roamlary_dev` → **`ab32047c8481 (head)`**.
+
+### 12.5 API endpoints and request/response examples
+
+| Method + path | Purpose | Success / errors |
+|---|---|---|
+| `POST /api/v1/reports` | File a report (identity from token; `pending` server-chosen) | `201` · `401` no/invalid token · `422` validation/injection · `409` integrity |
+| `GET /api/v1/reports` | Visible reports, newest first; `?category=`, `?status=pending\|approved`, `?offset=`, `?limit=` | `200 [ReportRead]` · `401` · `422` |
+| `GET /api/v1/reports/nearby` | Required `latitude`, `longitude`, `radius_m` (meters); optional `category`, `offset`, `limit`; nearest first | `200 [ReportRead]` · `401` · `422` |
+| `GET /api/v1/reports/{report_id}` | One visible report | `200` · `404` missing **or** rejected (identical) · `401` |
+
+Create request → response (the only 4 accepted request fields; the
+response is the closed 8-field public shape — note **no `user_id`**):
+
+```json
+POST /api/v1/reports  →  HTTP 201
+{ "category": "poor_lighting", "description": "dark street behind the station",
+  "latitude": 28.6139, "longitude": 77.2090 }
+
+{ "id": "3f6a1c2e-…", "category": "poor_lighting", "status": "pending",
+  "description": "dark street behind the station",
+  "latitude": 28.6139, "longitude": 77.2090,
+  "created_at": "2026-10-12T14:03:11Z", "updated_at": "2026-10-12T14:03:11Z" }
+```
+
+Nearby search (radius unit is **meters**, bounded 1–50000):
+
+```
+GET /api/v1/reports/nearby?latitude=28.61&longitude=77.20&radius_m=2000
+Authorization: Bearer <token>
+→ 200 [ReportRead, …]  nearest first
+```
+
+Field rules: `category` ∈ the 6 values; `description` required, trimmed,
+1–500 chars (blank → 422); both coordinates required (lat −90…90, lon
+−180…180); `user_id`/`status`/`id`/timestamps injected → 422; timestamps
+always UTC. Filters: `status=rejected` or unknown → 422; `limit` 1–100
+(default 20), `offset` ≥ 0. Full client-facing docs: README's
+"Community safety reports (Phase 6)".
+
+### 12.6 Location-search method and limitations
+
+**Method: a basic latitude/longitude distance query — the haversine
+formula computed in SQL** (parameterized; Earth radius 6,371,000 m),
+**not** a geospatial index and **not** PostGIS:
+
+```
+distance = 2·R·asin( √( sin²(Δlat/2) + cos(lat₁)·cos(lat₂)·sin²(Δlon/2) ) )
+```
+
+- **Unit & bounds:** `radius_m` in **meters**, required, `0 < r ≤ 50000`
+  (50 km max — beyond that "nearby" stops being about the traveler).
+- **Antimeridian:** the formula uses trig of the half-difference, and
+  trig is 360°-periodic — reports at lon `179.9` and a center at
+  `-179.9` compute as ~22 km apart, not ~39,980 km (proven by test and
+  live check).
+- **High latitudes:** no flat-map/equirectangular approximation is used,
+  so accuracy holds at 78°N (proven by test and live check).
+- **Rounding safety:** `a` is clamped to ≤1 before `asin()` so rounding
+  at antipodal points can never push the query into a domain error.
+- **NULL coordinates:** rows without coordinates can't match a distance
+  expression and are skipped cleanly (test-covered).
+- **Practical limitations (documented, not hidden):** scans the whole
+  table (**O(n)**, no index — fine for thousands of rows, revisit before
+  real traffic), spherical-vs-ellipsoidal Earth error is **<1%** at city
+  scale, results are capped/paginated (limit ≤ 100), and ordering ties
+  break by `created_at DESC, id DESC`.
+- **Why no PostGIS:** not present in the `postgres:16-alpine` container,
+  and a major infrastructure dependency is not justified for this
+  prototype — documented rather than silently assumed.
+
+### 12.7 Authentication, ownership, privacy and moderation behavior
+
+- **Auth:** all 4 routes require a valid bearer token (401 without one or
+  with a garbage token — tested on every route).
+- **No impersonation:** the submitter comes only from the verified JWT;
+  `user_id` in a body/query is structurally impossible (`extra="forbid"`
+  → 422, injection-tested).
+- **Ownership:** reports have **no owner actions to authorize** — reads
+  are community-wide by design, and no `PATCH`/`DELETE`/status endpoint
+  exists, so there is no mutation surface to guard (scope-faithful: the
+  brief permits only lifecycle actions the existing design allows, and it
+  reserves `status` for moderation). Ownership is still stored server-side
+  for accountability (test asserts `user_id` in the table).
+- **No self-verified reports:** `status` is absent from the create schema
+  (422 on injection) and set to `pending` in server code; nothing in the
+  API can produce `approved`.
+- **Honest trust framing:** every response carries `status`, so clients
+  (and users) can always distinguish an unverified `pending` submission
+  from an `approved` one — the API never claims a place is dangerous or
+  safe. `rejected` rows are hidden from list/nearby/get with an
+  identical-404, and hidden is not filterable.
+- **Privacy:** the read schema has exactly 8 fields — no `user_id`, no
+  email, no phone, no auth data (exact-field-set assertions + a
+  two-account identical-view test).
+- Parameterized ORM statements only; query bounds on radius/limit/offset;
+  no logging added (no tokens, coordinates, or secrets logged); **no rate
+  limiting yet** (documented limitation).
+
+### 12.8 Commands executed (Windows PowerShell, from `backend/`)
+
+```powershell
+# Preflight: branch, HEAD, tree, migration head
+git branch --show-current; git log --oneline -3; git status --porcelain
+.venv\Scripts\python -m alembic current
+
+# Lint + format (run after every file change)
+.venv\Scripts\python -m ruff format . ; .venv\Scripts\python -m ruff check .
+
+# New tests first, then migration/model tests, then the FULL suite
+# (ROAMLARY_TEST_DATABASE_URL derived from .env — value never printed)
+.venv\Scripts\python -m pytest tests/test_reports.py -q
+.venv\Scripts\python -m pytest tests/test_migrations.py tests/test_models.py -q
+.venv\Scripts\python -m pytest tests/ -q
+
+# Migration applied to roamlary_dev + constraint verified via psql
+.venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m alembic current
+
+# Live E2E (temp script in the system temp dir, deleted after run) and the
+# live migration-guard demo: downgrade → seed out-of-set row → upgrade
+# (refused, exit 1) → verify unchanged → delete seed → upgrade (exit 0)
+```
+
+### 12.9 Tests & actual results (real output, nothing fabricated)
+
+| Run | Output |
+|---|---|
+| `pytest tests/test_reports.py -q` | **28 passed** |
+| `pytest tests/test_migrations.py tests/test_models.py -q` | **19 passed** |
+| Full suite (SQLite + PostgreSQL, 2026-10-12) | **193 passed**, 0 failed, 0 skipped (174 offline + 19 PG) |
+| `ruff format .` + `ruff check .` | no changes needed · **All checks passed!** |
+| Coverage of the brief's test list | creation+retrieval, missing/invalid auth, invalid category/description/coordinates/radius/pagination, owner-vs-non-owner (public reads + no-mutation surface), category & status filters, nearby inside/outside radius, antimeridian + high-latitude boundaries, pagination & max limits, public-response privacy, Phases 1–5 regression (full suite), migration safety on SQLite **and** PG — all present ✓ |
+| Blocked / skipped tests | **none** (the 19 PG tests ran against the disposable `roamlary_test` database; skipped ≠ passed, and nothing was skipped) |
+| Pre-existing test adjusted | `test_db_operations.test_community_report_created_pending` used the loose sample category `lighting`, which the new DB CHECK now rejects → sample updated to `poor_lighting` with the assertion kept at exact-match strength; documented in `PHASE6_CHANGES.md` §6.5 (no assertion deleted or weakened) |
+| Honest failure record | first live E2E run: **49/51** — both failures were *script-expectation bugs* (an offset page computed past the end of the data; a nearest-first assertion that forgot a closer report existed). The API behaved correctly; after fixing the script's expectations: **51/51** |
+
+### 12.10 Live verification on `roamlary_dev` (real output, 2026-10-12)
+
+- **E2E via the full app stack** (temp script, deleted after use):
+  **51/51 checks passed** — health contract, registration, creation of all
+  6 categories, validation rejections (unknown/blank/overlong/coords/
+  injections), exact-field privacy (no identity key anywhere), two-account
+  identical views, newest-first ordering, category/status filters,
+  pagination bounds + default cap, rejected-hidden semantics with
+  byte-identical 404s, nearby inside/outside/antimeridian/high-latitude +
+  Python haversine cross-check of distances & ordering, radius bounds,
+  401s on all routes; its own rows/users deleted afterwards and the
+  database **verified empty** (0 users / 0 reports / 0 SOS rows).
+- **Live migration-guard demo** (transcript summarized): `downgrade` to
+  `0dd8995649b4` (exit 0) → raw `'theft'` row inserted → `upgrade head`
+  **refused** (exit 1, `Refusing to upgrade migration ab32047c8481: …
+  data-handling decision …`) → verified unchanged: version
+  `0dd8995649b4`, `category-constraint-count=0`, probe row intact →
+  demo row deleted (explicit data-handling decision) → `upgrade head`
+  exit 0 → `ab32047c8481 (head)`, constraint present, DB empty.
+
+### 12.11 Known limitations & follow-up work
+
+- **No moderation:** every report stays `pending` forever;
+  `approved`/`rejected` are unreachable via the API (roles/dashboard are a
+  later, owner-assigned phase). `rejected`-hiding works but can only be
+  triggered from the database today.
+- **No owner lifecycle:** submitters cannot edit/delete their own reports
+  (no `PATCH`/`DELETE` by this phase's scope).
+- Nearby search scans the table (no index/PostGIS), radius ≤ 50 km,
+  spherical Earth (<1% error at city scale).
+- Pagination exists **only** on reports; contact/check-in/SOS lists remain
+  unbounded; no `total` count in report responses (arrays only).
+- No rate limiting/abuse controls on report creation yet.
+- Passing tests are **not** a security audit or a production claim — this
+  remains a local hackathon prototype.
+
+### 12.12 Scope confirmation — no real alerts or external notifications
+
+**Confirmation: Phase 6 implemented NO real emergency alerts and NO
+external notifications of any kind.** Explicitly **not** built: SMS /
+WhatsApp / email / push notifications (Twilio, AiSensy), calls to
+emergency numbers, real dispatch, trusted-contact notification,
+nearby-user alerts, community alerting, any AI (Phase 7), background
+tracking, camera/microphone, moderation/roles/dashboard, PostGIS or other
+new infrastructure, Flutter/frontend changes (`frontend/` untouched), and
+no commits/pushes/branch switches (HEAD still `f602505`). Filing a report
+**only writes a row**; searching reports **only reads rows**.
+
+### 12.13 Documentation updated & git state
+
+**Docs:** README (Phase 6 scope block, new "Community safety reports"
+section with endpoint/category/visibility/nearby tables, migration bullet
+for `ab32047c8481`, counts 193/174/19, four new Common-problems rows),
+this report (§2, §3, §4, §5, §6 + this §12; Known limitations and Pending
+tasks **renumbered to §13/§14** with the §9.14 note annotated), and the
+new **`PHASE6_CHANGES.md`** standalone review (15-row inventory, migration
+proof, test results, scope list, git state).
+
+**Git:** no commits, pushes, merges, resets, stashes, or branch switches
+**during the phase**; HEAD stayed **`f602505`** (= `origin/backend`).
+Working tree: **10 modified + 5 new = 15 files** (all Phase 6), no
+secrets, `frontend/` untouched.
+
+> **Later (2026-10-12):** the owner instructed "commit and push" → the
+> 15-file Phase 6 change set was **committed and pushed to
+> `origin/backend`** (see `git log`); the working tree is clean. Note for
+> the record: every push of this branch has always carried the **whole
+> repository tree** — `backend/`, `frontend/` (27 tracked Flutter files
+> since the initial commit `4761b41`), and `.gitignore`. The on-disk
+> `docs/` folder is **empty**, and git cannot track or push an empty
+> directory (nothing was lost — it never had contents).
+
+## 13. Known limitations (current)
 
 - Served endpoints: health, register/login, `GET/PATCH /users/me`, the five
   **trusted-contact** routes, the five **check-in** routes (Phase 4, §10),
-  and the five **SOS** routes (Phase 5, §11). Nothing else exposes the
-  database over HTTP.
+  the five **SOS** routes (Phase 5, §11), and the four **community-report**
+  routes (Phase 6, §12: create, list, nearby, get-by-id). Nothing else
+  exposes the database over HTTP.
 - Authentication is a **local prototype**: Argon2id password hashing + HS256
   JWTs. No refresh tokens, password reset, email verification, rate limiting,
   or account recovery yet — all belong to later phases.
@@ -1641,34 +1971,58 @@ secrets, `frontend/` untouched.
   `acknowledged`/`false_alarm` exist in the schema but are unreachable (no
   responder system); SOS activation has no rate limiting yet; there is no
   emergency UI (Phase 10).
-- No pagination yet: contact/check-in/SOS lists are unbounded arrays (fine
-  at prototype scale, revisit before real traffic).
-- Community reports, AI, and notifications remain unimplemented entirely.
+- Phase 6 stores and searches reports **only**: every report is an
+  **unverified user submission** (always `pending` — no moderation/roles
+  exist, so `approved`/`rejected` are unreachable via the API), filing one
+  notifies no one, submitter identity is never exposed, reports have no
+  owner edit/delete actions, and the nearby search is an O(n) SQL haversine
+  (no index/PostGIS, radius ≤ 50 km, <1% error at city scale).
+- Pagination exists **only** on the report endpoints (offset/limit,
+  1–100); contact/check-in/SOS lists remain unbounded arrays (fine at
+  prototype scale, revisit before real traffic).
+- AI and notifications remain unimplemented entirely.
 - Dev-grade CORS and configuration only; no HTTPS.
 - Runs only on this laptop, local machine, port 8000.
 - The `backend` branch is pushed to GitHub (`origin/backend`) through
-  **Phases 1–5**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
-  `f26536e`, and **Phases 4 + 5 committed together and pushed after owner
-  approval, 2026-10-12** (see `git log`). The working tree is **clean**;
-  `PHASE4_CHANGES.md` and `PHASE5_CHANGES.md` are now tracked files.
+  **Phases 1–6**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
+  `f26536e`, Phases 4 + 5 as `f602505`, and **Phase 6 committed and pushed
+  after the owner's instruction, 2026-10-12** (see `git log`). The working
+  tree is **clean**; every push of this branch contains the full tree
+  (`backend/`, `frontend/`, `.gitignore`) — `docs/` exists on disk but is
+  empty, so git has nothing to track there. GitHub's **`main` branch is
+  still at the initial commit `4761b41`** — it does not contain any phase
+  work (owner decision whether/when to update it; see §14).
 - Database lives in a Docker container; if that container's volume is removed,
   recreate the schema with `alembic upgrade head`.
 - Frontend cannot integrate beyond the health + auth + Phase 4 + Phase 5
-  contract until Phase 9.
+  contract until Phase 9 (the Phase 6 report contract is new and
+  uncommitted).
 
-## 13. Pending tasks and next steps
+## 14. Pending tasks and next steps
 
 1. ✅ **Settled (2026-10-12):** owner reviewed Phases 4 + 5 (§10/§11 +
    `PHASE4_CHANGES.md`/`PHASE5_CHANGES.md`) and approved commit & push.
    The Phase 3 audit was already settled (`f26536e`).
 2. ✅ **Done (2026-10-12):** the combined Phase 4 + Phase 5 delta was
    committed (one commit) and pushed to `origin/backend` after explicit
-   owner instruction — working tree clean.
-3. Owner assigns the next phase (per the roadmap: Phase 6, community safety
-   reports — simulated).
-4. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
+   owner instruction (as `f602505`).
+3. ✅ **Done (2026-10-12):** Phase 6 (§12 + `PHASE6_CHANGES.md`) was
+   committed and pushed to `origin/backend` after the owner's instruction;
+   working tree clean. Whole-tree contents on GitHub verified
+   (`backend/` + `frontend/` + `.gitignore`; `docs/` is an empty on-disk
+   folder git cannot push).
+4. Owner decides whether to bring GitHub's **`main` branch** up to date —
+   still at the initial `4761b41`, contains no phase work. Options: merge
+   `backend` → `main`, open a pull request, or keep `main` frozen (owner's
+   call; the backend lead never merges to `main` without instruction).
+5. Owner decides what should live in the empty **`docs/`** folder (e.g.
+   the future `docs/merge-report.md` integration document, API contract
+   exports) — git cannot push an empty directory.
+6. Owner assigns the next phase (per the roadmap: Phase 7, AI companion —
+   blocked until Laptop 3 publishes the AI contract).
+7. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
    planning and the `docs/merge-report.md` integration document.
-5. Laptop 3 to publish the AI contract before Phase 7 can be real (stub until
+8. Laptop 3 to publish the AI contract before Phase 7 can be real (stub until
    then).
 
 ---

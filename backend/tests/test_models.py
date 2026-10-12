@@ -6,7 +6,7 @@ from sqlalchemy import create_engine, inspect
 
 from app.db.base_class import Base
 from app.models import CheckIn, CommunityReport, SosEvent, TrustedContact, User
-from app.models.enums import CheckInStatus, ReportStatus, SosStatus
+from app.models.enums import CheckInStatus, ReportCategory, ReportStatus, SosStatus
 
 EXPECTED_TABLES = {"users", "trusted_contacts", "check_ins", "sos_events", "community_reports"}
 
@@ -81,6 +81,17 @@ def test_location_range_check_constraints_exist() -> None:
     engine.dispose()
 
 
+def test_report_category_check_constraint_exists() -> None:
+    """Phase 6: the report category is a closed set, guarded by a CHECK
+    constraint (added to the database by migration ab32047c8481)."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    names = {c["name"] for c in inspector.get_check_constraints("community_reports")}
+    assert "ck_community_reports_category_valid" in names, names
+    engine.dispose()
+
+
 def test_status_enums_match_the_contract() -> None:
     """The Python status enums hold exactly the documented values.
 
@@ -103,6 +114,19 @@ def test_status_enums_match_the_contract() -> None:
         "cancelled",
     }
     assert {s.value for s in ReportStatus} == {"pending", "approved", "rejected"}
+
+
+def test_report_category_enum_matches_the_contract() -> None:
+    """The Phase 6 category set holds exactly the six documented values
+    (the Phase 2 model deferred this product decision to Phase 6)."""
+    assert {c.value for c in ReportCategory} == {
+        "unsafe_area",
+        "harassment",
+        "suspicious_activity",
+        "road_hazard",
+        "poor_lighting",
+        "other",
+    }
 
 
 def test_model_classes_map_to_expected_tables() -> None:
