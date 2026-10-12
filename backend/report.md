@@ -35,8 +35,8 @@ the project owner; the backend lead implements only assigned phases.**
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (all work pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; **Phase 6 committed and pushed after the owner's instruction, 2026-10-12** — see `git log`; working tree clean) |
-| History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → **Phase 6 commit (2026-10-12, owner-instructed)** — see `git log` for its hash |
+| Branch | `backend` (all work pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; **Phase 6 committed and pushed after the owner's instruction, 2026-10-12** as `9029047` — see `git log`; working tree clean). **Owner also decided (2026-10-12) to fast-forward `main` to this branch and add `docs/README.md`** — both done, see §14 |
+| History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → `9029047` Phase 6 (+ docs placeholder commit) → **`main` fast-forwarded to match** (2026-10-12, owner-instructed) |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
 | PostgreSQL | **Running locally** — server 16.15 in the Docker container `roamlary-postgres-dev` (databases: `roamlary_dev`, `roamlary_test`). No system-wide install | 
@@ -1988,10 +1988,11 @@ secrets, `frontend/` untouched.
   `f26536e`, Phases 4 + 5 as `f602505`, and **Phase 6 committed and pushed
   after the owner's instruction, 2026-10-12** (see `git log`). The working
   tree is **clean**; every push of this branch contains the full tree
-  (`backend/`, `frontend/`, `.gitignore`) — `docs/` exists on disk but is
-  empty, so git has nothing to track there. GitHub's **`main` branch is
-  still at the initial commit `4761b41`** — it does not contain any phase
-  work (owner decision whether/when to update it; see §14).
+  (`backend/`, `frontend/`, `.gitignore`, and — since the owner's decision
+  of 2026-10-12 — `docs/README.md`, so the `docs/` folder now exists on
+  GitHub). GitHub's **`main` branch was fast-forwarded to this branch**
+  the same day (owner decision, §14), so the GitHub homepage shows all of
+  Phases 1–6.
 - Database lives in a Docker container; if that container's volume is removed,
   recreate the schema with `alembic upgrade head`.
 - Frontend cannot integrate beyond the health + auth + Phase 4 + Phase 5
@@ -2011,13 +2012,14 @@ secrets, `frontend/` untouched.
    working tree clean. Whole-tree contents on GitHub verified
    (`backend/` + `frontend/` + `.gitignore`; `docs/` is an empty on-disk
    folder git cannot push).
-4. Owner decides whether to bring GitHub's **`main` branch** up to date —
-   still at the initial `4761b41`, contains no phase work. Options: merge
-   `backend` → `main`, open a pull request, or keep `main` frozen (owner's
-   call; the backend lead never merges to `main` without instruction).
-5. Owner decides what should live in the empty **`docs/`** folder (e.g.
-   the future `docs/merge-report.md` integration document, API contract
-   exports) — git cannot push an empty directory.
+4. ✅ **Done (2026-10-12):** owner decided to bring GitHub's **`main`
+   branch** up to date → `main` was fast-forwarded to the `backend`
+   branch (no merge conflict possible: `main` had never diverged) and
+   pushed; the GitHub homepage now shows all of Phases 1–6.
+5. ✅ **Done (2026-10-12):** owner chose a placeholder for the empty
+   **`docs/`** folder → `docs/README.md` explains the folder's purpose
+   and lists the planned future contents (e.g. `docs/merge-report.md`
+   from Phase 9); the folder now exists on GitHub.
 6. Owner assigns the next phase (per the roadmap: Phase 7, AI companion —
    blocked until Laptop 3 publishes the AI contract).
 7. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment

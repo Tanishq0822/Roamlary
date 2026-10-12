@@ -371,5 +371,6 @@ this phase) was restored to the committed state and reported to the owner.
 > **Update (2026-10-12):** the owner instructed commit & push — these 15
 > files were committed and pushed (see the header note). Whole-tree check:
 > the pushed branch contains `backend/`, `frontend/` (27 tracked files),
-> and `.gitignore`; the on-disk `docs/` folder is empty, which git cannot
-> push (an empty directory has no contents to store).
+> and `.gitignore`; the empty `docs/` folder later received a
+> `README.md` placeholder (owner decision), and `main` was fast-forwarded
+> to this branch the same day so GitHub's homepage shows all phases.
