@@ -159,8 +159,8 @@ class ApiRepository implements AppRepository {
       body: {
         'name': name,
         'phone': phone,
-        if (relationship != null) 'relationship': relationship,
-        if (email != null) 'email': email,
+        'relationship': ?relationship,
+        'email': ?email,
       },
     ) as Map<String, dynamic>;
     return TrustedContact.fromJson(data);
@@ -190,8 +190,8 @@ class ApiRepository implements AppRepository {
       'POST',
       '/check-ins/',
       body: {
-        if (note != null) 'note': note,
-        if (dueAt != null) 'due_at': dueAt.toUtc().toIso8601String(),
+        'note': ?note,
+        'due_at': ?dueAt?.toUtc().toIso8601String(),
       },
     ) as Map<String, dynamic>;
     return CheckIn.fromJson(data);
@@ -233,9 +233,9 @@ class ApiRepository implements AppRepository {
       'POST',
       '/sos',
       body: {
-        if (description != null) 'description': description,
-        if (latitude != null) 'latitude': latitude,
-        if (longitude != null) 'longitude': longitude,
+        'description': ?description,
+        'latitude': ?latitude,
+        'longitude': ?longitude,
       },
     ) as Map<String, dynamic>;
     return SosEvent.fromJson(data);

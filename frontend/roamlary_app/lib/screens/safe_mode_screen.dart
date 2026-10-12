@@ -1,9 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../core/app_theme.dart';
-import '../state/app_state.dart';
-import '../widgets/common.dart';
 import 'checkins_screen.dart';
 import 'sos_screen.dart';
 
@@ -32,7 +29,7 @@ class _SafeModeScreenState extends State<SafeModeScreen> {
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: _armed
-                  ? AppTheme.danger.withOpacity(0.10)
+                  ? AppTheme.danger.withValues(alpha: 0.10)
                   : theme.colorScheme.primaryContainer,
               borderRadius: BorderRadius.circular(20),
             ),

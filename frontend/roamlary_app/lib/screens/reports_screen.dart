@@ -56,8 +56,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Community reports'),
@@ -70,6 +68,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-reports',
         onPressed: _openCreate,
         icon: const Icon(Icons.add_location_alt_outlined),
         label: const Text('Report'),
@@ -292,7 +291,7 @@ class _CreateReportDialogState extends State<_CreateReportDialog> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 DropdownButtonFormField<ReportCategory>(
-                  value: _category,
+                  initialValue: _category,
                   decoration: const InputDecoration(labelText: 'Category'),
                   items: ReportCategory.values
                       .map((c) => DropdownMenuItem(

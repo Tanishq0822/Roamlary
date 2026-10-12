@@ -274,7 +274,7 @@ class _QuickAction extends StatelessWidget {
     final theme = Theme.of(context);
     final color = danger ? AppTheme.danger : theme.colorScheme.primary;
     return Material(
-      color: color.withOpacity(0.10),
+      color: color.withValues(alpha: 0.10),
       borderRadius: BorderRadius.circular(16),
       child: InkWell(
         borderRadius: BorderRadius.circular(16),

@@ -90,6 +90,7 @@ class _ContactsScreenState extends State<ContactsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Trusted contacts')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-contacts',
         onPressed: _add,
         icon: const Icon(Icons.person_add_alt),
         label: const Text('Add contact'),

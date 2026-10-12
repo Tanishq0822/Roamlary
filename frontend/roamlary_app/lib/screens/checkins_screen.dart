@@ -72,11 +72,10 @@ class _CheckInsScreenState extends State<CheckInsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Scaffold(
       appBar: AppBar(title: const Text('Safety check-ins')),
       floatingActionButton: FloatingActionButton.extended(
+        heroTag: 'fab-checkins',
         onPressed: _openCreate,
         icon: const Icon(Icons.add),
         label: const Text('New check-in'),
@@ -282,7 +281,6 @@ class _CreateCheckInDialogState extends State<_CreateCheckInDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return AlertDialog(
       title: const Text('New check-in'),
       content: SizedBox(
