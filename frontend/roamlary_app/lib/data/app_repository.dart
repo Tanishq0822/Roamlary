@@ -1,3 +1,4 @@
+import '../models/enums.dart';
 import '../models/models.dart';
 
 /// Auth token + profile bundle returned by sign-in / register.

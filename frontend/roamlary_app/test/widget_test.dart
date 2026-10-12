@@ -1,6 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:provider/provider.dart';
 import 'package:roamlary_app/core/app_theme.dart';
 import 'package:roamlary_app/data/companion_service.dart';
 import 'package:roamlary_app/data/mock_repository.dart';
