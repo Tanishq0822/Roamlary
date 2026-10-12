@@ -1,10 +1,5 @@
 import 'enums.dart';
 
-// Re-export the enums so every file that imports the models barrel also
-// sees CheckInStatus / SosStatus / ReportCategory (app_repository.dart
-// needs them for its method signatures).
-export 'enums.dart';
-
 /// A trusted contact — mirrors backend `TrustedContactRead`.
 class TrustedContact {
   const TrustedContact({
