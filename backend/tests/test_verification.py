@@ -312,8 +312,10 @@ def test_verified_user_passes_gate_after_owner_approval(api_client, sqlite_engin
     assert resp.status_code == 200
     body = resp.json()
     assert set(body) == {"profiles", "message"}
-    assert body["profiles"] == []  # placeholder: no fabricated users
-    assert "Phase 7" in body["message"]  # honest about what exists
+    assert body["profiles"] == []  # no discoverable candidates in this fixture
+    # Phase 7 replaced the placeholder with real discovery; the message
+    # must stay honest about what the score means (never a safety claim).
+    assert "not a guarantee" in body["message"]
 
 
 def test_owner_role_itself_does_not_bypass_gate(api_client, sqlite_engine):

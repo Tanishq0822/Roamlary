@@ -8,11 +8,12 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phase 6: community safety reports + Phase 6 second assignment: identity verification & social access)
+## Current scope (Phases 6–7: community reports, identity verification & social access, travel buddies & discovery)
 
 Implemented now (on top of the Phase 1 foundation + Phase 2 database +
 Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS +
-Phase 6 reports):
+Phase 6 reports + Phase 6 second assignment identity verification +
+Phase 7 travel buddies):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -20,8 +21,9 @@ Phase 6 reports):
 - CORS configured for Flutter development origins
 - Interactive API documentation (Swagger UI / ReDoc)
 - **PostgreSQL persistence** via SQLAlchemy 2.x (engine + per-request sessions)
-- **Eight domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
-  `CommunityReport`, `IdentityVerification`, `AppSetting`, `SettingChange` —
+- **Eleven domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
+  `CommunityReport`, `IdentityVerification`, `AppSetting`, `SettingChange`,
+  `TravelProfile`, `TravelPlan`, `TravelPartnerRequest` —
   with UUID keys, timestamps, CHECK constraints and
   `ON DELETE RESTRICT` foreign keys
 - **Alembic migrations** (initial schema + `password_hash` column +
@@ -29,7 +31,8 @@ Phase 6 reports):
   Phase 5 SOS description/location-timestamp/cancellation columns &
   `cancelled` status + Phase 6 `community_reports.category` CHECK
   constraint + Phase 6 second assignment `users.verification_status`/
-  `users.role` columns and the verification/policy/audit tables)
+  `users.role` columns and the verification/policy/audit tables +
+  Phase 7 travel profile/plan/partner-request tables)
 - **Local authentication**: `POST /auth/register`, `POST /auth/login`
   (Argon2id password hashing + HS256 JWT access tokens)
 - **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
@@ -50,29 +53,43 @@ Phase 6 reports):
   `POST /admin/verification-requests/{id}/approve|reject`,
   `GET/PATCH /admin/policy/social-verification` (audited + rate limited)
 - **Server-side social gate**: `require_owner` / `require_verified_user`
-  dependencies + the gated placeholder `GET /social/discovery`
+  dependencies — reused unchanged by the travel-buddy surface below
+- **Travel buddies & social discovery (Phase 7)**: `POST/GET/PATCH/DELETE
+  /travel-profile/me` (one discoverable profile per account),
+  `POST/GET /travel-plans` + `GET/PATCH/DELETE /travel-plans/{plan_id}`,
+  `GET /travel-buddies/discover` (eligibility-aware, scored, paginated),
+  `GET /travel-buddies/{user_id}` (limited public profile),
+  `POST/GET /travel-buddies/requests` +
+  `GET /travel-buddies/requests/{request_id}` +
+  `POST /travel-buddies/requests/{request_id}/accept|reject|cancel`, and
+  the real `GET /social/discovery` (broad verified-user feed)
 - **Owner provisioning CLI**: `python -m app.cli make-owner <email>` (the
   only path that grants the `owner` role)
-- Automated test suite: **245 tests** (221 offline + 24 real-PostgreSQL
+- Automated test suite: **339 tests** (309 offline + 30 real-PostgreSQL
   integration; contacts + check-ins + SOS + reports + verification +
-  admin/policy + auth + profiles + models + migrations)
+  admin/policy + auth + profiles + travel buddies + models + migrations)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
 them to exist): Firebase Authentication, refresh tokens, password reset, email
 verification, report **moderation/approval workflow** (the
 `approved`/`rejected` states are reserved — no endpoint can set them yet), AI
 companion, notifications, **overdue-check-in alerts**, pagination on the
-non-report endpoints, real travel-buddy discovery/chat/events (the single
-`/social/discovery` route is a gated placeholder until Phase 7), a real
+non-report/non-travel endpoints, travel **chat/messaging and trip events**
+(discovery and partner requests exist; the two users are never connected
+by a messaging channel), a real
 identity-verification provider (verification here is **manual review only** —
 no Aadhaar/ID documents or sensitive identity data are collected, stored, or
 displayed anywhere), production deployment. Phase 5 only *records* SOS
 incidents locally — it never contacts emergency services, never messages a
 contact, and never shares a location. Phase 6 only *stores and searches*
-reports — filing one sends nothing to anyone. Authentication
+reports — filing one sends nothing to anyone. Phase 7 only *matches and
+requests* — accepting a travel-partner request creates a connection row,
+never notifies anyone, never opens a chat, and never implies either user
+is safe. Authentication
 here is a **local prototype** — it needs real security work (HTTPS, rate
 limiting, token revocation) before any production claim. Account/safety
-workflows (trusted contacts, check-ins, SOS, profile) stay reachable while
+workflow endpoints (trusted contacts, check-ins, SOS, account profile,
+travel profile & plans) stay reachable while
 **unverified** — incomplete verification must never lock anyone out of
 safety tools.
 
@@ -142,7 +159,7 @@ Four separate concerns, so each stays small and testable:
 `create_all()` in production — Alembic owns the schema, so every change is a
 reviewed, replayable file.
 
-### The eight tables
+### The eleven tables
 
 | Table | Purpose | Key columns |
 | --- | --- | --- |
@@ -154,6 +171,9 @@ reviewed, replayable file.
 | `identity_verifications` | One row per verification **request** (history) | `user_id` (FK), `status` (pending/approved/rejected), `applicant_note`, `review_note`, `reviewed_at`, `reviewed_by` (FK) |
 | `app_settings` | Runtime configuration (one key today: `social_requires_verification`) | `key` (unique), `value`, `updated_by` (FK) |
 | `setting_changes` | Append-only audit of policy changes | `setting_key`, `old_value`, `new_value`, `changed_by` (FK) |
+| `travel_profiles` | One travel identity per account (Phase 7) | `user_id` (FK, **unique**), `travel_nickname`, `languages`/`travel_styles`/`interests` (JSON lists), `group_size_pref` (CHECK 2–12), `discoverable` |
+| `travel_plans` | One trip intention per row (Phase 7) | `user_id` (FK), `destination` + `destination_normalized`, `region` + `region_normalized`, `start_date`/`end_date` (CHECK end ≥ start), `flexible_dates`, `status` (active/paused/completed), `visibility` (private/discoverable) |
+| `travel_partner_requests` | "A wants to travel with B" (Phase 7) | `requester_id`/`recipient_id` (FKs, CHECK ≠), `plan_id` (FK→travel_plans, nullable, RESTRICT), `status` (pending/accepted/rejected/cancelled), two partial UNIQUE pending-pair indexes |
 
 All children use **`ON DELETE RESTRICT`**: deleting a user who still has safety
 records is blocked at the database level, so safety history can never vanish by
@@ -161,7 +181,9 @@ accident. Status columns are protected by CHECK constraints, report `category`
 is a closed 6-value set enforced by a CHECK constraint (Phase 6), and lat/long
 are range-guarded (−90..90 / −180..180). The two `users` verification columns
 are NOT NULL with CHECK-protected value sets and secure server-side defaults
-(`unverified`, `user`).
+(`unverified`, `user`). Travel status/visibility/request columns are CHECK-
+protected sets (Phase 7); deleting a plan referenced by a partner request is
+blocked (RESTRICT) so request history keeps pointing at a real trip.
 
 ### What CORS is and when it matters
 
@@ -574,7 +596,7 @@ request is refused even for the owner (`409`).
 | `POST /api/v1/admin/verification-requests/{id}/reject` | Reject → applicant `rejected` (same errors) | `200` · `401` · `403` · `404` · `409` · `422` |
 | `GET /api/v1/admin/policy/social-verification` | Read the effective policy | `200` · `401` · `403` |
 | `PATCH /api/v1/admin/policy/social-verification` | Change it (`{"requires_verification": true\|false}`) | `200` · `401` · `403` · `422` · `429` rate limit |
-| `GET /api/v1/social/discovery` | **Gated placeholder** (empty list until Phase 7) | `200` · `401` · `403` |
+| `GET /api/v1/social/discovery` | Broad verified-user feed (real since Phase 7 — see the "Travel buddies" section) | `200` · `401` · `403` |
 
 Typical flow:
 
@@ -593,8 +615,9 @@ POST /api/v1/admin/verification-requests/{id}/approve     (owner)
    (the applicant's account is now verification_status="verified")
 
 GET  /api/v1/social/discovery           (applicant)
-→ 200 { "profiles": [], "message": "Travel-buddy discovery is not
-        implemented yet (planned for Phase 7+) …" }
+→ 200 { "profiles": [ …limited public travel profiles, at most 10… ],
+        "message": "Compatibility scores are a deterministic ranking …
+        not a guarantee that anyone is safe …" }
 ```
 
 ### The gate (fail-closed by design)
@@ -647,8 +670,120 @@ database URL, passwords, or tokens.
 > work). With a single owner, the owner's own account can never be
 > API-approved (self-review is refused), so the owner stays `unverified`
 > through the API unless a second reviewer exists or the server operator
-> changes the row deliberately. Discovery/chat/events themselves arrive in
-> Phase 7 — this phase only ships the gate.
+> changes the row deliberately. The gate itself now guards the real
+> travel-buddy surface (Phase 7, next section) in addition to
+> `/social/discovery`.
+
+## Travel buddies & discovery (Phase 7)
+
+Two users can describe how they travel, publish trip plans, find compatible
+travellers, and exchange travel-partner requests — with **no AI, no external
+matching service, and no messaging**: everything is arithmetic over data the
+backend already stores, and every rule is written down below and in
+`app/core/matching.py`.
+
+### The two data layers
+
+- **Travel profile** (`/travel-profile/me`) — one row per account: optional
+  nickname, short bio, home region, and three preference lists
+  (`languages`, `travel_styles`, `interests` — closed sets for styles and
+  interests, free-form but length-limited languages), an optional group-size
+  preference (2–12), and a `discoverable` switch that **defaults to
+  hidden**. No identity documents, no precise location, nothing sensitive.
+- **Travel plan** (`/travel-plans`) — one row per trip intention:
+  destination (free text, normalized server-side for matching), optional
+  region, start/end dates (end ≥ start enforced), `flexible_dates`,
+  `status` (active/paused/completed), and `visibility`
+  (private/discoverable, defaults to private). Plans whose `end_date` is
+  in the past are excluded from discovery **at read time** (there is no
+  background job).
+
+### Endpoints
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `GET /api/v1/travel-profile/me` | Your travel profile (+ `completion` hints) | `200` · `401` · `404` no profile yet (actionable message) |
+| `POST /api/v1/travel-profile/me` | Create it (`discoverable` defaults to `false`) | `201` · `401` · `409` already exists · `422` |
+| `PATCH /api/v1/travel-profile/me` | Partial update (explicit `null` clears, `[]` empties) | `200` · `401` · `404` · `422` |
+| `DELETE /api/v1/travel-profile/me` | Remove your profile (your plans are NOT touched) | `204` · `401` · `404` |
+| `POST /api/v1/travel-plans/` | Publish a plan (`private` by default) | `201` · `401` · `422` |
+| `GET /api/v1/travel-plans/` | Your plans (active first, newest first) | `200` · `401` |
+| `GET /api/v1/travel-plans/{plan_id}` | Read one plan (404 if missing **or** not yours) | `200` · `401` · `404` |
+| `PATCH /api/v1/travel-plans/{plan_id}` | Edit a plan (date edits are re-validated together) | `200` · `401` · `404` · `409` · `422` |
+| `DELETE /api/v1/travel-plans/{plan_id}` | Delete a plan | `204` · `401` · `404` · `409` still referenced by a request |
+| `GET /api/v1/travel-buddies/discover` | Eligible, scored candidates (`?destination=`, `?region=`, `?start_date=`, `?end_date=`, `?interests=`, `?travel_style=`, `?language=`, `?min_score=`, `?offset=`, `?limit=` 1–100) | `200` · `401` · `403` · `422` |
+| `GET /api/v1/travel-buddies/{user_id}` | Limited public travel profile of one user | `200` · `401` · `403` · `404` not discoverable/doesn't exist |
+| `POST /api/v1/travel-buddies/requests` | Ask a discovered user to travel together (`{"recipient_id": "…", "plan_id": "…"}` — `plan_id` optional, must be the RECIPIENT's public plan) | `201` · `401` · `403` · `404` recipient not eligible · `409` duplicate · `422` self/invalid · `429` rate limit |
+| `GET /api/v1/travel-buddies/requests?direction=incoming\|outgoing` | Your request history (`?status=` filter, offset/limit) | `200` · `401` · `422` |
+| `GET /api/v1/travel-buddies/requests/{request_id}` | Read one request (404 unless you are a party) | `200` · `401` · `404` |
+| `POST /api/v1/travel-buddies/requests/{request_id}/accept` | Recipient accepts (`pending → accepted`) | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/travel-buddies/requests/{request_id}/reject` | Recipient declines (`pending → rejected`) | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/travel-buddies/requests/{request_id}/cancel` | Requester withdraws (`pending → cancelled`) | `200` · `401` · `404` · `409` |
+| `GET /api/v1/social/discovery` | Broad feed of discoverable verified-user profiles (at most 10), same honesty message | `200` · `401` · `403` |
+
+### Who may do what (the gate is layered, on purpose)
+
+- **Plain login (any verification state):** everything under
+  `/travel-profile/me`, `/travel-plans`, and reading/cancelling **your own**
+  requests. Managing your own travel data — including retracting a request
+  you sent — is never blocked by the social policy.
+- **Social gate (`require_verified_user`, the same dependency
+  `/social/discovery` has used since Phase 6):** discovery, sending a
+  request, accepting/rejecting, and viewing someone's public profile. While
+  the owner's policy requires verification, an unverified account gets
+  `403` with a status-specific message.
+
+### Discovery: who can appear, and how they are ranked
+
+A candidate appears only if **all** of these hold: they have a travel
+profile marked `discoverable`; the plan is `active` and `discoverable` and
+has not ended; they are not you; they are not already an accepted partner
+or the counterparty of a pending request in either direction; and — while
+the policy requires verification — their account is `verified`.
+
+Ranking is a **documented heuristic**, capped at 100:
+
+| Signal | Points |
+| --- | --- |
+| Destination matches your `?destination=` filter (normalized: casefold + whitespace-collapse) | +40 |
+| Region matches your `?region=` filter instead | +20 |
+| Plan overlaps your `?start_date=`/`?end_date=` window | +30 (strict) / +15 (overlap only via the ±7-day flexible grace) |
+| Shared declared interests | +5 each (max +15) |
+| Shared travel styles | +5 each (max +10) |
+| Shared language | +5 |
+
+The destination/region/date weights score **what you filtered for**; an
+unfiltered browse therefore ranks by shared preferences only. Normalization
+is exact after casefold/whitespace-collapse — punctuation variants ("Goa,
+India" vs "Goa India") are treated as different destinations (documented
+limitation). Every discovery response carries a `note` repeating the
+honesty boundary:
+
+> Compatibility scores are a deterministic ranking of travel logistics and
+> stated preferences — **not a guarantee that anyone is safe** or that two
+> people will get along. Always meet in public and tell a trusted contact
+> your plans.
+
+### Request lifecycle
+
+```text
+A: POST /travel-buddies/requests {"recipient_id": B, "plan_id": <B's plan>}
+→ 201 { "id": "…", "status": "pending", … }
+
+B: GET  /travel-buddies/requests?direction=incoming   → sees the request
+B: POST /travel-buddies/requests/{id}/accept          → 200 "accepted"
+   (or /reject → "rejected"; A may /cancel while pending → "cancelled")
+```
+
+Accepted is a **social connection only**: it grants no verification bypass,
+no chat, no notifications, and no access either user did not already have.
+Duplicates are refused before they are written: a second pending request in
+the same direction hits the database's partial UNIQUE index (concurrent
+duplicates lose there, not in application code), and the cross-direction
+duplicate ("B asks A while A's request to B is pending") is refused with
+`409` by the endpoint's either-direction pre-check. Sending is rate limited
+to 30 requests/hour/user (`429` beyond that — in-process counter, same
+documented caveat as the owner policy limiter).
 
 ## Migrations (Alembic)
 
@@ -701,6 +836,20 @@ Applied migrations on `roamlary_dev`:
   guard — see Common problems). Round-trip verified (`upgrade` →
   `downgrade` → `upgrade`) on SQLite and PostgreSQL, plus live on
   `roamlary_dev`. `alembic current` → `3e285edb0896 (head)`.
+- `426dcef31e27` — Phase 7: adds the three travel tables
+  (`travel_profiles` with a UNIQUE `user_id` index and a 2–12 group-size
+  CHECK, `travel_plans` with end ≥ start / status / visibility CHECK
+  constraints and discovery-shaped indexes, `travel_partner_requests`
+  with a no-self-request CHECK, a status CHECK, RESTRICT foreign keys to
+  `users` and to the optional context `travel_plans` row, and two
+  partial UNIQUE indexes that keep at most one PENDING row per direction
+  of a user pair). The **upgrade** needs no guard (new tables — nothing
+  existing can violate them). The **downgrade** is guarded the same way
+  as Phases 4–6: while any travel profile, plan, or partner request
+  exists it **refuses** with an actionable error before touching the
+  schema. Round-trip verified (`upgrade` → `downgrade` → `upgrade`) on
+  SQLite and PostgreSQL, plus live on `roamlary_dev`. `alembic current`
+  → `426dcef31e27 (head)`.
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -827,6 +976,14 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `409` "A verification request is already under review." / "already verified" | Submitting while `pending`, or while `verified` | Only `unverified`/`rejected` accounts may submit; read `GET /verification/status` first |
 | `429` on `PATCH /admin/policy/social-verification` | More than 5 policy changes from one owner within an hour (in-process limit) | Expected throttle; wait for the window to pass, or restart the dev server (the counter is in-memory) |
 | `422` on register/`PATCH /users/me` mentioning `role` or `verification_status` | Injecting a field only the server may set | Send only the documented fields — roles/verification states are changed by the CLI and owner review, never by clients |
+| `404` on `GET /travel-profile/me` | No travel profile exists for the account yet | Expected: the message tells you to `POST /travel-profile/me` with `{}` (or fields) to create one |
+| `403` on `/travel-buddies/discover` or `/travel-buddies/{user_id}` | The account is not `verified` while the policy requires verification (same gate as `/social/discovery`) | Expected gate. Complete verification, or ask an owner to flip the policy during development |
+| `404` "Recipient not found." on `POST /travel-buddies/requests` | The recipient is hidden (`discoverable=false`), has no travel profile, or failed the live verification policy — all collapse to the same `404` so eligibility can't be probed | Only send to users you actually saw in discovery; if they just hid themselves, the `404` is the honest answer |
+| `409` on `POST /travel-buddies/requests` | A `pending` or `accepted` request already exists between the two users in either direction | Check `GET /travel-buddies/requests?direction=outgoing` first; a rejected/cancelled request may be re-sent |
+| `429` on `POST /travel-buddies/requests` | More than 30 sends from one user within an hour (in-process limit) | Expected throttle; wait for the window to pass, or restart the dev server (the counter is in-memory) |
+| `409` on `DELETE /travel-plans/{plan_id}` | A travel-partner request still references the plan (`ON DELETE RESTRICT`) | Cancel/close the request (or accept it — accepted requests keep their context plan), then delete |
+| `422` on `POST /travel-buddies/requests` with your own `recipient_id` | Self-requests are structurally impossible (schema + database CHECK) | Pick a recipient from discovery — never yourself |
+| `RuntimeError: Refusing to downgrade migration 426dcef31e27 …` | Travel profiles, plans, or partner requests exist that the older schema cannot hold | Intentional data-safety guard: nothing was changed. Export or delete those rows first, then re-run — or keep the Phase 7 schema |
 
 ## Development log
 

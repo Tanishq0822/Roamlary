@@ -1,48 +1,73 @@
-"""Social surface (Phase 6b placeholder route).
+"""Social surface (Phase 6b gate + Phase 7 real discovery).
 
-Plain language: travel-buddy discovery, messaging, and events do not
-exist yet - they are Phase 7+ work. This phase still needs a REAL
-endpoint that the identity-verification gate protects, otherwise
-"unverified users are denied social access" could only be tested
-theoretically. So Phase 6 ships exactly one route:
+Plain language: Phase 6 shipped ONE route here - GET /social/discovery -
+as an honest empty placeholder, purely so the identity-verification
+gate had a real endpoint to protect (and real API tests to prove
+denial). Phase 7 keeps that route and its gate EXACTLY as before (same
+path, same `require_verified_user` dependency, same `{profiles, message}`
+JSON contract the existing UI already parses) but now fills `profiles`
+with the real travel-buddy discovery results from Phase 7's matching
+service.
 
-    GET /social/discovery   (requires verification while the policy says so)
-
-It returns an empty `profiles` list with an honest message - no invented
-users, no fabricated matches. Phase 7 replaces this with the actual
-discovery implementation, keeping the same gate.
-
-The gate itself lives in `app/api/v1/deps.py` (`require_verified_user`);
-nothing in this file re-implements authorization.
+The richer, filterable, paginated endpoint is
+GET /api/v1/travel-buddies/discover; this route stays as a compatibility
+"broad feed" (no filters, top results only) because it predates the
+filterable one and the committed UI calls it bare. Nothing here
+re-implements authorization - the gate lives in `app/api/v1/deps.py`.
 """
 
 from fastapi import APIRouter
+from sqlalchemy import select
 
-from app.api.v1.deps import SocialUser
+from app.api.v1.deps import DbSession, SocialUser
+from app.api.v1.endpoints.travel_buddies import _candidate_read
 from app.api.v1.schemas.social import DiscoveryResponse
+from app.core.policy import get_policy
+from app.models.travel_profile import TravelProfile
+from app.services.discovery import broad_feed
 
 router = APIRouter(prefix="/social", tags=["social"])
 
-# Honest placeholder message - never claim features that do not exist.
+# How many broad-feed results this compatibility route returns. The
+# filterable endpoint accepts offset/limit up to 100; this one is a
+# fixed-size "who's out there" peek.
+_BROAD_FEED_LIMIT = 10
+
+# Honest message - the UI displays it verbatim next to the count.
 _DISCOVERY_MESSAGE = (
-    "Travel-buddy discovery is not implemented yet (planned for Phase 7+). "
-    "This endpoint exists in Phase 6 only to enforce the identity-"
-    "verification gate; you have passed it, but there is nothing to "
-    "discover here yet."
+    "Showing travellers with active, discoverable plans. Compatibility "
+    "scores are a deterministic ranking of travel logistics and stated "
+    "preferences - not a guarantee that anyone is safe or compatible. "
+    "Use GET /api/v1/travel-buddies/discover for filtered, paginated "
+    "matching."
 )
 
 
 @router.get(
     "/discovery",
     response_model=DiscoveryResponse,
-    summary="Discovery (gated placeholder)",
+    summary="Broad discovery feed (gated by identity verification)",
 )
-def get_discovery(current_user: SocialUser) -> DiscoveryResponse:
-    """Gate check + placeholder payload.
+def get_discovery(current_user: SocialUser, db: DbSession) -> DiscoveryResponse:
+    """Gate check + real (unfiltered) discovery results.
 
-    `current_user` is the require_verified_user dependency: without a
-    token -> 401; with an unverified/pending/rejected account while the
-    policy requires verification -> 403; otherwise the route runs and
-    returns an empty list (nothing is implemented yet).
+    `current_user` is the `require_verified_user` dependency, unchanged
+    from Phase 6b: while the policy requires verification, an
+    unverified/pending/rejected account gets the same 403 as before; a
+    verified account (or any account while the owner has turned the
+    policy off) gets the top eligible candidates. The JSON shape is
+    unchanged from Phase 6: `profiles` (now populated) plus an honest
+    `message`.
     """
-    return DiscoveryResponse(profiles=[], message=_DISCOVERY_MESSAGE)
+    profile = db.scalar(select(TravelProfile).where(TravelProfile.user_id == current_user.id))
+    rows = broad_feed(
+        db,
+        searcher=current_user,
+        searcher_profile=profile,
+        requires_verification=get_policy(db),
+        limit=_BROAD_FEED_LIMIT,
+    )
+    return DiscoveryResponse(
+        profiles=[_candidate_read(c).model_dump(mode="json") for c in rows],
+        message=_DISCOVERY_MESSAGE,
+    )

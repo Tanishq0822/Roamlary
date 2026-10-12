@@ -33,6 +33,8 @@ if TYPE_CHECKING:
     from app.models.community_report import CommunityReport
     from app.models.identity_verification import IdentityVerification
     from app.models.sos_event import SosEvent
+    from app.models.travel_plan import TravelPlan
+    from app.models.travel_profile import TravelProfile
     from app.models.trusted_contact import TrustedContact
 
 
@@ -101,3 +103,11 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     verification_requests: Mapped[list[IdentityVerification]] = relationship(
         back_populates="user", foreign_keys="IdentityVerification.user_id"
     )
+    # Travel surface (Phase 7). One optional profile (1:1) and many plans.
+    # Travel-partner REQUESTS deliberately have no backref here: their two
+    # user FKs (requester/recipient) would make the reverse side
+    # ambiguous, and every query selects the request rows directly.
+    travel_profile: Mapped[TravelProfile | None] = relationship(
+        back_populates="user", uselist=False
+    )
+    travel_plans: Mapped[list[TravelPlan]] = relationship(back_populates="user")

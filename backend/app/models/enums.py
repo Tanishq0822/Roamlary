@@ -166,3 +166,51 @@ class UserRole(StrEnum):
 
     USER = "user"
     OWNER = "owner"
+
+
+class TravelPlanStatus(StrEnum):
+    """Lifecycle of a travel plan (Phase 7).
+
+        active    -> the trip is planned/open (the ONLY state discovery sees)
+        paused    -> temporarily not seeking companions (kept, hidden)
+        completed -> over; kept as history, never discovered
+
+    No endpoint moves a plan to `expired` - plans whose `end_date` has
+    passed are simply ineligible at read time (the project has no
+    background jobs; documented in report.md).
+    """
+
+    ACTIVE = "active"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+
+
+class PlanVisibility(StrEnum):
+    """Who may see a travel plan (Phase 7).
+
+    private      -> owner only (the SECURE DEFAULT)
+    discoverable -> eligible to appear in travel-buddy discovery
+                    (still subject to profile + account eligibility)
+    """
+
+    PRIVATE = "private"
+    DISCOVERABLE = "discoverable"
+
+
+class BuddyRequestStatus(StrEnum):
+    """Lifecycle of a travel-partner request (Phase 7).
+
+        pending   -> sent, awaiting the RECIPIENT's decision
+        accepted  -> recipient agreed (terminal)
+        rejected  -> recipient declined; requester may send a new request
+        cancelled -> requester withdrew their own pending request (terminal)
+
+    Transitions are enforced in the endpoint layer; the database adds
+    partial UNIQUE constraints so at most one PENDING request exists per
+    user pair in either direction.
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"

@@ -10,6 +10,9 @@ from app.api.v1.endpoints import (
     health,
     social,
     sos_events,
+    travel_buddies,
+    travel_plans,
+    travel_profile,
     trusted_contacts,
     users,
     verification,
@@ -26,3 +29,6 @@ api_router.include_router(community_reports.router)
 api_router.include_router(verification.router)
 api_router.include_router(admin.router)
 api_router.include_router(social.router)
+api_router.include_router(travel_profile.router)
+api_router.include_router(travel_plans.router)
+api_router.include_router(travel_buddies.router)

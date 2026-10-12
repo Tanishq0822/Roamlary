@@ -26,12 +26,13 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  (registers all tables)
 from app.db.base_class import Base
-from app.models import TrustedContact, User
+from app.models import TravelPlan, TravelProfile, TrustedContact, User
 from app.models.enums import CheckInStatus
 from tests.conftest import (
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
+    insert_raw_user_and_travel,
     insert_raw_user_and_verification,
 )
 
@@ -799,3 +800,223 @@ def test_pg_phase6b_downgrade_upgrade_roundtrip(pg_engine) -> None:
     assert version == "3e285edb0896"
     assert row.verification_status == "unverified"  # re-backfilled
     assert row.role == "user"
+
+
+# ----------------------- Phase 7 travel surface on PostgreSQL
+
+
+def test_phase7_travel_tables_have_native_uuid_and_restrict_fks(pg_engine) -> None:
+    """The three travel tables use native uuid columns, and every FK
+    (including the optional plan context) is RESTRICT."""
+    with pg_engine.connect() as conn:
+        uuid_cols = (
+            conn.execute(
+                sa.text(
+                    "SELECT table_name, column_name FROM information_schema.columns "
+                    "WHERE table_name IN "
+                    "('travel_profiles', 'travel_plans', 'travel_partner_requests') "
+                    "AND column_name = 'id' AND data_type = 'uuid'"
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(uuid_cols) == 3  # one native uuid PK per travel table
+        fkr = conn.execute(
+            sa.text(
+                "SELECT conrelid::regclass::text, confrelid::regclass::text, "
+                "confdeltype FROM pg_constraint WHERE contype = 'f' AND "
+                "conrelid::regclass::text IN "
+                "('travel_profiles', 'travel_plans', 'travel_partner_requests')"
+            )
+        ).all()
+    assert fkr, "foreign keys must exist on the travel tables"
+    for table, referred, on_delete in fkr:
+        # pg_constraint.confdeltype is 'r'/'R' for ON DELETE RESTRICT.
+        assert on_delete.upper() == "R", f"{table}->{referred} must be ON DELETE RESTRICT"
+
+
+def test_phase7_partial_pending_pair_index_enforced_on_pg(pg_engine) -> None:
+    """On real PostgreSQL, racing identical pending sends lose at the
+    database (per direction); the cross-direction pair is guarded by the
+    endpoint layer (documented boundary)."""
+    with pg_engine.begin() as conn:
+        a_id, b_id = uuid.uuid4(), uuid.uuid4()
+        for uid in (a_id, b_id):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'PG Traveller', now(), now())"
+                ),
+                {"id": uid},
+            )
+        base = (
+            "INSERT INTO travel_partner_requests "
+            "(id, requester_id, recipient_id, status, created_at, updated_at) "
+            "VALUES (:rid, :req, :rec, 'pending', now(), now())"
+        )
+        conn.execute(sa.text(base), {"rid": uuid.uuid4(), "req": a_id, "rec": b_id})
+        with pytest.raises(IntegrityError):
+            conn.execute(sa.text(base), {"rid": uuid.uuid4(), "req": a_id, "rec": b_id})
+        conn.rollback()
+    # After rollback both rows are gone; seed the mirrored direction and
+    # prove ITS duplicate is rejected too.
+    with pg_engine.begin() as conn:
+        a_id, b_id = uuid.uuid4(), uuid.uuid4()
+        for uid in (a_id, b_id):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'PG Traveller', now(), now())"
+                ),
+                {"id": uid},
+            )
+        base = (
+            "INSERT INTO travel_partner_requests "
+            "(id, requester_id, recipient_id, status, created_at, updated_at) "
+            "VALUES (:rid, :req, :rec, 'pending', now(), now())"
+        )
+        conn.execute(sa.text(base), {"rid": uuid.uuid4(), "req": b_id, "rec": a_id})
+        with pytest.raises(IntegrityError):
+            conn.execute(sa.text(base), {"rid": uuid.uuid4(), "req": b_id, "rec": a_id})
+        conn.rollback()
+
+
+def test_phase7_check_constraints_enforced_on_pg(pg_engine: Session) -> None:
+    """Self-requests and inverted date ranges fail at the database."""
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Check', now(), now())"
+            ),
+            {"id": uid},
+        )
+        with pytest.raises(IntegrityError):  # no self-request
+            conn.execute(
+                sa.text(
+                    "INSERT INTO travel_partner_requests "
+                    "(id, requester_id, recipient_id, status, created_at, updated_at) "
+                    "VALUES (:rid, :uid, :uid, 'pending', now(), now())"
+                ),
+                {"rid": uuid.uuid4(), "uid": uid},
+            )
+        conn.rollback()
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Check', now(), now())"
+            ),
+            {"id": uid},
+        )
+        with pytest.raises(IntegrityError):  # end before start
+            conn.execute(
+                sa.text(
+                    "INSERT INTO travel_plans "
+                    "(id, user_id, destination, destination_normalized, start_date, "
+                    "end_date, created_at, updated_at) "
+                    "VALUES (:pid, :uid, 'Goa', 'goa', '2026-12-10', '2026-12-01', "
+                    "now(), now())"
+                ),
+                {"pid": uuid.uuid4(), "uid": uid},
+            )
+        conn.rollback()
+
+
+def test_phase7_json_list_columns_round_trip_on_pg(pg_session: Session) -> None:
+    """The generic JSON preference lists store and return real arrays."""
+    user = User(display_name="PG Nomad", email="pg-nomad@example.com")
+    pg_session.add(user)
+    pg_session.flush()
+    pg_session.add(
+        TravelProfile(
+            user_id=user.id,
+            travel_nickname="Nomad",
+            languages=["english", "hindi"],
+            travel_styles=["slow_travel"],
+            interests=["hiking", "food"],
+            discoverable=True,
+        )
+    )
+    pg_session.add(
+        TravelPlan(
+            user_id=user.id,
+            destination="Ladakh",
+            destination_normalized="ladakh",
+            start_date=datetime.now().date(),
+            end_date=datetime.now().date(),
+            flexible_dates=True,
+            status="active",
+            visibility="discoverable",
+        )
+    )
+    pg_session.commit()
+    profile = pg_session.query(TravelProfile).one()
+    assert profile.languages == ["english", "hindi"]
+    assert profile.interests == ["hiking", "food"]
+    plan = pg_session.query(TravelPlan).one()
+    assert plan.destination_normalized == "ladakh"
+
+
+def test_pg_phase7_downgrade_refuses_when_travel_data_exists(pg_engine) -> None:
+    """DATA-DEPENDENT DOWNGRADE on real PostgreSQL: travel rows make the
+    rollback REFUSE cleanly, leaving schema and records untouched."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_travel(pg_engine)
+
+    downgrade = _run_alembic_on_pg(["downgrade", "3e285edb0896"])
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while travel data exists, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(pg_engine)
+    assert {"travel_profiles", "travel_plans", "travel_partner_requests"} <= set(
+        inspector.get_table_names()
+    )
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        destination = conn.execute(sa.text("SELECT destination FROM travel_plans")).scalar_one()
+    assert version == "426dcef31e27"
+    assert destination == "Goa"
+
+
+def test_pg_phase7_downgrade_upgrade_roundtrip(pg_engine) -> None:
+    """Normal path on REAL PostgreSQL: clean state downgrades (tables
+    removed); upgrading again restores the exact Phase 7 schema."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_checkin(pg_engine, "pending")  # non-travel row survives
+
+    downgrade = _run_alembic_on_pg(["downgrade", "3e285edb0896"])
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(pg_engine)
+    assert "travel_plans" not in set(inspector.get_table_names())
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        count = conn.execute(sa.text("SELECT count(*) FROM users")).scalar_one()
+    assert version == "3e285edb0896"
+    assert count == 1  # the user row itself survives
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(pg_engine)
+    assert {"travel_profiles", "travel_plans", "travel_partner_requests"} <= set(
+        inspector.get_table_names()
+    )
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "426dcef31e27"

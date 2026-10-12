@@ -265,3 +265,60 @@ def insert_raw_user_and_verification(
                 ),
                 {"rid": request_id, "uid": user_id, "status": request_status},
             )
+
+
+def insert_raw_user_and_travel(engine) -> None:
+    """Insert two users + a travel profile, plan, and partner request with
+    RAW SQL.
+
+    Same purpose as the other raw helpers: the Phase 7 downgrade guard
+    must be tested against rows no matter who wrote them. Works on a
+    schema that already has the travel tables (revision 426dcef31e27).
+    Two users exist because a partner request needs a real counterpart.
+    Only NOT NULL columns and the 'Migration Probe' names are written;
+    everything else takes its column defaults.
+    """
+    if engine.dialect.name == "postgresql":
+        uid_a, uid_b, profile_id, plan_id, request_id = (uuid.uuid4() for _ in range(5))
+        discoverable_literal = "TRUE"  # PG rejects the integer form
+    else:
+        uid_a, uid_b, profile_id, plan_id, request_id = (str(uuid.uuid4()) for _ in range(5))
+        discoverable_literal = "1"  # SQLite stores booleans as integers
+    with engine.begin() as conn:
+        for uid in (uid_a, uid_b):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users "
+                    "(id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'Migration Probe', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": uid},
+            )
+        conn.execute(
+            sa.text(
+                "INSERT INTO travel_profiles "
+                "(id, user_id, travel_nickname, discoverable, created_at, updated_at) "
+                "VALUES (:pid, :uid, 'Migration Probe', " + discoverable_literal + ", "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"pid": profile_id, "uid": uid_a},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO travel_plans "
+                "(id, user_id, destination, destination_normalized, start_date, end_date, "
+                "created_at, updated_at) "
+                "VALUES (:planid, :uid, 'Goa', 'goa', '2026-12-01', '2026-12-10', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"planid": plan_id, "uid": uid_a},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO travel_partner_requests "
+                "(id, requester_id, recipient_id, status, created_at, updated_at) "
+                "VALUES (:rid, :uida, :uidb, 'pending', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"rid": request_id, "uida": uid_a, "uidb": uid_b},
+        )
