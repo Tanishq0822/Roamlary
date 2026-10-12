@@ -32,6 +32,7 @@ from tests.conftest import (
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
+    insert_raw_user_and_verification,
 )
 
 PG_TEST_URL = os.environ.get("ROAMLARY_TEST_DATABASE_URL")
@@ -619,3 +620,182 @@ def test_pg_phase6_downgrade_upgrade_roundtrip(pg_engine) -> None:
     assert constraint_count == 1  # constraint restored
     assert version == "ab32047c8481"
     assert category == "unsafe_area"
+
+
+# ---------------------- Phase 6b verification foundation checks (PG)
+
+
+def _insert_plain_user(
+    connection, verification_status: str = "unverified", role: str = "user"
+) -> uuid.UUID:
+    """Insert one user row and return its id (raw SQL, caller-committed).
+
+    The Phase 6b columns are always provided explicitly so this works on
+    BOTH schemas the tests build: the ORM-created one (Python-side
+    defaults only) and the Alembic-created one (database defaults).
+    """
+    user_id = uuid.uuid4()
+    connection.execute(
+        sa.text(
+            "INSERT INTO users (id, display_name, verification_status, role, "
+            "created_at, updated_at) "
+            "VALUES (:id, 'X', :vstatus, :role, now(), now())"
+        ),
+        {"id": user_id, "vstatus": verification_status, "role": role},
+    )
+    return user_id
+
+
+def test_phase6b_check_constraints_enforced_on_pg(pg_engine) -> None:
+    """The Phase 6b CHECK constraints reject bad values written by RAW SQL
+    on REAL PostgreSQL - the second validation layer behind the enums."""
+    # Bad account verification status -> rejected.
+    with pg_engine.begin() as connection:
+        _insert_plain_user(connection)
+        with pytest.raises(IntegrityError):
+            connection.execute(
+                sa.text(
+                    "UPDATE users SET verification_status = 'super-verified' "
+                    "WHERE display_name = 'X'"
+                )
+            )
+    # Bad role -> rejected (no privilege escalation via raw SQL).
+    with pg_engine.begin() as connection:
+        _insert_plain_user(connection)
+        with pytest.raises(IntegrityError):
+            connection.execute(sa.text("UPDATE users SET role = 'admin' WHERE display_name = 'X'"))
+    # Bad request status -> rejected.
+    with pg_engine.begin() as connection:
+        user_id = _insert_plain_user(connection)
+        with pytest.raises(IntegrityError):
+            connection.execute(
+                sa.text(
+                    "INSERT INTO identity_verifications "
+                    "(id, user_id, status, created_at, updated_at) "
+                    "VALUES (:rid, :uid, 'maybe', now(), now())"
+                ),
+                {"rid": uuid.uuid4(), "uid": user_id},
+            )
+    # All documented values -> accepted.
+    with pg_engine.begin() as connection:
+        user_id = _insert_plain_user(connection, verification_status="verified", role="owner")
+        connection.execute(
+            sa.text(
+                "INSERT INTO identity_verifications "
+                "(id, user_id, status, created_at, updated_at) "
+                "VALUES (:rid, :uid, 'approved', now(), now())"
+            ),
+            {"rid": uuid.uuid4(), "uid": user_id},
+        )
+        row = connection.execute(sa.text("SELECT verification_status, role FROM users")).one()
+    assert row.verification_status == "verified"
+    assert row.role == "owner"
+
+
+def test_phase6b_defaults_on_new_accounts(pg_session: Session) -> None:
+    """An account created through the ORM (the path registration uses)
+    starts unverified + user - never verified, never privileged."""
+    from app.models.enums import UserRole, VerificationStatus
+
+    user = User(display_name="PG Default", email="pg-default@example.com")
+    pg_session.add(user)
+    pg_session.commit()
+    assert user.verification_status == VerificationStatus.UNVERIFIED
+    assert user.role == UserRole.USER
+
+
+def test_pg_phase6b_upgrade_backfills_existing_users(pg_engine) -> None:
+    """A user created BEFORE the Phase 6b revision comes out of the
+    upgrade as unverified + user on REAL PostgreSQL (server default fills
+    every existing row; nobody is silently promoted)."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "ab32047c8481"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_checkin(pg_engine, "pending")  # plain pre-Phase-6b user
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "3e285edb0896"])
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    with pg_engine.connect() as conn:
+        row = conn.execute(sa.text("SELECT verification_status, role FROM users")).one()
+    assert row.verification_status == "unverified"
+    assert row.role == "user"
+
+
+def test_pg_phase6b_downgrade_refuses_when_verification_data_exists(pg_engine) -> None:
+    """Data-dependent downgrade on REAL PostgreSQL: existing verification
+    requests must make the Phase 6b downgrade REFUSE, and the refusal must
+    change nothing (schema and the record stay exactly as they were)."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "3e285edb0896"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_verification(pg_engine, request_status="pending")
+
+    downgrade = _run_alembic_on_pg(["downgrade", "ab32047c8481"])
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while verification requests exist, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(pg_engine)
+    assert "identity_verifications" in set(inspector.get_table_names())
+    assert "verification_status" in {c["name"] for c in inspector.get_columns("users")}
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(
+            sa.text("SELECT status FROM identity_verifications")
+        ).scalar_one()
+        constraint = conn.execute(
+            sa.text(
+                "SELECT pg_get_constraintdef(oid) FROM pg_constraint "
+                "WHERE conname = 'ck_users_role_valid'"
+            )
+        ).scalar_one()
+    assert version == "3e285edb0896"  # still at the Phase 6b revision
+    assert status_value == "pending"  # the record itself is untouched
+    assert "'owner'" in constraint  # role CHECK still active
+
+
+def test_pg_phase6b_downgrade_upgrade_roundtrip(pg_engine) -> None:
+    """Normal path on REAL PostgreSQL: clean state downgrades successfully
+    (tables + columns removed, user row survives); upgrading again restores
+    the exact Phase 6b schema with secure backfill."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "3e285edb0896"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_verification(pg_engine, request_status=None)  # defaults only
+
+    downgrade = _run_alembic_on_pg(["downgrade", "ab32047c8481"])
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(pg_engine)
+    assert "identity_verifications" not in set(inspector.get_table_names())
+    user_cols = {c["name"] for c in inspector.get_columns("users")}
+    assert "verification_status" not in user_cols
+    assert "role" not in user_cols
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        count = conn.execute(sa.text("SELECT count(*) FROM users")).scalar_one()
+    assert version == "ab32047c8481"
+    assert count == 1  # the user row itself survives
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "3e285edb0896"])
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(pg_engine)
+    assert {"identity_verifications", "app_settings", "setting_changes"} <= set(
+        inspector.get_table_names()
+    )
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        row = conn.execute(sa.text("SELECT verification_status, role FROM users")).one()
+    assert version == "3e285edb0896"
+    assert row.verification_status == "unverified"  # re-backfilled
+    assert row.role == "user"

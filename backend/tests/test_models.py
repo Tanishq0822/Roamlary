@@ -5,10 +5,36 @@ import uuid
 from sqlalchemy import create_engine, inspect
 
 from app.db.base_class import Base
-from app.models import CheckIn, CommunityReport, SosEvent, TrustedContact, User
-from app.models.enums import CheckInStatus, ReportCategory, ReportStatus, SosStatus
+from app.models import (
+    AppSetting,
+    CheckIn,
+    CommunityReport,
+    IdentityVerification,
+    SettingChange,
+    SosEvent,
+    TrustedContact,
+    User,
+)
+from app.models.enums import (
+    CheckInStatus,
+    ReportCategory,
+    ReportStatus,
+    SosStatus,
+    UserRole,
+    VerificationRequestStatus,
+    VerificationStatus,
+)
 
-EXPECTED_TABLES = {"users", "trusted_contacts", "check_ins", "sos_events", "community_reports"}
+EXPECTED_TABLES = {
+    "users",
+    "trusted_contacts",
+    "check_ins",
+    "sos_events",
+    "community_reports",
+    "identity_verifications",
+    "app_settings",
+    "setting_changes",
+}
 
 
 def test_all_tables_are_registered() -> None:
@@ -92,6 +118,54 @@ def test_report_category_check_constraint_exists() -> None:
     engine.dispose()
 
 
+def test_phase6b_check_constraints_exist() -> None:
+    """Phase 6b: account verification state, role, and request status are
+    closed sets, each guarded by a database CHECK constraint (the second
+    validation layer behind the Python enums)."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    users_names = {c["name"] for c in inspector.get_check_constraints("users")}
+    assert "ck_users_verification_status_valid" in users_names, users_names
+    assert "ck_users_role_valid" in users_names, users_names
+    request_names = {c["name"] for c in inspector.get_check_constraints("identity_verifications")}
+    assert "ck_identity_verifications_status_valid" in request_names, request_names
+    engine.dispose()
+
+
+def test_phase6b_columns_default_to_secure_values() -> None:
+    """New accounts get `unverified` + `user` via the model defaults -
+    registration can never start anyone verified or privileged."""
+    users = Base.metadata.tables["users"]
+    assert str(users.columns["verification_status"].default.arg) == "unverified"
+    assert str(users.columns["role"].default.arg) == "user"
+    assert users.columns["verification_status"].nullable is False
+    assert users.columns["role"].nullable is False
+
+
+def test_phase6b_tables_reference_users() -> None:
+    """Every Phase 6b table has an ON DELETE RESTRICT foreign key to
+    users, so verification/audit data can never be orphaned or silently
+    dropped by deleting an account."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    expected_columns = {
+        "identity_verifications": {"user_id", "reviewed_by"},
+        "app_settings": {"updated_by"},
+        "setting_changes": {"changed_by"},
+    }
+    for table_name, wanted in expected_columns.items():
+        fks = inspector.get_foreign_keys(table_name)
+        found = set()
+        for fk in fks:
+            if fk["referred_table"] == "users":
+                found.update(fk["constrained_columns"])
+                assert fk["options"].get("ondelete") == "RESTRICT", table_name
+        assert wanted <= found, f"{table_name}: {fks}"
+    engine.dispose()
+
+
 def test_status_enums_match_the_contract() -> None:
     """The Python status enums hold exactly the documented values.
 
@@ -129,9 +203,29 @@ def test_report_category_enum_matches_the_contract() -> None:
     }
 
 
+def test_verification_enums_match_the_contract() -> None:
+    """Phase 6b: the account states, request states, and roles hold
+    exactly the documented values - no silent extras."""
+    assert {s.value for s in VerificationStatus} == {
+        "unverified",
+        "pending",
+        "verified",
+        "rejected",
+    }
+    assert {s.value for s in VerificationRequestStatus} == {
+        "pending",
+        "approved",
+        "rejected",
+    }
+    assert {r.value for r in UserRole} == {"user", "owner"}
+
+
 def test_model_classes_map_to_expected_tables() -> None:
     assert User.__tablename__ == "users"
     assert TrustedContact.__tablename__ == "trusted_contacts"
     assert CheckIn.__tablename__ == "check_ins"
     assert SosEvent.__tablename__ == "sos_events"
     assert CommunityReport.__tablename__ == "community_reports"
+    assert IdentityVerification.__tablename__ == "identity_verifications"
+    assert AppSetting.__tablename__ == "app_settings"
+    assert SettingChange.__tablename__ == "setting_changes"

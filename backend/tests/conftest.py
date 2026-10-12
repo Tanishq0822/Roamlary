@@ -224,3 +224,44 @@ def insert_raw_user_and_report(
                 "status": status,
             },
         )
+
+
+def insert_raw_user_and_verification(
+    engine,
+    request_status: str | None = "pending",
+    verification_status: str = "unverified",
+    role: str = "user",
+) -> None:
+    """Insert one user (+ optional verification request) with RAW SQL.
+
+    Same purpose as the other raw helpers: the Phase 6b downgrade guard
+    must be tested against rows no matter who wrote them. Only works on a
+    schema that already has the Phase 6b columns (revision 3e285edb0896).
+
+    - `request_status=None` inserts a user only (use `verification_status`
+      or `role` to simulate non-default state for the guard).
+    - `request_status="pending"` also inserts a verification request row.
+    """
+    if engine.dialect.name == "postgresql":
+        user_id, request_id = uuid.uuid4(), uuid.uuid4()
+    else:
+        user_id, request_id = str(uuid.uuid4()), str(uuid.uuid4())
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO users "
+                "(id, display_name, verification_status, role, created_at, updated_at) "
+                "VALUES (:id, 'Migration Probe', :vstatus, :role, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": user_id, "vstatus": verification_status, "role": role},
+        )
+        if request_status is not None:
+            conn.execute(
+                sa.text(
+                    "INSERT INTO identity_verifications "
+                    "(id, user_id, status, created_at, updated_at) "
+                    "VALUES (:rid, :uid, :status, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"rid": request_id, "uid": user_id, "status": request_status},
+            )

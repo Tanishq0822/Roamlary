@@ -8,10 +8,11 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phase 6 — Community safety reports & location search)
+## Current scope (Phase 6: community safety reports + Phase 6 second assignment: identity verification & social access)
 
 Implemented now (on top of the Phase 1 foundation + Phase 2 database +
-Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS):
+Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS +
+Phase 6 reports):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -19,14 +20,16 @@ Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS):
 - CORS configured for Flutter development origins
 - Interactive API documentation (Swagger UI / ReDoc)
 - **PostgreSQL persistence** via SQLAlchemy 2.x (engine + per-request sessions)
-- **Five domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
-  `CommunityReport` — with UUID keys, timestamps, CHECK constraints and
+- **Eight domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
+  `CommunityReport`, `IdentityVerification`, `AppSetting`, `SettingChange` —
+  with UUID keys, timestamps, CHECK constraints and
   `ON DELETE RESTRICT` foreign keys
 - **Alembic migrations** (initial schema + `password_hash` column +
   Phase 4 contact/check-in columns & `cancelled` status +
   Phase 5 SOS description/location-timestamp/cancellation columns &
   `cancelled` status + Phase 6 `community_reports.category` CHECK
-  constraint)
+  constraint + Phase 6 second assignment `users.verification_status`/
+  `users.role` columns and the verification/policy/audit tables)
 - **Local authentication**: `POST /auth/register`, `POST /auth/login`
   (Argon2id password hashing + HS256 JWT access tokens)
 - **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
@@ -39,22 +42,39 @@ Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS):
 - **Community safety reports**: `POST /reports`, `GET /reports`,
   `GET /reports/nearby`, `GET /reports/{report_id}` — with category/status
   filters, bounded offset/limit pagination, and a haversine radius search
-- Automated test suite: **193 tests** (174 offline + 19 real-PostgreSQL
-  integration; contacts + check-ins + SOS + reports + auth + profiles +
-  models + migrations)
+- **Identity verification (manual review)**: `GET /verification/status`,
+  `POST /verification/requests` — account states
+  `unverified → pending → verified/rejected`; clients can never set any
+  state themselves
+- **Owner-only admin**: `GET /admin/verification-requests` (review queue),
+  `POST /admin/verification-requests/{id}/approve|reject`,
+  `GET/PATCH /admin/policy/social-verification` (audited + rate limited)
+- **Server-side social gate**: `require_owner` / `require_verified_user`
+  dependencies + the gated placeholder `GET /social/discovery`
+- **Owner provisioning CLI**: `python -m app.cli make-owner <email>` (the
+  only path that grants the `owner` role)
+- Automated test suite: **245 tests** (221 offline + 24 real-PostgreSQL
+  integration; contacts + check-ins + SOS + reports + verification +
+  admin/policy + auth + profiles + models + migrations)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
 them to exist): Firebase Authentication, refresh tokens, password reset, email
-verification, roles/permissions, report **moderation/approval workflow** (the
+verification, report **moderation/approval workflow** (the
 `approved`/`rejected` states are reserved — no endpoint can set them yet), AI
 companion, notifications, **overdue-check-in alerts**, pagination on the
-non-report endpoints, production deployment. Phase 5 only *records* SOS
+non-report endpoints, real travel-buddy discovery/chat/events (the single
+`/social/discovery` route is a gated placeholder until Phase 7), a real
+identity-verification provider (verification here is **manual review only** —
+no Aadhaar/ID documents or sensitive identity data are collected, stored, or
+displayed anywhere), production deployment. Phase 5 only *records* SOS
 incidents locally — it never contacts emergency services, never messages a
 contact, and never shares a location. Phase 6 only *stores and searches*
-reports — every report is an **unverified user submission**, no moderation or
-verification exists, and filing one sends nothing to anyone. Authentication
+reports — filing one sends nothing to anyone. Authentication
 here is a **local prototype** — it needs real security work (HTTPS, rate
-limiting, token revocation) before any production claim.
+limiting, token revocation) before any production claim. Account/safety
+workflows (trusted contacts, check-ins, SOS, profile) stay reachable while
+**unverified** — incomplete verification must never lock anyone out of
+safety tools.
 
 ## Prerequisites
 
@@ -122,21 +142,26 @@ Four separate concerns, so each stays small and testable:
 `create_all()` in production — Alembic owns the schema, so every change is a
 reviewed, replayable file.
 
-### The five tables
+### The eight tables
 
 | Table | Purpose | Key columns |
 | --- | --- | --- |
-| `users` | App account / profile | `id` (UUID PK), `firebase_uid` (optional, unique), `display_name`, `email` (optional, unique) |
+| `users` | App account / profile | `id` (UUID PK), `firebase_uid` (optional, unique), `display_name`, `email` (optional, unique), `verification_status` (unverified/pending/verified/rejected), `role` (user/owner) |
 | `trusted_contacts` | People to notify in an SOS | `user_id` (FK→users), `name`, `phone`, `email` |
 | `check_ins` | "Ping me by time T" promises | `user_id` (FK), `status`, `due_at`, `completed_at` |
 | `sos_events` | **Simulated** emergency incidents | `user_id` (FK), `status`, `latitude`/`longitude`, `resolved_at` |
 | `community_reports` | Crowd-sourced safety notes | `user_id` (FK), `category` (6-value set, Phase 6), `description`, `latitude`/`longitude`, `status` |
+| `identity_verifications` | One row per verification **request** (history) | `user_id` (FK), `status` (pending/approved/rejected), `applicant_note`, `review_note`, `reviewed_at`, `reviewed_by` (FK) |
+| `app_settings` | Runtime configuration (one key today: `social_requires_verification`) | `key` (unique), `value`, `updated_by` (FK) |
+| `setting_changes` | Append-only audit of policy changes | `setting_key`, `old_value`, `new_value`, `changed_by` (FK) |
 
 All children use **`ON DELETE RESTRICT`**: deleting a user who still has safety
 records is blocked at the database level, so safety history can never vanish by
 accident. Status columns are protected by CHECK constraints, report `category`
 is a closed 6-value set enforced by a CHECK constraint (Phase 6), and lat/long
-are range-guarded (−90..90 / −180..180).
+are range-guarded (−90..90 / −180..180). The two `users` verification columns
+are NOT NULL with CHECK-protected value sets and secure server-side defaults
+(`unverified`, `user`).
 
 ### What CORS is and when it matters
 
@@ -202,7 +227,9 @@ Errors: duplicate email → `409`; wrong password **or** unknown email → `401`
 (same message *and* similar response time, so accounts can't be enumerated);
 missing/bad/expired token → `401`; unknown or protected fields in **any**
 request body (`register`, `login`, `PATCH`) → `422` (all request schemas are
-strict). Emails are normalized (trimmed + lowercased), so `Asha@Example.COM` and
+strict — `role` and `verification_status` are protected too; only the
+server-side CLI and owner review can ever change them). Emails are
+normalized (trimmed + lowercased), so `Asha@Example.COM` and
 `asha@example.com` are the same account.
 
 ### Try it in the Swagger UI
@@ -461,12 +488,14 @@ curl -X POST http://127.0.0.1:8000/api/v1/reports `
 
 **Status & visibility (read this before trusting a report):**
 
-- Every report is created **`pending`** — a plain, **unverified user
-  submission**. Filing one proves nothing about the place.
+- Every report is created **`pending`** — an **unverified submission**
+  (the *content* is not verified truth, regardless of whether the
+  author's *account* has since passed identity verification). Filing one
+  proves nothing about the place.
 - **No moderation exists yet**: nothing can set `approved` or `rejected`,
-  and no endpoint accepts a status — ordinary users can never mark their
-  own reports "verified". `approved`/`rejected` are reserved for a future
-  moderation phase with roles.
+  and no endpoint accepts a status — not even the owner (the Phase 6
+  second assignment added roles, but **no report-moderation endpoint**).
+  `approved`/`rejected` are reserved for a future moderation phase.
 - Public reads return everything **except** `status='rejected'` (hidden);
   a rejected report's ID returns the same `404` as one that never
   existed. Because `status` travels in every response, clients can always
@@ -512,6 +541,115 @@ curl "http://127.0.0.1:8000/api/v1/reports/nearby?latitude=28.61&longitude=77.20
 > nearby-user alerts, no moderation. Reports are read-only public content
 > for authenticated users in this phase.
 
+## Identity verification & social gate (Phase 6 second assignment)
+
+This phase adds a **manual-review identity-verification workflow**, an
+**owner role**, and a **server-side gate** that blocks unverified accounts
+from social features. It deliberately collects **no identity documents** —
+no Aadhaar, no ID numbers, no scans — only an optional short note for the
+reviewer.
+
+### Account states and who may change them
+
+| From | To | Who / what triggers it |
+| --- | --- | --- |
+| `unverified` | `pending` | the account holder submits `POST /verification/requests` |
+| `rejected` | `pending` | the account holder submits again (always allowed) |
+| `pending` | `verified` | an **owner** approves the request |
+| `pending` | `rejected` | an **owner** rejects the request |
+
+There is **no other transition**: no request body, profile field, header,
+registration value, or policy change can set any of these states
+(injected `role`/`verification_status` values → `422`). Approving your own
+request is refused even for the owner (`409`).
+
+### Endpoints
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `GET /api/v1/verification/status` | The caller's OWN status + role + live policy + latest request | `200` · `401` |
+| `POST /api/v1/verification/requests` | Submit a request (optional `{"note": "≤200 chars"}`) | `201` · `401` · `409` already pending/verified · `422` |
+| `GET /api/v1/admin/verification-requests` | Review queue, oldest first; `?status=`, `?offset=`, `?limit=` | `200` · `401` · `403` not owner · `422` |
+| `POST /api/v1/admin/verification-requests/{id}/approve` | Approve → applicant `verified` (optional `{"review_note": "≤200 chars"}`) | `200` · `401` · `403` · `404` · `409` not pending / own request · `422` |
+| `POST /api/v1/admin/verification-requests/{id}/reject` | Reject → applicant `rejected` (same errors) | `200` · `401` · `403` · `404` · `409` · `422` |
+| `GET /api/v1/admin/policy/social-verification` | Read the effective policy | `200` · `401` · `403` |
+| `PATCH /api/v1/admin/policy/social-verification` | Change it (`{"requires_verification": true\|false}`) | `200` · `401` · `403` · `422` · `429` rate limit |
+| `GET /api/v1/social/discovery` | **Gated placeholder** (empty list until Phase 7) | `200` · `401` · `403` |
+
+Typical flow:
+
+```text
+POST /api/v1/verification/requests     (applicant, no body or {"note": "..."})
+→ 201 { "id": "…", "status": "pending", "applicant_note": "…",
+        "review_note": null, "reviewed_at": null,
+        "created_at": "2026-10-12T17:40:02Z" }
+
+GET  /api/v1/admin/verification-requests?status=pending   (owner)
+→ 200 [ { …, "user_id": "…", "display_name": "Live Applicant",
+          "status": "pending", … } ]
+
+POST /api/v1/admin/verification-requests/{id}/approve     (owner)
+→ 200 { …, "status": "approved", "reviewed_by": "<owner user id>", … }
+   (the applicant's account is now verification_status="verified")
+
+GET  /api/v1/social/discovery           (applicant)
+→ 200 { "profiles": [], "message": "Travel-buddy discovery is not
+        implemented yet (planned for Phase 7+) …" }
+```
+
+### The gate (fail-closed by design)
+
+`GET /social/discovery` is protected by `require_verified_user`:
+
+1. No/invalid token → `401`.
+2. The **policy is read live from the database on every request** — if the
+   setting row is missing, corrupt, or unreadable, the answer is treated as
+   `true` ("verification required"). A broken read can never open the gate.
+3. Policy `true` and status ≠ `verified` → `403` with a status-specific,
+   actionable message (e.g. *"Your status is 'pending': your request is
+   under review."*).
+4. Policy `false` (owner opened it during development) → any authenticated
+   account passes.
+
+**Kept open on purpose while unverified:** profile (`/users/me`),
+trusted contacts, check-ins, SOS, reports, and the verification routes
+themselves — incomplete verification must never lock anyone out of safety
+tools. `require_owner` (admin routes) demands an exact `owner` role match;
+an unknown/corrupt role is denied, never elevated.
+
+### Owner provisioning (the only path)
+
+```powershell
+# run on the server, from backend/ — grants `owner` to an existing account
+.venv\Scripts\python -m app.cli make-owner someone@example.com
+# → OK: someone@example.com now has role=owner.   (exit code 0)
+# → FAILED: no account with that email            (exit code 1)
+```
+
+Registration always creates `role="user"`; no API field, header, or body can
+change a role. The command prints only the email + result — never the
+database URL, passwords, or tokens.
+
+### Policy management (owner only)
+
+- `GET` reports the effective value (`requires_verification`) plus
+  `updated_at`/`updated_by`.
+- `PATCH {"requires_verification": false}` flips the gate off immediately
+  (no restart, no token change). Every accepted change appends an audit row
+  to `setting_changes`: **who, when, old value, new value**; a no-op write
+  appends nothing; a change never alters anyone's verification status or
+  past review history.
+- At most **5 policy changes per hour per owner** (in-process counter) —
+  the 6th returns `429`.
+
+> **Boundaries:** verification is *manual review only* (no identity
+> provider, no documents, no email notifications — none are claimed to
+> work). With a single owner, the owner's own account can never be
+> API-approved (self-review is refused), so the owner stays `unverified`
+> through the API unless a second reviewer exists or the server operator
+> changes the row deliberately. Discovery/chat/events themselves arrive in
+> Phase 7 — this phase only ships the gate.
+
 ## Migrations (Alembic)
 
 Alembic creates and evolves the schema. The migration files live in
@@ -550,6 +688,19 @@ Applied migrations on `roamlary_dev`:
   value survives. Round-trip verified (`upgrade` → `downgrade` →
   `upgrade`) on SQLite and PostgreSQL. `alembic current` →
   `ab32047c8481 (head)`.
+- `3e285edb0896` — Phase 6 second assignment: adds the NOT NULL
+  `users.verification_status` (default `unverified`) and `users.role`
+  (default `user`) columns with CHECK constraints, plus three new tables
+  (`identity_verifications`, `app_settings`, `setting_changes`). The
+  **upgrade** needs no guard: the new columns are backfilled to the secure
+  defaults in the same statement that adds them, so no existing row can
+  violate the new CHECKs. The **downgrade** is guarded: if any
+  verification request, policy, or audit row exists — or any user has a
+  non-default state/role — it deliberately **refuses** with an actionable
+  census of the blocking rows *before* touching the schema (data-safety
+  guard — see Common problems). Round-trip verified (`upgrade` →
+  `downgrade` → `upgrade`) on SQLite and PostgreSQL, plus live on
+  `roamlary_dev`. `alembic current` → `3e285edb0896 (head)`.
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -589,24 +740,30 @@ Then put the matching `DATABASE_URL` in `.env`.
 
 Two test layers exist. Do not confuse them:
 
-- **Offline unit tests** (174) — use an in-memory SQLite database and the
+- **Offline unit tests** (221) — use an in-memory SQLite database and the
   FastAPI `TestClient`. No PostgreSQL, no network. They prove model
   behaviour, auth flows (register/login/JWT/profile), contact & check-in
   endpoint contracts (ownership, transitions, timestamps), SOS endpoint
   contracts (activation validation, ownership, lifecycle), community-report
   endpoint contracts (strict creation, privacy, visibility, filters,
   pagination bounds, nearby radius/antimeridian/high-latitude behaviour),
-  fail-closed behaviour, route contracts, and the migration chain
-  (including the Phase 4 downgrade guard, the Phase 5 downgrade guard, and
-  the Phase 6 **upgrade** guard). They always run with a fixed TEST-ONLY
+  verification & admin/policy endpoint contracts (state machine, no
+  self-verify/self-review, fail-closed policy, audit, rate limit, strict
+  schemas), fail-closed behaviour, route contracts, and the migration chain
+  (including the Phase 4 downgrade guard, the Phase 5 downgrade guard, the
+  Phase 6 **upgrade** guard, and the Phase 6 second assignment **downgrade**
+  guard). They always run with a fixed TEST-ONLY
   JWT secret (never the real `.env` value).
-- **PostgreSQL integration tests** (19) — run against a **disposable**
+- **PostgreSQL integration tests** (24) — run against a **disposable**
   database and prove real PostgreSQL behaviour (native `uuid` columns, CHECK
   constraint enforcement — including the Phase 4/5 `cancelled` values,
-  Phase 6 category constraint, and new columns — timezone-aware
-  timestamps, the `password_hash` column, both downgrade guards: refused
-  with `cancelled` rows, allowed without them, and the Phase 6 upgrade
-  guard: refused with out-of-set categories). They are **skipped** unless
+  Phase 6 category constraint, Phase 6 second assignment role/verification
+  CHECKs, and new columns — timezone-aware
+  timestamps, the `password_hash` column, downgrade guards: refused
+  with `cancelled` rows, allowed without them, the Phase 6 upgrade
+  guard: refused with out-of-set categories, and the Phase 6 second
+  assignment downgrade guard: refused with verification/policy/audit data,
+  allowed without). They are **skipped** unless
   you point them at a throwaway database.
 
 ```powershell
@@ -663,6 +820,13 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `422` on `GET /reports/nearby` | Missing/invalid `latitude`/`longitude`, missing `radius_m`, `radius_m` ≤ 0 or > 50000, or `limit`/`offset` out of bounds | Send `latitude` (−90…90), `longitude` (−180…180), `radius_m` in **meters** (1–50000), plus optional `limit` (1–100) / `offset` (≥ 0) |
 | `404` on `GET /reports/{id}` | The report is missing **or** `rejected` (both return the identical `404` by design — hidden reports can't be probed) | Rejected reports are invisible to the public API; check with an admin/DBA if moderation ever lands |
 | `RuntimeError: Refusing to upgrade migration ab32047c8481 …` | At least one `community_reports` row carries a category outside the Phase 6 closed set (any string was legal in the Phase 2 schema) | Intentional data-safety guard: nothing was changed. Decide what to do with those rows (map each to an allowed category such as `other`, or delete them), then re-run `alembic upgrade head` |
+| `RuntimeError: Refusing to downgrade migration 3e285edb0896 …` | Verification requests, policy/audit rows, or a non-default user state/role would be orphaned by the downgrade | Intentional data-safety guard: nothing was changed (the error lists exact counts). Decide what to do with those rows first, then re-run — or keep the Phase 6 second-assignment schema |
+| `403` "Identity verification is required for social features…" on `/social/discovery` | The account is `unverified`/`pending`/`rejected` while the policy requires verification | Expected gate. `POST /verification/requests` (or re-submit after a rejection), wait for an owner decision; `GET /verification/status` shows where you stand |
+| `403` "Owner privileges required for this action." | The account's `role` is not `owner` (admin routes only) | Expected: run the server-side CLI `.venv\Scripts\python -m app.cli make-owner <email>` on the server — no API path grants roles |
+| `409` "You cannot review your own verification request." | The owner tried to approve/reject their OWN request | Expected no-self-elevation rule; with a single owner, that account stays `unverified` through the API (documented limitation) |
+| `409` "A verification request is already under review." / "already verified" | Submitting while `pending`, or while `verified` | Only `unverified`/`rejected` accounts may submit; read `GET /verification/status` first |
+| `429` on `PATCH /admin/policy/social-verification` | More than 5 policy changes from one owner within an hour (in-process limit) | Expected throttle; wait for the window to pass, or restart the dev server (the counter is in-memory) |
+| `422` on register/`PATCH /users/me` mentioning `role` or `verification_status` | Injecting a field only the server may set | Send only the documented fields — roles/verification states are changed by the CLI and owner review, never by clients |
 
 ## Development log
 
