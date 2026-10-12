@@ -39,3 +39,14 @@ class TrustedContact(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # The user who owns this contact ("back_populates" connects the two
     # directions of the same relationship defined on User).
     owner: Mapped[User] = relationship(back_populates="trusted_contacts")
+
+    # Optional label for how the contact knows the user ("mother",
+    # "friend", "colleague"). Added in Phase 4.
+    #
+    # IMPORTANT ORDERING NOTE: this column is deliberately declared AFTER
+    # the `owner` relationship above. Inside a class body, the name
+    # `relationship` refers to whatever was assigned most recently; if
+    # this column were declared first, the `owner = relationship(...)`
+    # line would try to CALL this column and crash. One concept = one
+    # name ("relationship") everywhere: Python, database, and API.
+    relationship: Mapped[str | None] = mapped_column(String(50))

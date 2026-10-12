@@ -82,9 +82,26 @@ def test_location_range_check_constraints_exist() -> None:
 
 
 def test_status_enums_match_the_contract() -> None:
-    """The Python status enums hold exactly the documented values."""
-    assert {s.value for s in CheckInStatus} == {"pending", "safe", "needs_help", "expired"}
-    assert {s.value for s in SosStatus} == {"active", "acknowledged", "resolved", "false_alarm"}
+    """The Python status enums hold exactly the documented values.
+
+    'cancelled' was added to CheckInStatus in Phase 4 (users must be
+    able to abandon a check-in) and to SosStatus in Phase 5 (users must
+    be able to retract an SOS); the rest are the Phase 2 design.
+    """
+    assert {s.value for s in CheckInStatus} == {
+        "pending",
+        "safe",
+        "needs_help",
+        "expired",
+        "cancelled",
+    }
+    assert {s.value for s in SosStatus} == {
+        "active",
+        "acknowledged",
+        "resolved",
+        "false_alarm",
+        "cancelled",
+    }
     assert {s.value for s in ReportStatus} == {"pending", "approved", "rejected"}
 
 

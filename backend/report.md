@@ -35,8 +35,8 @@ the project owner; the backend lead implements only assigned phases.**
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (Phases 1–3 pushed to `origin/backend`; Phase 3 audit-fix delta uncommitted, see §9.14) |
-| History | `4761b41` initial setup → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → *(Phase 3 audit-fix delta uncommitted, see §9.14)* |
+| Branch | `backend` (Phases 1–5 pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; **Phases 4 + 5 (incl. the migration-safety fix round) committed together after owner approval, 2026-10-12** — see `git log`; working tree clean) |
+| History | `4761b41` initial setup → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → *(next commit: Phases 4 + 5 incl. the fix round — committed & pushed after owner approval, 2026-10-12; see `git log`)* |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
 | PostgreSQL | **Running locally** — server 16.15 in the Docker container `roamlary-postgres-dev` (databases: `roamlary_dev`, `roamlary_test`). No system-wide install | 
@@ -48,7 +48,7 @@ the project owner; the backend lead implements only assigned phases.**
 
 ## 3. Development phases and status
 
-Roadmap assigned by the project owner (Phases 0–3 complete; Phases 4+ are NOT
+Roadmap assigned by the project owner (Phases 0–5 complete; Phases 6+ are NOT
 started — the backend lead waits for each phase assignment):
 
 | Phase | Name | Status |
@@ -56,9 +56,9 @@ started — the backend lead waits for each phase assignment):
 | 0 | Repository inspection & planning | ✅ Complete (approved by owner: "ok you can do that") |
 | 1 | FastAPI foundation | ✅ **Complete — implemented & verified** (this report §7) |
 | 2 | PostgreSQL connection, models, migrations | ✅ **Complete — implemented & verified** (this report §8) |
-| 3 | Authentication & user profiles | ✅ **Complete** — implemented, committed `3d728ac`, pushed; owner-assigned audit & fix round done (§9.14), its delta uncommitted |
-| 4 | Trusted contacts & safety check-ins | ⏳ Not started |
-| 5 | SOS & emergency workflow (simulated) | ⏳ Not started |
+| 3 | Authentication & user profiles | ✅ **Complete** — committed `3d728ac`, pushed; owner-assigned audit & fix round (§9.14) later committed as `f26536e` and pushed after the owner said "commit and push it" |
+| 4 | Trusted contacts & safety check-ins | ✅ **Complete — implemented & verified** (this report §10); owner's rules forbid commits during the phase, so it stayed uncommitted through the owner-assigned migration-safety fix round (§10.15) — later **committed and pushed together with Phase 5** after owner approval (see `git log`) |
+| 5 | SOS & emergency workflow (simulated) | ✅ **Complete — implemented & verified** (this report §11); uncommitted during the phase per the same rule; **committed and pushed together with Phase 4** after owner approval (see `git log`) |
 | 6 | Community safety reports & location data | ⏳ Not started |
 | 7 | AI companion & safety signals | ⏳ Not started (needs Laptop 3 contract) |
 | 8 | Notifications & background-job interfaces | ⏳ Not started |
@@ -83,11 +83,14 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-12 | **Phase 1** | Owner assigned Phase 1 → aligned health contract to owner-specified format, removed premature `database_url` setting, expanded tests 3→7, updated README, renamed `REPORT.md`→`report.md`, rewrote this report | committed as `5ea9b59`, pushed to `origin/backend` (owner later said "commit and push") |
 | 2026-10-12 | **Phase 2** | Owner assigned Phase 2 → started Docker engine (approved K4), ran `postgres:16-alpine` container, added `DATABASE_URL` config, engine/session/get_db, 5 models, Alembic + initial migration (applied to `roamlary_dev`), 28 new tests, README + this report | committed as `eb8e709`, pushed to `origin/backend` (owner approval) |
 | 2026-10-12 | **Phase 3** | Owner assigned Phase 3 → local JWT auth (register/login), Argon2id hashing, protected `/users/me`, `password_hash` column + migration `d9841015aec7` (applied to `roamlary_dev`), 34 new tests, README + this report | committed as `3d728ac`, pushed to `origin/backend` (owner said "commit and push") |
-| 2026-10-12 | **Phase 3 audit & fix** | Owner assigned Phase 3 verification round → audited all 4 endpoints, config, migration, and tests; fixed strict request schemas (422 on injected fields), login timing equalization, fail-closed-before-DB-write ordering, no-op PATCH `updated_at`, stale `config.py` docstring; added 12 new tests (fail-closed, required claims, race condition, impersonation, hermetic secret); corrected report/README contradictions | **uncommitted working-tree changes** (owner rule: no commits during a phase) |
+| 2026-10-12 | **Phase 3 audit & fix** | Owner assigned Phase 3 verification round → audited all 4 endpoints, config, migration, and tests; fixed strict request schemas (422 on injected fields), login timing equalization, fail-closed-before-DB-write ordering, no-op PATCH `updated_at`, stale `config.py` docstring; added 12 new tests (fail-closed, required claims, race condition, impersonation, hermetic secret); corrected report/README contradictions | *was* uncommitted at the time; owner later said "commit and push it" → committed as `f26536e`, pushed to `origin/backend` |
+| 2026-10-12 | **Phase 4** | Owner assigned Phase 4 → trusted-contact CRUD (5 routes) + check-in lifecycle (5 routes incl. `/complete`), added `TrustedContact.relationship` + `CheckIn.note` columns and the `cancelled` status, migration `ccd362671e07` (applied to `roamlary_dev`), 40 new tests (37 endpoint + 3 PostgreSQL integration), README + this report + `PHASE4_CHANGES.md` | **uncommitted working-tree changes** (owner rule: no commits during this phase) → owner later approved → **committed and pushed together with Phase 5** (see `git log`) |
+| 2026-10-12 | **Phase 4 migration-safety fix** | Owner assigned a targeted fix round (§10.15): the Phase 4 migration's `downgrade()` now detects `cancelled` check-ins **before** any schema change and refuses with an actionable error instead of failing mid-migration; 4 new regression tests (2 SQLite + 2 real-PostgreSQL), live refusal + normal path proven on `roamlary_dev`, docs corrected (the earlier "reversible" wording implied it always succeeds regardless of data) | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phases 4 and 5** (see `git log`) |
+| 2026-10-12 | **Phase 5** | Owner assigned Phase 5 → extended the Phase 2 `sos_events` table (`description`, `location_recorded_at`, `cancelled_at`, `cancelled` status; migration `0dd8995649b4` with the same downgrade data-safety guard), 5 SOS endpoints (activate/list/get/cancel/resolve) with strict schemas, owner-only queries, identical-404s and server-only timestamps; 30 new tests (24 endpoint + 2 SQLite migration + 4 PostgreSQL), live E2E 35/35 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE5_CHANGES.md` | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phase 4** (see `git log`) |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
-**Implemented and verified (Phase 1 + Phase 3):**
+**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5):**
 
 | Method + Path | Purpose | Auth | Response |
 |---|---|---|---|
@@ -96,6 +99,27 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | `POST /api/v1/auth/login` | Authenticate with email + password; returns a bearer token | none | `{access_token, token_type}` (HTTP 200) |
 | `GET /api/v1/users/me` | Return the authenticated user's public profile | Bearer JWT | `UserProfile` (see §9.6) |
 | `PATCH /api/v1/users/me` | Update the authenticated user's `display_name` | Bearer JWT | `UserProfile` |
+| `POST /api/v1/trusted-contacts/` | Save a contact for the token's user | Bearer JWT | `TrustedContactRead` (HTTP 201) |
+| `GET /api/v1/trusted-contacts/` | List the token user's contacts (oldest first) | Bearer JWT | `[TrustedContactRead]` |
+| `GET /api/v1/trusted-contacts/{contact_id}` | Read one contact (404 if missing **or** not yours) | Bearer JWT | `TrustedContactRead` |
+| `PATCH /api/v1/trusted-contacts/{contact_id}` | Edit name/phone/relationship/email | Bearer JWT | `TrustedContactRead` |
+| `DELETE /api/v1/trusted-contacts/{contact_id}` | Delete one contact | Bearer JWT | HTTP 204, no body |
+| `POST /api/v1/check-ins/` | Create a check-in (`pending`, server-chosen) | Bearer JWT | `CheckInRead` (HTTP 201) |
+| `GET /api/v1/check-ins/` | List the token user's check-ins (newest first, `?status=` filter) | Bearer JWT | `[CheckInRead]` |
+| `GET /api/v1/check-ins/{checkin_id}` | Read one check-in (404 if missing **or** not yours) | Bearer JWT | `CheckInRead` |
+| `PATCH /api/v1/check-ins/{checkin_id}` | Edit note/deadline, or transition status | Bearer JWT | `CheckInRead` |
+| `POST /api/v1/check-ins/{checkin_id}/complete` | Mark an eligible check-in `safe` (server clock) | Bearer JWT | `CheckInRead` |
+| `POST /api/v1/sos` | Activate an SOS incident (`active`, server-chosen; optional description + coordinates) | Bearer JWT | `SosEventRead` (HTTP 201) |
+| `GET /api/v1/sos` | List the token user's incidents (newest first) | Bearer JWT | `[SosEventRead]` |
+| `GET /api/v1/sos/{sos_id}` | Read one incident (404 if missing **or** not yours) | Bearer JWT | `SosEventRead` |
+| `POST /api/v1/sos/{sos_id}/cancel` | Retract an `active` incident (`cancelled_at`, server clock; no body) | Bearer JWT | `SosEventRead` |
+| `POST /api/v1/sos/{sos_id}/resolve` | Close an `active` incident (`resolved_at`, server clock; no body) | Bearer JWT | `SosEventRead` |
+
+Phase 4 request/response examples, field rules, status transitions, and
+timestamp policy: **§10.6** (details) and `README.md` (client-facing).
+Phase 5 (SOS) equivalents: **§11.6** and the README's "SOS incidents"
+section. Note the SOS paths have no trailing slash (`/sos`, per the
+Phase 5 spec) while the Phase 4 collections use one (`/check-ins/`).
 
 ```json
 GET /api/v1/health  →  HTTP 200
@@ -116,30 +140,65 @@ missing/invalid/expired token on `/users/me` returns **401**; a request body
 containing protected fields (e.g. `password_hash`, `id`, `firebase_uid`) on
 `PATCH /users/me` returns **422**.
 
+Phase 4 error behaviour: every contact/check-in route without a valid bearer
+token → **401**; a contact or check-in that does not exist **or** belongs to
+another user → the **same 404** (no ownership enumeration); an invalid status
+transition, a `PATCH` on an already-answered check-in, or `/complete` on a
+`needs_help`/`cancelled` record → **409**; any unknown/injected field, a
+malformed UUID, a naive timestamp, or a `due_at` already in the past →
+**422**.
+
+Phase 5 (SOS) error behaviour: every SOS route without a valid bearer
+token → **401**; an incident that does not exist **or** belongs to another
+user → the **same 404**; any transition except `active → cancelled/resolved`
+(including repeats and crossing between terminal states) → **409** with a
+plain-language message and an unchanged record; a missing coordinate pair,
+an out-of-range latitude/longitude, a blank or >500-char `description`, or
+any injected server-controlled field (`user_id`, `status`, `id`,
+`created_at`, `cancelled_at`, `resolved_at`, `location_recorded_at`) →
+**422**.
+
 **Proposed for future phases — NOT IMPLEMENTED, do not call these:**
-`GET/POST/DELETE /contacts…`, `POST /check-ins`,
-`POST /check-ins/{id}/response`, `POST/GET/PATCH /sos/events…`, `POST /reports`,
+`POST /reports`,
 `GET /reports?lat&lon&radius`, `POST /ai/companion/messages`.
+*(An SOS workflow now exists at `/api/v1/sos` — §11 — but it only stores
+rows; nothing about it notifies anyone.)*
 Refresh tokens, password reset, and email verification are also **not**
 implemented. (To be formalized with the owner during Phase 9 frontend
 alignment.)
 
 ## 6. Database design — IMPLEMENTED (Phase 2)
 
-Schema is real and now spans Phase 2 + Phase 3 migrations, all applied to
-`roamlary_dev`:
+Schema is real and now spans Phase 2 + Phase 3 + Phase 4 + Phase 5
+migrations, all applied to `roamlary_dev`:
 
 - `cc78d54068bb` — "initial schema" (Phase 2): the five tables below.
 - `d9841015aec7` — "add password_hash to users" (Phase 3): adds a nullable
   `password_hash` (varchar 255) to `users`. Full rationale in §9.10.
+- `ccd362671e07` — "add contact relationship, checkin note, cancelled status"
+  (Phase 4): adds nullable `trusted_contacts.relationship` (varchar 50) and
+  `check_ins.note` (varchar 500), and relaxes the `check_ins` status CHECK
+  constraint to allow `cancelled`. Full rationale in §10.4.
+- `0dd8995649b4` — "add sos description, location timestamp, cancelled
+  status" (Phase 5): adds nullable `sos_events.description` (varchar 500),
+  `sos_events.location_recorded_at`, and `sos_events.cancelled_at`
+  (timezone-aware), and relaxes the `sos_events` status CHECK constraint to
+  allow `cancelled`. Full rationale in §11.4.
 
 | Table | Purpose | Owner / deletion rule |
 |---|---|---|
 | `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, `password_hash` nullable, timestamps) | — |
-| `trusted_contacts` | Nominated safety contact (`name`, `phone`, `email` nullable) | `users` · `ON DELETE RESTRICT` |
-| `check_ins` | "Ping me by time T" (`status`, `due_at`, `completed_at`) | `users` · `ON DELETE RESTRICT` |
-| `sos_events` | **Simulated** incident (`status`, lat/lon, `resolved_at`) | `users` · `ON DELETE RESTRICT` |
+| `trusted_contacts` | Nominated safety contact (`name`, `phone`, `relationship` nullable, `email` nullable) | `users` · `ON DELETE RESTRICT` |
+| `check_ins` | "Ping me by time T" (`status` ∈ pending/safe/needs_help/expired/**cancelled**, `due_at`, `note` nullable, `completed_at`) | `users` · `ON DELETE RESTRICT` |
+| `sos_events` | **Simulated** incident (`status` ∈ active/acknowledged/resolved/false_alarm/**cancelled**, lat/lon, `description` nullable, `location_recorded_at`, `resolved_at`, `cancelled_at`) | `users` · `ON DELETE RESTRICT` |
 | `community_reports` | Crowd-sourced note (`category`, `description`, lat/lon, `status`) | `users` · `ON DELETE RESTRICT` |
+
+All Phase 4 and Phase 5 schema changes were additive and nullable — no
+existing row was altered or dropped (verified by downgrade→re-upgrade on
+`roamlary_dev`, §10.5 and §11.5). The reverse direction is **guarded, not
+assumed**: a downgrade now refuses while any `cancelled` check-in (Phase 4,
+§10.15) or `cancelled` SOS incident (Phase 5, §11.4) exists rather than
+alter data.
 
 Status values are enforced by CHECK constraints; lat/lon are range-guarded.
 Deletion is deliberately **RESTRICT** (not cascade) so safety history can never
@@ -909,13 +968,17 @@ check-ins). Phase 3 was committed as `3d728ac` and pushed to `origin/backend`
 after the owner said "commit and push"; the owner-assigned audit & fix round
 (§9.14) sits uncommitted in the working tree, exactly as the earlier phases
 did before their approval.
+*(Post-approval update: the owner later reviewed the audit round and said
+"commit and push it" — it became commit `f26536e`, pushed to `origin/backend`.)*
 
 ### 9.14 Phase 3 audit & fix round (owner-assigned verification)
 
 The owner assigned a fix-and-verify pass over Phase 3 *after* it was
 committed (`3d728ac`). This section records what the audit found, what was
-changed, and the actual results. Everything below is in the **uncommitted
-working tree** on top of `3d728ac`.
+changed, and the actual results. Everything below was written while it sat
+in the **uncommitted working tree** on top of `3d728ac`.
+*(Post-approval update: committed as `f26536e` after the owner's sign-off —
+see §9.14.6.)*
 
 #### 9.14.1 Audit method
 
@@ -939,7 +1002,7 @@ listed with the fix actually applied.
 | 3 | Register created the database row **before** the fail-closed secret check ran, so a missing `JWT_SECRET_KEY` could leave a half-created, unusable account. | Low | New public `ensure_auth_configured()` in `security.py`; register now calls it **before any database write**, so 503 happens with no row created. |
 | 4 | `PATCH /users/me` with an empty body (`{}`) still bumped `updated_at`, so the timestamp did not mean "last real change". | Low | `updated_at` is now bumped only when `display_name` actually changed; `{}` is a valid no-op returning the profile unchanged. |
 | 5 | Tests used the **real dev secret** from `.env` — not hermetic, and it exercised the actual signing key. | Low | New autouse fixture in `conftest.py` pins a fixed TEST-ONLY secret for every test (`TEST_JWT_SECRET`); the real `.env` secret is never used by tests. |
-| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. |
+| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. *(Note: "§10, §11" here means Known limitations / Pending tasks **as numbered at that time**; inserting the Phase 4 record as §10 shifted them to §11/§12 in the Phase 4 round, and inserting the Phase 5 record as §11 shifted them again — §10 is the Phase 4 record, §11 the Phase 5 record, Known limitations is now §12, Pending tasks §13.)* |
 
 #### 9.14.3 New tests added (12)
 
@@ -987,9 +1050,15 @@ the disposable `roamlary_test` database.
 
 #### 9.14.6 Git state after this round
 
-- HEAD is still `3d728ac` (Phase 3 commit) — **no commits, pushes, merges,
-  resets, or branch changes were made in this audit round**, per the owner's
-  rule. All audit changes sit in the working tree for review (`git diff`).
+- At the time of writing, HEAD was still `3d728ac` (Phase 3 commit) — **no
+  commits, pushes, merges, resets, or branch changes were made during this
+  audit round**, per the owner's rule. All audit changes sat in the working
+  tree for review (`git diff`).
+  *(Post-approval update: the owner reviewed the delta and said "commit and
+  push it" — it was committed as `f26536e` ("Phase 3 audit: strict auth
+  schemas, timing equalization, fail-closed precheck") and pushed to
+  `origin/backend`. Verified during the Phase 4 preflight: branch `backend`,
+  HEAD `f26536e`, clean tree.)*
 - `.env` and `.venv` remain gitignored; the frontend was not touched; a scan
   of changed files found only documentation placeholders, no real secrets.
 
@@ -1005,32 +1074,598 @@ equalizes the two failure paths but does not make login constant-time in a
 formal sense. Passing unit/integration tests is **not** a security audit or a
 production-readiness claim.
 
-## 10. Known limitations (current)
+## 10. Phase 4 record — Trusted contacts & safety check-ins ✅
 
-- No API CRUD endpoints yet — the tables exist but nothing exposes them over
-  HTTP; only `GET /api/v1/health`, `POST /api/v1/auth/register`,
-  `POST /api/v1/auth/login`, and `GET/PATCH /api/v1/users/me` are served.
+### 10.1 Phase information
+
+| Item | Value |
+|---|---|
+| Assigned by | Project owner (Phase 4 brief: trusted contacts + safety check-ins) |
+| Branch | `backend` (verified in preflight; never changed) |
+| Base commit | `f26536e` (Phase 3 audit) |
+| Git state after the phase | **Uncommitted working-tree changes only** — the owner's Phase 4 rules forbid commits/pushes during the phase (confirmed with `git status` / `git diff`, §10.14) |
+| Migrations | one new: `ccd362671e07` — applied to `roamlary_dev`, verified `alembic current` → `ccd362671e07 (head)` |
+| Phase 3 dependency gate | **PASS** — before any Phase 4 code was written, the full 84-test suite was re-run green against SQLite + real PostgreSQL, and register/login/JWT/profile behaviour was verified against actual code (§10.8) |
+| Tests added | 40 (37 endpoint tests + 3 PostgreSQL integration tests) |
+| Full suite after the phase | **124 passed**, 0 failed, 0 skipped |
+| Status | **COMPLETE (implemented + tested)**; SOS/notification/AI workflows remain **planned** for their own phases |
+
+### 10.2 What was built, in plain language
+
+Two capabilities were added on top of the existing architecture (same DB
+session, same `get_current_user` dependency, same error format, same
+`/api/v1` versioning — no new framework, no changes to Phases 1–3 behaviour):
+
+1. **Trusted contacts** — a user can save, list, read, edit, and delete the
+   people they'd want reachable in an emergency. Saving stores data only:
+   **nothing is sent, no one is notified, and no number is verified.**
+2. **Safety check-ins** — a user can create a promise ("I'll be back by
+   `<due_at>`"), attach an optional note, and later mark it answered. The
+   backend **stores and manages records only**: an overdue check-in triggers
+   no alert, no notification, and no SOS — by design (§10.13).
+
+The owner's open design question from Phase 3 ("what happens when a
+check-in deadline passes?") was answered by the Phase 4 brief itself:
+**nothing happens automatically in Phase 4.** Deadlines are stored; expiry
+handling belongs to a later, explicitly designed phase.
+
+### 10.3 Design decisions (agreed against the brief's "suggested" options)
+
+| Question | Decision | Why |
+|---|---|---|
+| Status lifecycle | Kept the Phase 2 enum `pending`/`safe`/`needs_help`/`expired` and **added `cancelled`** instead of renaming to the brief's suggested `active`/`completed`/`cancelled` | Brief says "use existing model conventions… do not introduce arbitrary states". `pending`≈active, `safe`≈completed; `needs_help` carries real safety meaning that a rename would destroy; a user also needed a way to abandon a check-in |
+| Transitions | Only `pending → safe` / `pending → needs_help` / `pending → cancelled`. Every other value — including re-setting the same status — → **409** | "Do not allow completed or cancelled check-ins to be silently reactivated": terminal states are fully locked; there is deliberately **no** reactivate transition |
+| `completed_at` | Server clock, set when a check-in first reaches `safe` or `needs_help`; **stays NULL for `pending` and `cancelled`** | `completed_at` = "when the user answered"; cancelling is an abandonment, not an answer. Clients can never supply it |
+| `/complete` idempotency | **Idempotent**: already-`safe` → 200 with the record unchanged (`completed_at` preserved from the *first* call); `needs_help`/`cancelled` → **409** | Safe for mobile network retries; `safe` must never overwrite a `needs_help` answer |
+| `due_at` ("planned return time") | Field name kept as the Phase 2 `due_at` (no rename migration); must be **timezone-aware and in the future** or → **422**, at create *and* update | Renaming would churn the Phase 2 contract for nothing; a past deadline is a promise broken before it started — rejected loudly, never silently accepted |
+| Timestamp format | Input: ISO 8601 **with** `Z` or an offset (`+05:30`); naive timestamps → **422**. Output: always UTC (normalized in the response schema, so the contract holds on both SQLite and PostgreSQL) | Guessing a timezone for a safety deadline could be off by hours |
+| Phone normalization | Strip spaces/dashes/parentheses/dots, keep a leading `+`; must then be 7–15 digits. **No country code is assumed or added** | Brief: "do not assume all users have Indian phone numbers"; stored form is exactly what the user wrote, minus separators |
+| Cross-user access | Every query filters by the token's user; missing **and** not-owned return the **identical 404** | Avoids leaking which IDs exist (ownership enumeration) |
+| `relationship` field | New nullable `String(50)` column; in the model class it is declared **after** the `owner = relationship(...)` line with an explanatory comment | One name for one concept (Python/DB/API all say `relationship`); class-body ordering prevents shadowing SQLAlchemy's `relationship()` |
+| Pagination | None — plain arrays, contacts oldest-first, check-ins newest-first (both with `id` tie-break for determinism) | The current API has no pagination convention; adding one here would be unnecessary complexity (documented limitation, §10.11) |
+| `note` vs `message` | Column named `note` | Phase 4 sends nothing to anyone, so "note" (a remark) is honest where "message" (implying delivery) is not |
+
+### 10.4 File-by-file change log (Phase 4)
+
+Full standalone review copy: [`PHASE4_CHANGES.md`](PHASE4_CHANGES.md).
+
+**New files (7 + 1 doc):**
+
+| Path | Purpose |
+|---|---|
+| `app/api/v1/endpoints/trusted_contacts.py` | The 5 contact routes + the shared `_get_owned_contact` 404-or-return helper |
+| `app/api/v1/endpoints/check_ins.py` | The 5 check-in routes, the `ALLOWED_TRANSITIONS` state machine, `_get_owned_checkin` |
+| `app/api/v1/schemas/trusted_contact.py` | `TrustedContactCreate`/`Update` (strict, `extra="forbid"`, phone/email normalization) + `TrustedContactRead` (approved fields only) |
+| `app/api/v1/schemas/check_in.py` | `CheckInCreate`/`Update` (strict, tz-aware + future `due_at` validation) + `CheckInRead` (UTC serializer) |
+| `alembic/versions/ccd362671e07_add_contact_relationship_checkin_note_.py` | New migration: 2 columns + status CHECK constraint (cross-dialect `batch_alter_table`) |
+| `tests/test_trusted_contacts.py` | 20 contact tests |
+| `tests/test_check_ins.py` | 17 check-in tests |
+| `PHASE4_CHANGES.md` | Standalone file-by-file change review document |
+
+**Modified files (7):**
+
+| Path | Change | Why |
+|---|---|---|
+| `app/models/enums.py` | Added `CANCELLED = "cancelled"` (+ mapping docstring) | Required lifecycle state for abandoning a check-in |
+| `app/models/trusted_contact.py` | Added nullable `relationship` (String 50) | The brief's optional contact field |
+| `app/models/check_in.py` | Added nullable `note` (String 500); CHECK constraint now includes `cancelled` | Optional note + new status |
+| `app/api/v1/router.py` | Registered the two new routers | Route exposure (10 new routes) |
+| `tests/conftest.py` | Added shared `api_client` fixture + `register_user` helper (SQLite-backed, registers real accounts) | Both new test files need authenticated clients; avoids duplicating the override boilerplate |
+| `tests/test_models.py` | Enum assertion now expects `cancelled` too | Legitimate contract update caused by the enum addition |
+| `tests/test_postgres_integration.py` | +3 tests: new columns exist & are nullable, values round-trip, `cancelled` passes the CHECK constraint | SQLite-only tests don't prove PostgreSQL compatibility |
+| `README.md`, `report.md` | Phase 4 documentation | Mandatory |
+
+**Untouched:** everything under `frontend/`, all Phase 1–3 endpoint behaviour,
+`alembic/versions/cc78d54068bb` and `d9841015aec7` (historical migrations were
+never edited), `.env`.
+
+### 10.5 Models, schema changes, and migration status
+
+Schema delta (all **additive + nullable**, no data rewritten):
+
+| Object | Change |
+|---|---|
+| `trusted_contacts.relationship` | new `VARCHAR(50) NULL` |
+| `check_ins.note` | new `VARCHAR(500) NULL` |
+| `ck_check_ins_status_valid` | dropped + recreated to allow `'cancelled'` (4 → 5 values) |
+
+Migration `ccd362671e07` ("add contact relationship, checkin note, cancelled
+status") was generated with `alembic revision --autogenerate`, then hand-
+adjusted because autogenerate does **not** compare CHECK constraints:
+
+- Constraint work uses `op.batch_alter_table(...)` so the migration runs on
+  **both** PostgreSQL (real `ALTER TABLE`) and SQLite (table rebuild) — plain
+  `op.drop_constraint` broke the existing SQLite migration tests.
+- Constraint names use the **short logical name** `status_valid`; the project
+  naming convention expands it to `ck_check_ins_status_valid`. Passing the
+  already-expanded name caused a doubled-prefix failure on first attempt.
+- The file was corrected after first being applied, so it was **re-run to
+  prove the committed file reproduces the live schema**: `downgrade` to
+  `d9841015aec7` (columns confirmed gone) → `upgrade head` (columns +
+  5-value constraint confirmed back). Final: `alembic current` →
+  **`ccd362671e07 (head)`** on `roamlary_dev`.
+- The file is self-contained: the naming convention is copied into it rather
+  than imported, so it can never break when app code changes later.
+- **Downgrade data-safety (added in the §10.15 fix round):** `downgrade()`
+  counts `cancelled` check-ins **before** any schema change and refuses
+  (clear error, nothing modified) while any exist — the round-trip above is
+  valid exactly because the dev database had **0** check-ins at the time.
+
+Verified on the real database with `\d` / `information_schema` queries —
+never by assuming the migration output. Integration tests use the disposable
+`roamlary_test` database only; `roamlary_dev` was left with **0 users, 0
+contacts, 0 check-ins, 0 SOS events** after verification (§10.8).
+
+### 10.6 Endpoints, validation rules, and examples
+
+All routes: **Bearer token required** (missing/invalid/expired → 401) and
+`user_id` is always taken from the token — request bodies are strict
+(`extra="forbid"`), so an injected `user_id`, `id`, `status` (on create), or
+`completed_at` is a **422**, never an override.
+
+**Trusted contacts** — `POST/GET /api/v1/trusted-contacts/`,
+`GET/PATCH/DELETE /api/v1/trusted-contacts/{contact_id}`
+
+```json
+POST /api/v1/trusted-contacts/          → 201
+{ "name": "Asha", "phone": "+91 98765 43210",
+  "relationship": "mother", "email": "asha@example.com" }
+
+200 response (approved fields only):
+{ "id": "…", "user_id": "…", "name": "Asha", "phone": "+919876543210",
+  "relationship": "mother", "email": "asha@example.com",
+  "created_at": "…", "updated_at": "…" }
+DELETE → 204 (no body); deleting never touches the user, other contacts,
+         or check-ins (test-proven)
+```
+
+Field rules: `name` 1–80 chars, non-blank after trim (**required**);
+`phone` **required**, normalized per §10.3; `email` optional (`EmailStr`,
+trimmed+lowercased); `relationship` optional ≤50 chars (blank → `NULL`).
+Missing name/phone → 422. Listing returns only the caller's contacts,
+oldest first.
+
+**Check-ins** — `POST/GET /api/v1/check-ins/`, `GET/PATCH
+/api/v1/check-ins/{checkin_id}`, `POST /api/v1/check-ins/{checkin_id}/complete`
+
+```json
+POST /api/v1/check-ins/                 → 201
+{ "note": "north trail hike", "due_at": "2026-10-12T18:30:00Z" }
+
+200 response (approved fields only):
+{ "id": "…", "user_id": "…", "status": "pending", "note": "north trail hike",
+  "due_at": "2026-10-12T18:30:00Z", "completed_at": null,
+  "created_at": "…", "updated_at": "…" }
+```
+
+- `status` starts `pending` (server-chosen); `GET /check-ins?status=pending`
+  filters (unknown value → 422); ordering newest-first.
+- `PATCH` may change `note`, `due_at` (still future/tz-aware), and `status`
+  (transition rules §10.3). `note`/`due_at` edits are refused **409** once the
+  check-in is answered; `id`, `user_id`, `created_at`, `completed_at` cannot
+  be sent (422).
+- `POST …/complete`: `pending` → `safe` + `completed_at = server now`;
+  repeat while `safe` → 200 unchanged (idempotent); `needs_help`/`cancelled`
+  → 409. No SOS, no notification, no claim that anyone was told.
+- An empty `PATCH {}` is a valid no-op (200, `updated_at` untouched).
+
+### 10.7 Commands executed (Windows PowerShell, from `backend/`)
+
+```powershell
+# Preflight: branch, HEAD, tree, container, migration head
+git branch --show-current; git log --oneline -4; git status --short
+docker ps --filter name=roamlary-postgres-dev
+.venv\Scripts\python -m alembic current
+
+# Phase 3 dependency gate (84 tests before any Phase 4 code)
+$env:ROAMLARY_TEST_DATABASE_URL = "<roamlary_test URL, value never printed>"
+.venv\Scripts\python -m pytest tests/ -q
+
+# Migration (autogenerate → hand-fix CHECK constraint → apply → verify)
+.venv\Scripts\python -m alembic revision --autogenerate -m "add contact relationship, checkin note, cancelled status"
+.venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m alembic downgrade d9841015aec7   # proves reversible with 0 check-ins (guard added in §10.15)
+.venv\Scripts\python -m alembic upgrade head             # re-apply committed file
+docker exec roamlary-postgres-dev psql -U roamlary -d roamlary_dev -c "\d check_ins"
+
+# Tests + lint (final)
+.venv\Scripts\python -m pytest tests/ -q
+.venv\Scripts\python -m ruff check .
+.venv\Scripts\python -m ruff format .
+
+# Live end-to-end against roamlary_dev (script in the system temp dir,
+# deleted after use): 28/28 checks, then removed its own rows
+.venv\Scripts\python -u <temp>\phase4_e2e.py
+```
+
+### 10.8 Actual test results (2026-10-12, real output)
+
+| Run | Result |
+|---|---|
+| **Full suite** (offline + PostgreSQL integration enabled) | **124 passed** in 22.4 s — 0 failed, 0 skipped *(at Phase 4 close; the §10.15 fix round later raised this to **128**)* |
+| Phase 4 new tests only | 37 passed (20 contacts + 17 check-ins) |
+| New PostgreSQL integration tests | included in the 10 PG tests above (7 from Phase 3 + 3 new) |
+| Regression Phases 1–3 | all green inside the same 124 — health, models, migrations, DB ops, auth (36), profiles (13), PG integration |
+| `ruff check .` | *All checks passed!* |
+| `ruff format --check .` | *42 files already formatted* |
+| **Live E2E (real PostgreSQL, full app stack)** | **28/28 checks passed**: health contract unchanged, contact CRUD + phone normalization (`+91 98765 43210` → `+919876543210`), cross-user GET/PATCH/DELETE all 404, injected `user_id` → 422, check-in create/complete/idempotency, past & naive `due_at` → 422, `cancelled` lifecycle, 0 SOS rows, cleanup verified |
+| Migration on SQLite | `tests/test_migrations.py` → **3 passed** (upgrade *and* downgrade cross-dialect) *(grew to **5** with the §10.15 fix round)* |
+
+Blocked tests: **none** — every test in the suite ran.
+
+Known in-phase failures that were **fixed** (recorded honestly): first
+migration attempt failed on a doubled constraint-name prefix (rolled back,
+then fixed); SQLite migration tests failed on plain `drop_constraint`
+(fixed with `batch_alter_table`); a duplicated `drop_column` block broke
+downgrade until removed; 4 endpoint-test failures on first run (2 were real
+API gaps — UTC response normalization and same-value status lock — 2 were
+test bugs). Final state is the all-green table above.
+
+### 10.9 Security & ownership verification
+
+| Check | Result |
+|---|---|
+| Every contact/check-in route requires a valid JWT | ✅ unauthenticated → 401 (tested per route) |
+| `user_id` server-assigned from the token; client-supplied `user_id`/`id`/`status`/`completed_at` rejected | ✅ 422 (tested) |
+| Per-query ownership filtering + identical 404 for missing vs foreign | ✅ tested, bodies byte-identical |
+| Strict request schemas (`extra="forbid"`) on all 4 new request models | ✅ |
+| Malformed UUID path params | ✅ 422 (FastAPI validation) |
+| No cross-user leakage in list endpoints | ✅ tested with two accounts |
+| Response schemas list only approved fields | ✅ exact-key-set assertions in tests |
+| Timestamps never client-controlled for `completed_at` | ✅ server clock; no schema field for it |
+| No secrets/SQL/stack traces exposed; no sensitive contact data logged | ✅ error bodies are fixed `detail` strings; `git diff` scanned |
+| No SOS/notification side effects | ✅ tests + E2E assert `sos_events` stays empty |
+
+Passing tests are **not** a security audit; this remains a local prototype.
+
+### 10.10 Regression results (Phases 1–3)
+
+All previously passing tests still pass — no behaviour was changed: health
+contract byte-identical (asserted in tests **and** live E2E), 36 auth tests,
+13 profile tests, model/migration/DB-op tests, and the 7 Phase 3 PostgreSQL
+integration tests. The only pre-existing test edited was
+`test_status_enums_match_the_contract` (§10.4), which encodes the enum
+contract that Phase 4 intentionally extended.
+
+### 10.11 Known limitations & remaining work
+
+**Implemented + tested:** the 10 routes, schema, lifecycle rules above.
+**Planned (later phases, deliberately absent):** expiry jobs for overdue
+check-ins, any notification/SMS/email, SOS workflows, contact
+verification/notification, roles/admin, Firebase, pagination, rate limiting.
+Also: no pagination (unbounded lists are fine at prototype scale), `expired`
+is unreachable in Phase 4 (only a future job sets it), and overdue check-ins
+are stored without any reaction — an overdue check-in is **not** proof of
+danger. The Phase 4 migration's `downgrade()` is **data-dependent**: it
+refuses while any `cancelled` check-in exists and requires an explicit
+data-handling decision first (§10.15); a permitted downgrade also reverts
+the `note`/`relationship` column values.
+
+### 10.12 Phase completion checklist (Phase 4 brief)
+
+| Requirement | Status |
+|---|---|
+| Phase 3 dependency gate verified against code + tests first | ✅ PASS (84 tests green before starting) |
+| 5 trusted-contact endpoints, ownership from token | ✅ |
+| 5 check-in endpoints incl. `/complete` with documented idempotency | ✅ |
+| Input validation, phone normalization, field limits | ✅ |
+| Past-time + timezone policies defined, documented, enforced | ✅ (§10.3) |
+| Status transitions validated; no silent reactivation | ✅ (409, tested) |
+| Migration for the 3 schema changes, applied & verified, history preserved | ✅ `ccd362671e07` |
+| 40 required tests written and passing | ✅ 40 + regression |
+| README updated (endpoints, examples, rules, timestamps, migration, commands) | ✅ |
+| report.md Phase 4 section added; history annotated not rewritten | ✅ this §10 |
+| No SOS/notifications/Firebase/AI/frontend work | ✅ (§10.13) |
+| No commits/pushes/branch changes during the phase | ✅ (§10.14) |
+| Owner-assigned migration-safety fix round (downgrade guard + 4 tests) | ✅ §10.15 |
+
+### 10.13 Scope confirmation
+
+**Not implemented (belongs to later phases):** SOS workflows or emergency
+escalation; automated alerts for overdue check-ins; SMS/WhatsApp/email/push
+notifications or background jobs; Firebase Authentication; live location
+tracking/sharing; community safety reports; AI features; Flutter/frontend
+changes; payments; roles/admin. Saving a contact does **not** mean that
+contact was notified or verified, and no identity or location was verified.
+
+### 10.14 Git state after Phase 4
+
+- Branch **`backend`** throughout; HEAD still **`f26536e`** (= `origin/backend`);
+  **no commits, pushes, merges, resets, or branch switches were made.**
+- All Phase 4 work sits in the working tree for review: `git status` /
+  `git diff` (7 modified + 8 new files, §10.4; **10 modified** after the
+  §10.15 fix round added `tests/test_migrations.py` to the modified set).
+- `backend/.env` remains gitignored (never printed/committed); diff scanned —
+  no secrets, no unrelated files; `frontend/` untouched.
+
+> **Later (2026-10-12):** after the owner's explicit approval ("commit and
+> push"), these Phase 4 files were **committed and pushed to
+> `origin/backend` together with Phase 5** — see `git log`. This section
+> preserves the review-time state as it stood.
+
+### 10.15 Migration-safety fix round (owner-assigned verification)
+
+Assigned and completed on 2026-10-12, after the owner reviewed Phase 4.
+Scope was deliberately narrow: **only** the Phase 4 migration's
+`downgrade()`, its tests, and the documentation claims that implied
+downgrades always succeed.
+
+**The concern (valid):** `downgrade()` restored the old 4-value CHECK
+constraint without checking for existing `cancelled` rows. With such rows
+present, PostgreSQL would reject the ALTER mid-migration, and the earlier
+"proven reversible" wording (§10.5, §10.7, README) did not establish that
+this data-dependent case was handled.
+
+**The fix** — in `ccd362671e07` only (the frozen migrations `cc78d54068bb`
+and `d9841015aec7` were not touched; `upgrade()` is unchanged, so the live
+schema is unchanged):
+
+1. `downgrade()` first runs `SELECT count(*) FROM check_ins WHERE status =
+   'cancelled'` — **before any schema change**.
+2. Count > 0 → raise a clear error naming the count, why the old constraint
+   cannot accept those rows, the fact that **nothing** was modified, and the
+   explicit data-handling decisions available (delete, remap, or keep the
+   Phase 4 schema). No records are deleted or converted to force a downgrade.
+3. Count = 0 → the original reverse steps run unchanged.
+
+Because the check precedes any DDL, a refusal leaves schema, constraint,
+`alembic_version`, and all rows exactly as they were.
+
+**Behaviour proven both ways** (SQLite via the migration-test conventions,
+real PostgreSQL via gated integration tests, and live on `roamlary_dev`):
+
+| Situation | Downgrade result | After-state |
+|---|---|---|
+| ≥1 `cancelled` check-in | **Refused** (exit 1, "Refusing to downgrade migration ccd362671e07 …") | Unchanged: still `ccd362671e07 (head)`, `note`+`relationship` present, 5-value constraint active, the `cancelled` row untouched |
+| No `cancelled` check-ins | **Succeeds** | Version `d9841015aec7`, columns dropped; the rows survive (the dropped columns' values do not — reverting a feature reverts its columns) |
+| Either case → `upgrade head` | **Succeeds** | Exact Phase 4 schema restored |
+
+**New tests (4):** `test_phase4_downgrade_refuses_when_cancelled_checkins_exist`
+and `test_phase4_downgrade_upgrade_roundtrip_without_cancelled_records` in
+`tests/test_migrations.py` (SQLite); the same two scenarios as
+`test_pg_phase4_downgrade_*` in `tests/test_postgres_integration.py`, where
+alembic itself runs against the disposable `roamlary_test` database. A shared
+raw-SQL helper (`insert_raw_user_and_checkin` in `tests/conftest.py`) inserts
+probe rows bypassing the ORM — the same situation a downgrade faces with
+pre-existing data. The existing `test_alembic_downgrade_base_removes_tables`
+still passes: a fresh database has no `cancelled` rows, so the guard lets the
+downgrade through.
+
+**Actual results (real output, 2026-10-12):**
+
+| Run | Result |
+|---|---|
+| `pytest tests/test_migrations.py -v` | **5 passed** (3 pre-existing + 2 new) |
+| **Full suite** (offline + PostgreSQL) | **128 passed**, 0 failed, 0 skipped (116 offline + 12 PG) |
+| `ruff check .` / `ruff format` | clean |
+| Live refusal on `roamlary_dev` | probe `cancelled` row inserted → downgrade **exit 1** with the refusal message → verified version still `ccd362671e07 (head)`, columns present, constraint 5-value, probe row still `cancelled` |
+| Live normal path on `roamlary_dev` | probe rows deleted → downgrade **exit 0** (columns confirmed gone) → `upgrade head` **exit 0** → `alembic current` = `ccd362671e07 (head)`, columns + constraint back; DB left with **0 users, 0 contacts, 0 check-ins, 0 SOS events** |
+
+**Doc corrections** (the claims that implied unconditional reversibility):
+`PHASE4_CHANGES.md` §2.1/data-safety/applied-and-proven/evidence tables,
+README's migration bullet (now documents the refusal) + a new Common-problems
+row + test counts (124 → 128, 114 → 116, 10 → 12), and this report's §6, §10.5,
+§10.7, §10.8 annotations, §10.11 limitation, §10.14 counts. Phase-close
+numbers were annotated, not rewritten.
+
+**Git:** no commits, pushes, merges, resets, or branch switches; HEAD still
+**`f26536e`**. Working tree now 10 modified + 8 new files (18 total), no
+secrets, `frontend/` untouched.
+
+> **Later (2026-10-12):** owner approved commit & push → these 18 files were
+> **committed and pushed together with Phase 5** (see `git log`).
+
+## 11. Phase 5 record — SOS & emergency workflow (simulated) ✅
+
+**Assigned by the project owner** with a detailed brief (Sections 1–11),
+including a mandatory preflight, an explicit scope list, required tests, and
+a hard stop after Phase 5. Same standing rule as Phase 4: **no commits,
+pushes, branch changes, resets, or rewrites of history** until review.
+
+**Safety boundary of this phase:** it only *records* SOS incidents
+locally. Activating an SOS does **not** contact police, ambulance, or any
+emergency number, does **not** notify trusted contacts or nearby users,
+and shares no location with anyone. This is not an emergency-response
+system.
+
+### 11.1 Mandatory preflight (all gates cleared before any code)
+
+| Gate | Result |
+|---|---|
+| Branch & path | `C:\Projects\Roamlary`, branch **`backend`** ✓ |
+| Existing work preserved | `git status` showed the 18 uncommitted Phase 4/fix-round files → all kept and built on, nothing overwritten ✓ |
+| Phase 4 downgrade fix really present | guard read in the actual migration (before any DDL) **and** the SQLite + PostgreSQL tests that assert it — not just docs ✓ |
+| Phase 3 auth working | green baseline: **128 passed** (116 offline + 12 PG), 0 failed ✓ |
+| Database target identified | `roamlary_dev` at `ccd362671e07 (head)` via the gitignored `.env` (URL never printed); integration tests use the disposable `roamlary_test` ✓ |
+| Stop-conditions | none triggered → Phase 5 proceeded |
+
+Also confirmed *before coding* (per the brief's §3): the Phase 2 schema
+**already had an `sos_events` table** with `status`, range-guarded lat/lon
+and `resolved_at` — so Phase 5 extends it instead of creating a second
+SOS model.
+
+### 11.2 Design decisions (documented choices)
+
+| # | Decision | Why |
+|---|---|---|
+| D1 | Keep the Phase 2 `SosStatus` values; add only `cancelled` | Same precedent as Phase 4's `CheckInStatus`: frozen Phase 2 design is annotated, not rewritten. `acknowledged`/`false_alarm` stay in the enum/CHECK but are **unreachable** (like `expired` for check-ins) — no responder system exists to acknowledge anything |
+| D2 | Lifecycle `active → cancelled` / `active → resolved`; both terminal; every other move (repeats, crossings) → **409** | The brief mandates it. SOS transitions are deliberately **not** idempotent, unlike Phase 4's `/complete` — a closed incident's first timestamp is never rewritten |
+| D3 | Three new **nullable** columns: `description`, `location_recorded_at`, `cancelled_at` | The Phase 2 table had none of them; all additive, no existing row touched |
+| D4 | Exact brief paths `/api/v1/sos` (no trailing slash), unlike Phase 4's `/check-ins/` | Owner-specified paths win; FastAPI redirects the slash variant and the difference is documented in the README |
+| D5 | `cancel`/`resolve` accept **no request body** | A client-supplied timestamp cannot even be expressed; both stamps come from the server clock |
+| D6 | Transitions use a conditional `UPDATE … WHERE id=… AND status='active'` (compare-and-set) | Race safety: if two requests race, exactly one applies and the loser sees `rowcount == 0` → 409, instead of both overwriting each other |
+
+### 11.3 Model, enum & schema changes
+
+`app/models/sos_event.py` gained:
+
+| Column | Type | Rule |
+|---|---|---|
+| `description` | VARCHAR(500) NULL | optional; trimmed; blank/whitespace-only rejected with 422 |
+| `location_recorded_at` | timestamptz NULL | **server** clock at activation, only when coordinates were sent |
+| `cancelled_at` | timestamptz NULL | **server** clock when the user retracted the SOS |
+
+The status CHECK became 5 values (`active`, `acknowledged`, `resolved`,
+`false_alarm`, `cancelled`); `app/models/enums.py` gained
+`SosStatus.CANCELLED`. Request schema (`SosEventCreate`) is
+`extra="forbid"` with both-or-neither coordinates (lat −90…90,
+lon −180…180); response schema exposes exactly 11 fields, all timestamps
+normalized to UTC (the `_to_utc` serializer pattern from Phase 4).
+
+**One pre-existing assertion changed** (mirrors Phase 4's documented
+change): `test_models.py`'s enum contract now expects `cancelled` in
+`SosStatus` — no assertion was deleted or weakened.
+
+### 11.4 Migration `0dd8995649b4` & downgrade safety
+
+*upgrade():* adds the three columns, then — hand-written, because
+autogenerate does **not** compare CHECK constraints — drops/recreates the
+status CHECK to include `cancelled`, via `batch_alter_table` with the
+self-contained naming convention and short logical name `status_valid`
+(the exact Phase 4 pattern).
+
+*downgrade():* **data-safety guard first** — counts
+`sos_events WHERE status='cancelled'` *before any schema change*; if any
+exist it raises an actionable `RuntimeError` (same wording shape as the
+Phase 4 guard) and **nothing** is deleted, converted, or altered. Only
+with zero such rows does it restore the 4-value CHECK and drop the three
+columns (a *permitted* downgrade drops those columns' values; the rows
+survive — documented).
+
+**Migration-test bookkeeping (annotated, not rewritten):** the Phase 4
+migration tests in `test_migrations.py` and `test_postgres_integration.py`
+previously upgraded to `"head"`; since `head` now means the Phase 5
+revision, they were **pinned to `ccd362671e07`** — their intent is the
+Phase 4 migration's behaviour and every assertion is unchanged. Phase 5's
+own migration tests are pinned to `0dd8995649b4` for the same reason.
+
+### 11.5 Live verification on `roamlary_dev` (real output, 2026-10-12)
+
+| Step | Result |
+|---|---|
+| `alembic upgrade head` | `0dd8995649b4 (head)`; all 3 columns present & nullable (checked via `information_schema`) |
+| Constraint check | `pg_get_constraintdef` shows all 5 status values incl. `cancelled` |
+| Live refusal demo | probe `cancelled` row inserted → downgrade **exit 1** with "Refusing to downgrade migration 0dd8995649b4…" → verified unchanged: still `0dd8995649b4 (head)`, columns present, 5-value constraint active, probe row still `cancelled` |
+| Live normal path | probe rows deleted → downgrade **exit 0** → `upgrade head` **exit 0** → `alembic current` = `0dd8995649b4 (head)`; DB left with **0 users, 0 SOS events** (and 0 contacts/check-ins/reports) |
+| Live E2E (full app stack vs `roamlary_dev`, temp script deleted after use) | **35/35 functional checks passed**: activation variants & validation (10), ownership/identical-404s (6), lifecycle & 409s (7), 401s on all five routes + invalid token (6), UTC timestamps, health contract. Its 2 users + 2 SOS rows were deleted afterwards; the database was re-verified empty |
+
+Honest note: the E2E script's own two *cleanup-verification* checks first
+reported FAIL because the script's `LIKE` pattern still held an old email
+domain after a rename — the data itself was correct; an explicit follow-up
+`DELETE` removed both rows and the empty database was verified above.
+
+### 11.6 Endpoints, examples, lifecycle & field rules
+
+| Method + Path | Behaviour |
+|---|---|
+| `POST /api/v1/sos` | 201; owner from the token; `status='active'` server-chosen; optional description/coordinates; `location_recorded_at` stamped only when coordinates were sent |
+| `GET /api/v1/sos` | own incidents only (filter **in the query**), newest first (`created_at desc, id desc`) |
+| `GET /api/v1/sos/{sos_id}` | own only — missing and foreign IDs return the **byte-identical 404** |
+| `POST /api/v1/sos/{sos_id}/cancel` | `active → cancelled` + `cancelled_at`=server clock; no body; anything else → 409 |
+| `POST /api/v1/sos/{sos_id}/resolve` | `active → resolved` + `resolved_at`=server clock; no body; anything else → 409 |
+
+```json
+POST /api/v1/sos
+{ "description": "flat tyre on highway 7", "latitude": 28.6139, "longitude": 77.2090 }
+
+201 — only fields ever returned:
+{ "id": "a41c…", "user_id": "9c1d…", "status": "active",
+  "description": "flat tyre on highway 7", "latitude": 28.6139,
+  "longitude": 77.2090, "location_recorded_at": "2026-10-12T11:05:12Z",
+  "created_at": "…", "updated_at": "…", "cancelled_at": null, "resolved_at": null }
+```
+
+Field rules: coordinates must be sent **together** (one alone → 422) and
+in range; blank/over-500-char description → 422; `user_id`, `status`,
+`id`, `created_at`, `updated_at`, `cancelled_at`, `resolved_at`,
+`location_recorded_at` are server-controlled — sending any → 422. A failed
+transition changes **nothing** (status and both timestamps proven
+byte-identical by test). Full client-facing docs: README "SOS incidents".
+
+### 11.7 Tests & actual results (real output, nothing fabricated)
+
+| Run | Result |
+|---|---|
+| `pytest tests/test_sos_events.py -q` | **24 passed** (auth, activation/validation, ownership/privacy, lifecycle, persistence, safety boundary) |
+| `pytest tests/test_migrations.py tests/test_models.py -q` | **15 passed** (7 migrations incl. both Phase 5 downgrade tests + 8 models) |
+| **Full suite** (offline + PostgreSQL) | **158 passed**, 0 failed, 0 skipped (**142 offline + 16 PG**) |
+| `ruff check .` / `ruff format` | clean, 46 files |
+| PostgreSQL integration (disposable `roamlary_test`) | +4 real-PG tests: Phase 5 columns exist & nullable, CHECK accepts `cancelled`, downgrade **refuses** with a cancelled row (schema + record verified unchanged), downgrade→upgrade **roundtrip** without one — plus the 12 pre-existing PG tests |
+| Blocked/weakened tests | **none** — no test was deleted or skipped; the two Phase 4 migration tests were re-pinned to their revision (§11.4) and one enum assertion extended (§11.3) |
+
+Fixed during the phase and recorded honestly: the first `test_sos_events.py`
+run had **1 failure** — a *test bug* (a state snapshot was taken before the
+transition it should have guarded); the API itself was correct, and after
+the fix the file passes 24/24.
+
+### 11.8 Documentation, scope exclusions & git state
+
+**Docs updated:** README (scope block → Phase 5, new "SOS incidents"
+section with endpoint/coordinate/lifecycle tables and examples, migration
+bullet for `0dd8995649b4`, test counts 158/142/16, three new Common-problems
+rows), this report (§2, §3, §4, §5, §6 + this §11; Known limitations and
+Pending tasks **renumbered to §12/§13** with the reference at §9.14's
+finding annotated), and the new **`PHASE5_CHANGES.md`** standalone review
+file (14-row inventory, migration proof, test results, git state).
+
+**NOT implemented (per the brief's scope list):** SMS/WhatsApp/email/push
+notifications (Twilio, AiSensy), calls to emergency numbers, real dispatch,
+trusted-contact notification, community reports/nearby-user alerts, AI risk
+analysis, background location tracking, camera/microphone monitoring,
+Flutter/frontend changes, Phase 6+.
+
+**Git:** no commits, pushes, merges, resets, stashes, or branch switches;
+HEAD still **`f26536e`** (= `origin/backend`). Working tree now
+**11 modified + 13 new = 24 files** (Phase 4's 18 + Phase 5's 6), no
+secrets, `frontend/` untouched.
+
+> **Later (2026-10-12):** owner reviewed and approved ("Commit and push
+> Phases 4+5") → all 24 files were **committed as one commit and pushed to
+> `origin/backend`**; working tree clean afterwards. See `git log`.
+
+## 12. Known limitations (current)
+
+- Served endpoints: health, register/login, `GET/PATCH /users/me`, the five
+  **trusted-contact** routes, the five **check-in** routes (Phase 4, §10),
+  and the five **SOS** routes (Phase 5, §11). Nothing else exposes the
+  database over HTTP.
 - Authentication is a **local prototype**: Argon2id password hashing + HS256
   JWTs. No refresh tokens, password reset, email verification, rate limiting,
   or account recovery yet — all belong to later phases.
-- No trusted contacts, check-ins, SOS workflow, community reports, AI, or
-  notifications — those belong to later phases.
+- Phase 4 stores contact/check-in data **only**: no notifications, no contact
+  verification, no overdue-check-in handling — those belong to later
+  phases. Saving a contact never messages anyone, and an overdue check-in
+  changes nothing.
+- Phase 5 records SOS incidents **only**: activating one writes a row and
+  never contacts emergency services, trusted contacts, or nearby users.
+  `acknowledged`/`false_alarm` exist in the schema but are unreachable (no
+  responder system); SOS activation has no rate limiting yet; there is no
+  emergency UI (Phase 10).
+- No pagination yet: contact/check-in/SOS lists are unbounded arrays (fine
+  at prototype scale, revisit before real traffic).
+- Community reports, AI, and notifications remain unimplemented entirely.
 - Dev-grade CORS and configuration only; no HTTPS.
 - Runs only on this laptop, local machine, port 8000.
-- The `backend` branch is pushed to GitHub (`origin/backend`) through Phase 3
-  (`3d728ac`). The Phase 3 audit-fix round (§9.14) is uncommitted in the
-  working tree.
+- The `backend` branch is pushed to GitHub (`origin/backend`) through
+  **Phases 1–5**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
+  `f26536e`, and **Phases 4 + 5 committed together and pushed after owner
+  approval, 2026-10-12** (see `git log`). The working tree is **clean**;
+  `PHASE4_CHANGES.md` and `PHASE5_CHANGES.md` are now tracked files.
 - Database lives in a Docker container; if that container's volume is removed,
   recreate the schema with `alembic upgrade head`.
-- Frontend cannot integrate beyond the health + auth contract until Phase 9.
+- Frontend cannot integrate beyond the health + auth + Phase 4 + Phase 5
+  contract until Phase 9.
 
-## 11. Pending tasks and next steps
+## 13. Pending tasks and next steps
 
-1. Owner reviews the **Phase 3 audit & fix round** (§9.14 + `git diff` on
-   `backend`).
-2. Owner decides whether to commit the audit-fix round — the backend lead will
-   not commit or push without explicit instruction.
-3. Owner assigns Phase 4 (trusted contacts & safety check-ins).
+1. ✅ **Settled (2026-10-12):** owner reviewed Phases 4 + 5 (§10/§11 +
+   `PHASE4_CHANGES.md`/`PHASE5_CHANGES.md`) and approved commit & push.
+   The Phase 3 audit was already settled (`f26536e`).
+2. ✅ **Done (2026-10-12):** the combined Phase 4 + Phase 5 delta was
+   committed (one commit) and pushed to `origin/backend` after explicit
+   owner instruction — working tree clean.
+3. Owner assigns the next phase (per the roadmap: Phase 6, community safety
+   reports — simulated).
 4. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
    planning and the `docs/merge-report.md` integration document.
 5. Laptop 3 to publish the AI contract before Phase 7 can be real (stub until

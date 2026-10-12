@@ -8,9 +8,10 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phase 3 — Authentication & user profiles)
+## Current scope (Phase 5 — SOS & emergency workflow, simulated)
 
-Implemented now (on top of the Phase 1 foundation + Phase 2 database):
+Implemented now (on top of the Phase 1 foundation + Phase 2 database +
+Phase 3 authentication + Phase 4 contacts/check-ins):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -21,19 +22,31 @@ Implemented now (on top of the Phase 1 foundation + Phase 2 database):
 - **Five domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
   `CommunityReport` — with UUID keys, timestamps, CHECK constraints and
   `ON DELETE RESTRICT` foreign keys
-- **Alembic migrations** (initial schema + `password_hash` column)
+- **Alembic migrations** (initial schema + `password_hash` column +
+  Phase 4 contact/check-in columns & `cancelled` status +
+  Phase 5 SOS description/location-timestamp/cancellation columns &
+  `cancelled` status)
 - **Local authentication**: `POST /auth/register`, `POST /auth/login`
   (Argon2id password hashing + HS256 JWT access tokens)
 - **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
-- Automated test suite: **84 tests** (auth + profiles + models + migrations +
-  real-PostgreSQL integration)
+- **Trusted contacts**: `POST/GET /trusted-contacts`,
+  `GET/PATCH/DELETE /trusted-contacts/{contact_id}`
+- **Safety check-ins**: `POST/GET /check-ins`,
+  `GET/PATCH /check-ins/{checkin_id}`, `POST /check-ins/{checkin_id}/complete`
+- **SOS incidents (simulated)**: `POST/GET /sos`,
+  `GET /sos/{sos_id}`, `POST /sos/{sos_id}/cancel`, `POST /sos/{sos_id}/resolve`
+- Automated test suite: **158 tests** (142 offline + 16 real-PostgreSQL
+  integration; contacts + check-ins + SOS + auth + profiles + models +
+  migrations)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
 them to exist): Firebase Authentication, refresh tokens, password reset, email
-verification, roles/permissions, trusted-contact/check-in/SOS/report **workflow
-endpoints**, AI companion, notifications, production deployment. Authentication
-here is a **local prototype** — it needs real security work (HTTPS, rate
-limiting, token revocation) before any production claim.
+verification, roles/permissions, community **report workflow endpoints**, AI
+companion, notifications, **overdue-check-in alerts**, pagination, production
+deployment. Phase 5 only *records* SOS incidents locally — it never contacts
+emergency services, never messages a contact, and never shares a location.
+Authentication here is a **local prototype** — it needs real security work
+(HTTPS, rate limiting, token revocation) before any production claim.
 
 ## Prerequisites
 
@@ -202,6 +215,199 @@ platform keystore/keychain), **not** in plain logs. The token expires after
 simply logs in again to get a new one. Real token storage is the frontend
 workstream's job — no Flutter screens exist yet.
 
+## Trusted contacts (Phase 4)
+
+Five endpoints, **all requiring a bearer token**. Every contact belongs to
+the user in the token — `user_id` is never read from the request body, and
+request bodies are strict: sending `user_id`, `id`, or any unknown field is a
+`422`.
+
+| Method + Path | Auth | Body | Success |
+| --- | --- | --- | --- |
+| `POST /api/v1/trusted-contacts/` | Bearer | `name`, `phone` (required); `relationship`, `email` (optional) | `201` → contact |
+| `GET /api/v1/trusted-contacts/` | Bearer | — | `200` → array (mine only, oldest first) |
+| `GET /api/v1/trusted-contacts/{contact_id}` | Bearer | — | `200` → contact / `404` |
+| `PATCH /api/v1/trusted-contacts/{contact_id}` | Bearer | any subset of the four fields | `200` → contact / `404` |
+| `DELETE /api/v1/trusted-contacts/{contact_id}` | Bearer | — | `204` (no body) / `404` |
+
+```json
+POST /api/v1/trusted-contacts/
+{ "name": "Asha", "phone": "+91 98765 43210",
+  "relationship": "mother", "email": "asha@example.com" }
+
+201 response — the only fields ever returned:
+{ "id": "3f2a…", "user_id": "9c1d…", "name": "Asha",
+  "phone": "+919876543210", "relationship": "mother",
+  "email": "asha@example.com",
+  "created_at": "2026-10-12T07:09:54Z", "updated_at": "2026-10-12T07:09:54Z" }
+```
+
+**Field rules**
+
+- `name` — required, 1–80 chars, trimmed (blank → `422`).
+- `phone` — required. Normalized before storage: spaces, dashes,
+  parentheses, and dots are removed; a leading `+` is kept. What remains must
+  be **7–15 digits**, optionally with `+`. **No country code is assumed or
+  added** (Roamlary users travel): `"+1 (415) 555-2671"` stores as
+  `+14155552671`, `"(415) 555-2671"` stores as `4155552671`.
+- `email` — optional (a phone is enough); real format check, trimmed and
+  lowercased. Send `null` on PATCH to clear it.
+- `relationship` — optional, ≤50 chars free text (`mother`, `friend`, …);
+  blank or `null` clears it.
+- `PATCH` with `{}` is a valid no-op (`200`, `updated_at` unchanged).
+
+**Ownership & errors:** `401` no/invalid/expired token · `422` invalid or
+injected fields · `404` for a missing **or** another user's contact — the
+response is byte-identical in both cases, so contact IDs can't be probed.
+Deleting a contact never touches your account, your other contacts, or your
+check-ins.
+
+> Saving a contact stores a name and a number. **Nothing is sent, no one is
+> notified, and no number is verified as reachable.**
+
+## Safety check-ins (Phase 4)
+
+Five endpoints, **all requiring a bearer token**, all scoped to the token's
+user (same identical-`404` rule as contacts).
+
+| Method + Path | Auth | Body | Success |
+| --- | --- | --- | --- |
+| `POST /api/v1/check-ins/` | Bearer | `note`, `due_at` (both optional) | `201` → check-in |
+| `GET /api/v1/check-ins/` | Bearer | — (query `?status=` optional) | `200` → array (mine only, newest first) |
+| `GET /api/v1/check-ins/{checkin_id}` | Bearer | — | `200` → check-in / `404` |
+| `PATCH /api/v1/check-ins/{checkin_id}` | Bearer | `note`, `due_at`, `status` | `200` → check-in / `404` / `409` |
+| `POST /api/v1/check-ins/{checkin_id}/complete` | Bearer | — | `200` → check-in / `404` / `409` |
+
+```json
+POST /api/v1/check-ins/
+{ "note": "north trail hike", "due_at": "2026-10-12T18:30:00Z" }
+
+201 response — the only fields ever returned:
+{ "id": "7b9e…", "user_id": "9c1d…", "status": "pending",
+  "note": "north trail hike", "due_at": "2026-10-12T18:30:00Z",
+  "completed_at": null, "created_at": "…", "updated_at": "…" }
+```
+
+**Status values and allowed transitions**
+
+```
+pending ──▶ safe           (PATCH {"status":"safe"}  or  POST …/complete)
+        ├──▶ needs_help    (PATCH {"status":"needs_help"})
+        └──▶ cancelled     (PATCH {"status":"cancelled"})
+
+safe / needs_help / expired / cancelled  →  terminal: no exits at all
+```
+
+- `status` always starts as **`pending`** — the client cannot choose it on
+  create (and sending one is a `422`).
+- Any other move — including setting the same status again, or trying to
+  reactivate a finished check-in → **`409`** with a plain-language message.
+  There is deliberately **no** reactivate transition; create a new check-in
+  instead.
+- `note` and `due_at` can be edited **only while `pending`**; once answered,
+  the record is read-only (`409`).
+- `expired` exists for a future phase's expiry job — **nothing sets it
+  automatically today**.
+
+**`POST …/complete` idempotency (safe for network retries)**
+
+| Current state | Result |
+| --- | --- |
+| `pending` | → `safe`, `completed_at` = server clock now, `200` |
+| already `safe` | `200`, unchanged — `completed_at` keeps the **first** completion time |
+| `needs_help` / `cancelled` / `expired` | `409` (completing must never overwrite a `needs_help` answer) |
+
+`completed_at` is always set by the server — there is no client-supplied
+completion timestamp, and `cancelled` leaves it `null` (nothing completed).
+
+**Timestamp format & timezone behaviour**
+
+- Send ISO 8601 **with a timezone**: `2026-10-12T18:30:00Z` or
+  `2026-10-12T18:30:00+05:30`. A naive value (no `Z`, no offset) → `422`.
+- `due_at` must be in the **future** at create *and* update time (server
+  UTC) — a past deadline → `422`, never silently accepted.
+- Responses always return UTC (values end in `Z`).
+
+**Filtering:** `GET /api/v1/check-ins/?status=pending` (or
+`safe`/`needs_help`/`expired`/`cancelled`); an unknown value → `422`.
+
+> **Safety boundary:** an overdue check-in is *not* proof of danger. Phase 4
+> stores data only — it never notifies contacts, never triggers an SOS, and
+> never contacts emergency services. Those behaviours belong to later phases.
+
+## SOS incidents (Phase 5 — simulated)
+
+Five endpoints, **all requiring a bearer token**, all scoped to the token's
+user (same identical-`404` rule as contacts and check-ins). Note the paths
+have **no trailing slash** (`/sos`, per the Phase 5 spec; a trailing-slash
+request is redirected by FastAPI).
+
+| Method + Path | Auth | Body | Success |
+| --- | --- | --- | --- |
+| `POST /api/v1/sos` | Bearer | `description`, `latitude`, `longitude` (all optional) | `201` → incident |
+| `GET /api/v1/sos` | Bearer | — | `200` → array (mine only, newest first) |
+| `GET /api/v1/sos/{sos_id}` | Bearer | — | `200` → incident / `404` |
+| `POST /api/v1/sos/{sos_id}/cancel` | Bearer | — (no body) | `200` → incident / `404` / `409` |
+| `POST /api/v1/sos/{sos_id}/resolve` | Bearer | — (no body) | `200` → incident / `404` / `409` |
+
+```json
+POST /api/v1/sos
+{ "description": "flat tyre on highway 7", "latitude": 28.6139, "longitude": 77.2090 }
+
+201 response — the only fields ever returned:
+{ "id": "a41c…", "user_id": "9c1d…", "status": "active",
+  "description": "flat tyre on highway 7", "latitude": 28.6139,
+  "longitude": 77.2090, "location_recorded_at": "2026-10-12T11:05:12Z",
+  "created_at": "…", "updated_at": "…",
+  "cancelled_at": null, "resolved_at": null }
+```
+
+**Coordinate rules**
+
+- `latitude` and `longitude` must be provided **together** — one without the
+  other → `422` (a single coordinate locates nothing).
+- Ranges: latitude `-90…90`, longitude `-180…180`; outside → `422`.
+- Both omitted → no location stored; `location_recorded_at` stays `null`.
+- When coordinates are given, `location_recorded_at` is stamped with the
+  **server clock at activation** — there is no client field for it.
+- The server never obtains or guesses a location, and a user's location is
+  never exposed to any other user (every query is owner-filtered).
+
+**Status values and allowed transitions**
+
+```
+active ──▶ cancelled    (POST …/cancel)
+      └──▶ resolved     (POST …/resolve)
+
+cancelled / resolved  →  terminal: no exits at all
+```
+
+- `status` always starts **`active`** — the client cannot choose it (sending
+  one is a `422`).
+- `cancelled_at` / `resolved_at` are set by the **server clock** on the
+  transition; the cancel/resolve routes accept **no body**, so a client
+  timestamp can never be applied.
+- Any move except `active → cancelled/resolved` — including repeating a
+  transition, or crossing between the two terminal states → **`409`** with a
+  plain-language message, and the record stays exactly as it was.
+- Unlike check-in `/complete` (idempotent by design), SOS repeats always
+  conflict: a terminal incident is a closed record whose first timestamp is
+  never rewritten.
+- `acknowledged` / `false_alarm` exist in the Phase 2 schema for a future
+  phase but are **unreachable now** (no responder system exists).
+
+**Validation:** `description` optional, 1–500 chars; a blank/whitespace-only
+description → `422` (provide text or omit the field). `user_id`, `status`,
+`id`, `created_at`, `updated_at`, `cancelled_at`, `resolved_at`,
+`location_recorded_at` are server-controlled — sending any of them → `422`.
+Responses always return UTC timestamps.
+
+> **Safety boundary:** activating an SOS **only writes a row** in this
+> prototype. It does **not** contact police, ambulance, or any emergency
+> number, does **not** notify trusted contacts or nearby users, and shares
+> no location with anyone. Do not present this as an emergency-response
+> system; real delivery needs integrations and safeguards from later phases.
+
 ## Migrations (Alembic)
 
 Alembic creates and evolves the schema. The migration files live in
@@ -210,6 +416,23 @@ Alembic creates and evolves the schema. The migration files live in
 Applied migrations on `roamlary_dev`:
 - `cc78d54068bb` — initial schema (Phase 2): the five tables.
 - `d9841015aec7` — adds the nullable `users.password_hash` column (Phase 3).
+- `ccd362671e07` — Phase 4: adds nullable `trusted_contacts.relationship`
+  (VARCHAR 50) and `check_ins.note` (VARCHAR 500), and allows the
+  `cancelled` value in the `check_ins` status CHECK constraint.
+  Round-trip verified (`upgrade` → `downgrade` → `upgrade` reproduced the
+  identical schema) **when no `cancelled` check-ins exist**. If any
+  `cancelled` check-ins exist, `downgrade` deliberately **refuses** with an
+  actionable error *before* touching the schema or data (cancelled records
+  need an explicit data-handling decision first — see Common problems).
+  `alembic current` → `ccd362671e07 (head)`.
+- `0dd8995649b4` — Phase 5: adds nullable `sos_events.description`
+  (VARCHAR 500), `sos_events.location_recorded_at`, and
+  `sos_events.cancelled_at` (timezone-aware), and allows the `cancelled`
+  value in the `sos_events` status CHECK constraint. Same downgrade rule
+  as Phase 4: round-trip verified when no `cancelled` SOS incidents
+  exist; if any exist, `downgrade` deliberately **refuses** before
+  touching anything (data-safety guard — see Common problems).
+  `alembic current` → `0dd8995649b4 (head)`.
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -249,15 +472,20 @@ Then put the matching `DATABASE_URL` in `.env`.
 
 Two test layers exist. Do not confuse them:
 
-- **Offline unit tests** (77) — use an in-memory SQLite database and the FastAPI
-  `TestClient`. No PostgreSQL, no network. They prove model behaviour, auth
-  flows (register/login/JWT/profile), fail-closed behaviour, and route
-  contracts. They always run with a fixed TEST-ONLY JWT secret (never the
-  real `.env` value).
-- **PostgreSQL integration tests** (7) — run against a **disposable** database
-  and prove real PostgreSQL behaviour (native `uuid` columns, CHECK
-  constraint enforcement, timezone-aware timestamps, and the `password_hash`
-  column). They are **skipped** unless you point them at a throwaway database.
+- **Offline unit tests** (142) — use an in-memory SQLite database and the
+  FastAPI `TestClient`. No PostgreSQL, no network. They prove model
+  behaviour, auth flows (register/login/JWT/profile), contact & check-in
+  endpoint contracts (ownership, transitions, timestamps), SOS endpoint
+  contracts (activation validation, ownership, lifecycle), fail-closed
+  behaviour, route contracts, and the migration chain (including the
+  Phase 4 and Phase 5 downgrade data-safety guards). They always run with
+  a fixed TEST-ONLY JWT secret (never the real `.env` value).
+- **PostgreSQL integration tests** (16) — run against a **disposable**
+  database and prove real PostgreSQL behaviour (native `uuid` columns, CHECK
+  constraint enforcement — including the Phase 4/5 `cancelled` values and
+  new columns — timezone-aware timestamps, the `password_hash` column, and
+  both downgrade guards: refused with `cancelled` rows, allowed without
+  them). They are **skipped** unless you point them at a throwaway database.
 
 ```powershell
 # Default run (PostgreSQL integration tests will be SKIPPED)
@@ -299,7 +527,16 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `409` on register | That email already has an account | Log in instead, or use a different email |
 | `422` on register or login | Body contains a field the strict schema doesn't allow (e.g. `password_hash`, `id`, `role`) | Send only the documented fields: register → `display_name`, `email`, `password`; login → `email`, `password` |
 | `422` on `PATCH /users/me` | Body contains a protected/unknown field | Send **only** `display_name`; `id`, `email`, `password_hash`, `firebase_uid` are not editable here |
+| `422` on contact create/update | Missing `name`/`phone`, bad email, overlong field, or a phone that isn't 7–15 digits after cleanup — or an injected `user_id`/`id` | Send only `name`, `phone`, `relationship`, `email`; phone may contain spaces/dashes/parentheses but must be 7–15 digits (optionally starting `+`) |
+| `422` on check-in create/update with `due_at` | Timestamp has no timezone, is malformed, or is already in the past | Send ISO 8601 **with** `Z`/offset (e.g. `2026-10-12T18:30:00Z`) and a future moment |
+| `409` on `PATCH /check-ins/{id}` | Illegal status move (e.g. reactivating `safe`/`cancelled`), same-status set, or editing `note`/`due_at` on an answered check-in | Only `pending → safe/needs_help/cancelled` is allowed; answered check-ins are read-only |
+| `409` on `POST /check-ins/{id}/complete` | The check-in is `needs_help` or `cancelled` (already answered another way) | Only `pending` can be completed; repeats on `safe` return `200` unchanged |
+| `404` on someone else's contact/check-in | Deliberate: foreign IDs return the same `404` as missing ones (no ownership probing) | Use only your own records — list them first (`GET /trusted-contacts/`, `GET /check-ins/`) |
 | Pydantic error mentioning `email-validator` | `EmailStr` needs the `email-validator` package | Re-run `.venv\Scripts\python -m pip install -e ".[dev]"` |
+| `RuntimeError: Refusing to downgrade migration ccd362671e07 …` | At least one check-in has `status='cancelled'`, which the older constraint would reject | Intentional data-safety guard: nothing was changed. Decide what to do with those rows (delete them, or move them to an allowed status), then re-run the downgrade — or keep the Phase 4 schema |
+| `RuntimeError: Refusing to downgrade migration 0dd8995649b4 …` | At least one SOS incident has `status='cancelled'`, which the older constraint would reject | Intentional data-safety guard: nothing was changed. Decide what to do with those rows (delete them, or move them to an allowed status), then re-run the downgrade — or keep the Phase 5 schema |
+| `409` on `POST /sos/{id}/cancel` or `…/resolve` | The incident is already `cancelled` or `resolved` (terminal states are locked; repeats always conflict — SOS transitions are deliberately not idempotent) | Read the incident first (`GET /sos/{id}`); only `active` incidents can transition |
+| `422` on `POST /sos` with coordinates | Only one of `latitude`/`longitude` sent, a value out of range, a blank `description`, or an injected server-controlled field (`user_id`, `status`, `cancelled_at`, …) | Send both coordinates together (lat −90…90, lon −180…180), non-blank `description` or none, and only the documented fields |
 
 ## Development log
 

@@ -29,9 +29,9 @@ class CheckIn(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "check_ins"
     __table_args__ = (
         # Belt-and-braces: even raw SQL inserts (bypassing Python) cannot
-        # store an invalid status.
+        # store an invalid status. 'cancelled' added in Phase 4.
         CheckConstraint(
-            "status IN ('pending', 'safe', 'needs_help', 'expired')",
+            "status IN ('pending', 'safe', 'needs_help', 'expired', 'cancelled')",
             name="status_valid",
         ),
     )
@@ -47,9 +47,17 @@ class CheckIn(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
 
     # Optional deadline (Phase 0 design allows check-ins without one).
+    # Phase 4 policy: if provided, it must be a timezone-aware moment in
+    # the FUTURE; the API rejects a past deadline with 422.
     due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
-    # Set when the user answered (safe / needs_help).
+    # Optional free-text note the user attaches ("hiking the north
+    # trail"). Purely informational - nothing is ever sent anywhere.
+    # Added in Phase 4.
+    note: Mapped[str | None] = mapped_column(String(500))
+
+    # Set when the user answered (safe / needs_help). Stays NULL for
+    # pending and cancelled check-ins.
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="check_ins")

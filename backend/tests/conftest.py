@@ -11,7 +11,10 @@ in tests/test_postgres_integration.py against a real disposable
 database and are skipped when none is provided.
 """
 
+import uuid
+
 import pytest
+import sqlalchemy as sa
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
@@ -19,6 +22,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
 from app.db.base_class import Base
+from app.db.session import get_db
 from app.main import app
 
 # Fixed TEST-ONLY JWT secret. Every test signs and verifies with this value
@@ -75,3 +79,108 @@ def db_session(sqlite_engine):
         yield session
     finally:
         session.close()
+
+
+@pytest.fixture()
+def api_client(sqlite_engine):
+    """Authenticated-API test client wired to the SQLite test database.
+
+    Overrides get_db so every request uses the in-memory database, and
+    clears any stale dependency overrides on entry and exit. Used by the
+    Phase 4 trusted-contact and check-in tests, which drive the real
+    FastAPI app end-to-end (register -> token -> authenticated call).
+    """
+
+    def override_get_db():
+        TestSession = sessionmaker(bind=sqlite_engine, autoflush=False, expire_on_commit=False)
+        session = TestSession()
+        try:
+            yield session
+        finally:
+            session.close()
+
+    app.dependency_overrides.clear()
+    app.dependency_overrides[get_db] = override_get_db
+    with TestClient(app) as client:
+        yield client
+    app.dependency_overrides.clear()
+
+
+def register_user(client, email, password="s3cure-Pass!", display_name="Tester"):
+    """Register a user and return (user_id, bearer_headers).
+
+    Convenience helper for tests that need one or more distinct accounts
+    to prove ownership isolation.
+    """
+    resp = client.post(
+        "/api/v1/auth/register",
+        json={"display_name": display_name, "email": email, "password": password},
+    )
+    assert resp.status_code == 201, resp.text
+    token = resp.json()["access_token"]
+    me = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {token}"}).json()
+    return me["id"], {"Authorization": f"Bearer {token}"}
+
+
+def insert_raw_user_and_checkin(engine, status: str, note: str | None = None) -> None:
+    """Insert one user + one check-in with RAW SQL, bypassing the ORM.
+
+    Migration tests need rows that already sit in the database no matter
+    who wrote them (app, script, or manual SQL) - exactly the situation a
+    migration downgrade faces. CURRENT_TIMESTAMP is valid on both SQLite
+    and PostgreSQL. PostgreSQL binds native uuid.UUID objects (its driver
+    resolves them to the uuid column); SQLite's driver cannot adapt UUID
+    objects, so it gets the canonical string form. Both rows use the
+    'Migration Probe' display name so operators can spot them.
+    """
+    if engine.dialect.name == "postgresql":
+        user_id, checkin_id = uuid.uuid4(), uuid.uuid4()
+    else:
+        user_id, checkin_id = str(uuid.uuid4()), str(uuid.uuid4())
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'Migration Probe', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": user_id},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO check_ins "
+                "(id, user_id, status, note, created_at, updated_at) "
+                "VALUES (:id, :user_id, :status, :note, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": checkin_id, "user_id": user_id, "status": status, "note": note},
+        )
+
+
+def insert_raw_user_and_sos(engine, status: str, description: str | None = None) -> None:
+    """Insert one user + one SOS incident with RAW SQL, bypassing the ORM.
+
+    Same purpose as insert_raw_user_and_checkin: migration tests need
+    rows that already sit in the database no matter who wrote them -
+    exactly the situation a migration downgrade faces.
+    """
+    if engine.dialect.name == "postgresql":
+        user_id, sos_id = uuid.uuid4(), uuid.uuid4()
+    else:
+        user_id, sos_id = str(uuid.uuid4()), str(uuid.uuid4())
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'Migration Probe', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": user_id},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO sos_events "
+                "(id, user_id, status, description, created_at, updated_at) "
+                "VALUES (:id, :user_id, :status, :description, "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": sos_id, "user_id": user_id, "status": status, "description": description},
+        )

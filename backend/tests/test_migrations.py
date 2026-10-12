@@ -14,6 +14,8 @@ from pathlib import Path
 
 import sqlalchemy as sa
 
+from tests.conftest import insert_raw_user_and_checkin, insert_raw_user_and_sos
+
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 EXPECTED_TABLES = {"users", "trusted_contacts", "check_ins", "sos_events", "community_reports"}
 
@@ -70,3 +72,192 @@ def test_alembic_history_is_a_single_linear_chain(tmp_path) -> None:
     result = _run_alembic(["history", "--verbose"], "sqlite://")
     assert result.returncode == 0, result.stderr
     assert "initial schema" in result.stdout
+
+
+def test_phase4_downgrade_refuses_when_cancelled_checkins_exist(tmp_path) -> None:
+    """DATA-DEPENDENT DOWNGRADE (regression): a 'cancelled' row must make the
+    Phase 4 downgrade REFUSE cleanly, instead of failing mid-schema-change
+    against the old 4-value CHECK constraint.
+
+    The refusal happens BEFORE any schema change, so schema and records
+    must both be left exactly as they were - nothing deleted or converted.
+
+    (Upgrades target the Phase 4 revision explicitly, not `head`: `head`
+    moved to Phase 5 in 0dd8995649b4, and these tests are about THIS
+    migration's behaviour.)
+    """
+    db_file = tmp_path / "migration_guard.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "ccd362671e07"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_checkin(engine, "cancelled")
+
+    downgrade = _run_alembic(["downgrade", "d9841015aec7"], url)
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while cancelled check-ins exist, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    # The refusal must leave EVERYTHING unchanged.
+    inspector = sa.inspect(engine)
+    checkin_cols = {c["name"] for c in inspector.get_columns("check_ins")}
+    contact_cols = {c["name"] for c in inspector.get_columns("trusted_contacts")}
+    assert "note" in checkin_cols  # column NOT dropped
+    assert "relationship" in contact_cols  # column NOT dropped
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status = conn.execute(sa.text("SELECT status FROM check_ins")).scalar_one()
+        table_sql = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='check_ins'")
+        ).scalar_one()
+    assert version == "ccd362671e07"  # still at the Phase 4 revision
+    assert status == "cancelled"  # the record itself is untouched
+    assert "'cancelled'" in table_sql  # 5-value constraint still active
+    engine.dispose()
+
+
+def test_phase4_downgrade_upgrade_roundtrip_without_cancelled_records(tmp_path) -> None:
+    """NORMAL DOWNGRADE PATH: with no cancelled rows the downgrade succeeds,
+    and upgrading again restores the exact Phase 4 schema.
+
+    (Upgrades target the Phase 4 revision explicitly, not `head`: `head`
+    moved to Phase 5 in 0dd8995649b4, and these tests are about THIS
+    migration's behaviour.)
+    """
+    db_file = tmp_path / "migration_roundtrip.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "ccd362671e07"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_checkin(engine, "pending", note="roundtrip probe")
+
+    # 1) Downgrade succeeds - no row violates the restored 4-value CHECK.
+    downgrade = _run_alembic(["downgrade", "d9841015aec7"], url)
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(engine)
+    assert "note" not in {c["name"] for c in inspector.get_columns("check_ins")}
+    assert "relationship" not in {c["name"] for c in inspector.get_columns("trusted_contacts")}
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status = conn.execute(sa.text("SELECT status FROM check_ins")).scalar_one()
+    assert version == "d9841015aec7"
+    assert status == "pending"  # the record itself survives the schema revert
+
+    # 2) Upgrading back restores the Phase 4 schema exactly.
+    upgrade_again = _run_alembic(["upgrade", "ccd362671e07"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(engine)
+    assert "note" in {c["name"] for c in inspector.get_columns("check_ins")}
+    assert "relationship" in {c["name"] for c in inspector.get_columns("trusted_contacts")}
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        row = conn.execute(sa.text("SELECT status, note FROM check_ins")).one()
+        table_sql = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='check_ins'")
+        ).scalar_one()
+    assert version == "ccd362671e07"
+    assert row.status == "pending"
+    # The note column was dropped and re-created EMPTY: a downgrade reverts
+    # the Phase 4 feature itself (documented behaviour), while the ROW and
+    # its status survive.
+    assert row.note is None
+    assert "'cancelled'" in table_sql  # 5-value constraint restored
+    engine.dispose()
+
+
+def test_phase5_downgrade_refuses_when_cancelled_sos_exist(tmp_path) -> None:
+    """DATA-DEPENDENT DOWNGRADE (regression): a 'cancelled' SOS incident
+    must make the Phase 5 downgrade REFUSE cleanly, instead of failing
+    mid-schema-change against the old 4-value CHECK constraint.
+
+    The refusal happens BEFORE any schema change, so schema and records
+    must both be left exactly as they were - nothing deleted or converted.
+    """
+    db_file = tmp_path / "migration_sos_guard.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "0dd8995649b4"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_sos(engine, "cancelled")
+
+    downgrade = _run_alembic(["downgrade", "ccd362671e07"], url)
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while cancelled SOS incidents exist, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    # The refusal must leave EVERYTHING unchanged.
+    inspector = sa.inspect(engine)
+    sos_cols = {c["name"] for c in inspector.get_columns("sos_events")}
+    assert {"description", "location_recorded_at", "cancelled_at"} <= sos_cols
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(sa.text("SELECT status FROM sos_events")).scalar_one()
+        table_sql = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='sos_events'")
+        ).scalar_one()
+    assert version == "0dd8995649b4"  # still at the Phase 5 revision
+    assert status_value == "cancelled"  # the record itself is untouched
+    assert "'cancelled'" in table_sql  # 5-value constraint still active
+    engine.dispose()
+
+
+def test_phase5_downgrade_upgrade_roundtrip_without_cancelled_sos(tmp_path) -> None:
+    """NORMAL DOWNGRADE PATH: with no cancelled SOS incidents the downgrade
+    succeeds, and upgrading again restores the exact Phase 5 schema."""
+    db_file = tmp_path / "migration_sos_roundtrip.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "0dd8995649b4"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_sos(engine, "active", description="roundtrip probe")
+
+    downgrade = _run_alembic(["downgrade", "ccd362671e07"], url)
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(engine)
+    assert "description" not in {c["name"] for c in inspector.get_columns("sos_events")}
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(sa.text("SELECT status FROM sos_events")).scalar_one()
+    assert version == "ccd362671e07"
+    assert status_value == "active"  # the record itself survives the schema revert
+
+    upgrade_again = _run_alembic(["upgrade", "0dd8995649b4"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(engine)
+    assert {"description", "location_recorded_at", "cancelled_at"} <= {
+        c["name"] for c in inspector.get_columns("sos_events")
+    }
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        row = conn.execute(sa.text("SELECT status, description FROM sos_events")).one()
+        table_sql = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='sos_events'")
+        ).scalar_one()
+    assert version == "0dd8995649b4"
+    assert row.status == "active"
+    # The description column was dropped and re-created EMPTY: a downgrade
+    # reverts the Phase 5 feature itself (documented behaviour), while the
+    # ROW and its status survive.
+    assert row.description is None
+    assert "'cancelled'" in table_sql  # 5-value constraint restored
+    engine.dispose()

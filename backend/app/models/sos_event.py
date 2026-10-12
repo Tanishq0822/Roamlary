@@ -3,8 +3,15 @@
 Plain language: one row = one (SIMULATED) emergency incident. This
 prototype does NOT contact emergency services. Location columns are
 optional and only stored when a location is intentionally recorded.
-The lifecycle (active -> acknowledged -> resolved / false_alarm)
-supports the later SOS workflow without implementing its logic yet.
+
+Phase 5 lifecycle (enforced by the API and a CHECK constraint):
+
+    active -> cancelled   (user retracted the SOS; terminal)
+    active -> resolved    (user marked it handled; terminal)
+
+`acknowledged` and `false_alarm` are Phase 2 values kept for a later
+phase but unreachable for now - no responder system exists to
+acknowledge an incident.
 """
 
 from __future__ import annotations
@@ -28,8 +35,9 @@ class SosEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     __tablename__ = "sos_events"
     __table_args__ = (
+        # 'cancelled' added in Phase 5 (user-retracted incident).
         CheckConstraint(
-            "status IN ('active', 'acknowledged', 'resolved', 'false_alarm')",
+            "status IN ('active', 'acknowledged', 'resolved', 'false_alarm', 'cancelled')",
             name="status_valid",
         ),
         # Guard rails against corrupted coordinates (degrees).
@@ -49,10 +57,22 @@ class SosEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     status: Mapped[str] = mapped_column(String(20), default=SosStatus.ACTIVE, nullable=False)
 
+    # Optional short note from the user ("ambulance needed at the hostel").
+    # Nothing is ever sent anywhere - this only stores text. Phase 5.
+    description: Mapped[str | None] = mapped_column(String(500))
+
     latitude: Mapped[float | None] = mapped_column(Float)
     longitude: Mapped[float | None] = mapped_column(Float)
 
-    # Set when the incident reaches a final state (resolved/false_alarm).
+    # When the location above was captured (server clock at activation).
+    # Only set if coordinates were provided. Phase 5.
+    location_recorded_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Set when the incident reaches a final state: resolved_at when the
+    # user marked it handled, cancelled_at when the user retracted it.
+    # Both are server-clock stamps, never client data. cancelled_at is
+    # Phase 5.
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     user: Mapped[User] = relationship(back_populates="sos_events")
