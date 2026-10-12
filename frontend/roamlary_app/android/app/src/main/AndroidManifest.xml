@@ -1,4 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Required for the real-mode API client (lib/data/api_repository.dart).
+         Flutter injects INTERNET for debug/profile builds, but release builds
+         do not get it automatically, so it is declared here. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
         android:label="roamlary_app"
         android:name="${applicationName}"

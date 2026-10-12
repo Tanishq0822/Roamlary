@@ -1,30 +1,46 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:provider/provider.dart';
+import 'package:roamlary_app/core/app_theme.dart';
+import 'package:roamlary_app/data/companion_service.dart';
+import 'package:roamlary_app/data/mock_repository.dart';
 import 'package:roamlary_app/main.dart';
+import 'package:roamlary_app/screens/login_screen.dart';
+import 'package:roamlary_app/state/app_state.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
-
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
-
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
+  testWidgets('App builds and shows the login screen', (tester) async {
+    await tester.pumpWidget(RoamlaryApp(repo: MockRepository()));
     await tester.pump();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Roamlary'), findsOneWidget);
+    expect(find.byType(LoginScreen), findsOneWidget);
+  });
+
+  testWidgets('Guest / demo path reaches the home shell', (tester) async {
+    await tester.pumpWidget(RoamlaryApp(repo: MockRepository()));
+    await tester.pump();
+
+    await tester.tap(find.text('Explore demo'));
+    // allow the guest sign-in + navigation to settle
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Home'), findsOneWidget);
+  });
+
+  testWidgets('Theme constructs without error', (tester) async {
+    final light = AppTheme.light();
+    final dark = AppTheme.dark();
+    expect(light.useMaterial3, isTrue);
+    expect(dark.useMaterial3, isTrue);
+  });
+
+  testWidgets('AppState exposes the repository and starts signed out',
+      (tester) async {
+    final state = AppState(MockRepository());
+    expect(state.isSignedIn, isFalse);
+    expect(state.repo, isA<MockRepository>());
+    expect(const CompanionService(), isA<CompanionService>());
   });
 }
