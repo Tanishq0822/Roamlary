@@ -25,7 +25,7 @@ Implemented now (on top of the Phase 1 foundation + Phase 2 database):
 - **Local authentication**: `POST /auth/register`, `POST /auth/login`
   (Argon2id password hashing + HS256 JWT access tokens)
 - **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
-- Automated test suite: **69 tests** (auth + profiles + models + migrations +
+- Automated test suite: **84 tests** (auth + profiles + models + migrations +
   real-PostgreSQL integration)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
@@ -177,9 +177,10 @@ bearer token.
 ```
 
 Errors: duplicate email → `409`; wrong password **or** unknown email → `401`
-(same message, so accounts can't be enumerated); missing/bad/expired token →
-`401`; `PATCH` with a protected field (`password_hash`, `id`, `firebase_uid`) →
-`422`. Emails are normalized (trimmed + lowercased), so `Asha@Example.COM` and
+(same message *and* similar response time, so accounts can't be enumerated);
+missing/bad/expired token → `401`; unknown or protected fields in **any**
+request body (`register`, `login`, `PATCH`) → `422` (all request schemas are
+strict). Emails are normalized (trimmed + lowercased), so `Asha@Example.COM` and
 `asha@example.com` are the same account.
 
 ### Try it in the Swagger UI
@@ -248,9 +249,11 @@ Then put the matching `DATABASE_URL` in `.env`.
 
 Two test layers exist. Do not confuse them:
 
-- **Offline unit tests** (62) — use an in-memory SQLite database and the FastAPI
+- **Offline unit tests** (77) — use an in-memory SQLite database and the FastAPI
   `TestClient`. No PostgreSQL, no network. They prove model behaviour, auth
-  flows (register/login/JWT/profile), and route contracts.
+  flows (register/login/JWT/profile), fail-closed behaviour, and route
+  contracts. They always run with a fixed TEST-ONLY JWT secret (never the
+  real `.env` value).
 - **PostgreSQL integration tests** (7) — run against a **disposable** database
   and prove real PostgreSQL behaviour (native `uuid` columns, CHECK
   constraint enforcement, timezone-aware timestamps, and the `password_hash`
@@ -294,6 +297,7 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `401` on `/users/me` right after login | Token missing/expired, or sent without the `Bearer ` prefix | Send `Authorization: Bearer <token>`; re-login if it expired (`ACCESS_TOKEN_EXPIRE_MINUTES`) |
 | `401 Invalid email or password` when the account exists | Wrong password — or the account has no `password_hash` (Firebase-only) | Confirm the password; local login only works for accounts that set a password at register |
 | `409` on register | That email already has an account | Log in instead, or use a different email |
+| `422` on register or login | Body contains a field the strict schema doesn't allow (e.g. `password_hash`, `id`, `role`) | Send only the documented fields: register → `display_name`, `email`, `password`; login → `email`, `password` |
 | `422` on `PATCH /users/me` | Body contains a protected/unknown field | Send **only** `display_name`; `id`, `email`, `password_hash`, `firebase_uid` are not editable here |
 | Pydantic error mentioning `email-validator` | `EmailStr` needs the `email-validator` package | Re-run `.venv\Scripts\python -m pip install -e ".[dev]"` |
 

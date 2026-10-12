@@ -13,10 +13,22 @@ from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.deps import DbSession
 from app.api.v1.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
-from app.core.security import create_access_token, hash_password, verify_password
+from app.core.security import (
+    create_access_token,
+    ensure_auth_configured,
+    hash_password,
+    verify_password,
+)
 from app.models.user import User
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+# A throwaway hash used ONLY to equalize login timing: when the email is
+# unknown we still run one real Argon2 verification against this value, so
+# an unknown-email 401 takes about as long as a wrong-password 401.
+# Without it, response time would reveal whether an account exists.
+# Generated once at import (one-time ~0.1s cost at startup).
+_DUMMY_PASSWORD_HASH = hash_password("timing-equalization-only-not-a-real-password")
 
 
 @router.post(
@@ -37,6 +49,10 @@ def register(body: RegisterRequest, db: DbSession) -> TokenResponse:
 
     The password hash is never returned.
     """
+    # Fail closed BEFORE any database write: if no signing secret is
+    # configured we must not create an account the client could never use.
+    ensure_auth_configured()
+
     existing = db.scalar(select(User).where(User.email == body.email))
     if existing is not None:
         raise HTTPException(
@@ -75,13 +91,23 @@ def login(body: LoginRequest, db: DbSession) -> TokenResponse:
 
     The error message is IDENTICAL for "unknown email" and "wrong
     password" so an attacker cannot discover which emails are registered
-    by watching error responses.
+    by watching error responses. The work done is also kept comparable:
+    an unknown email still runs one Argon2 verification (against a dummy
+    hash) so response TIME does not reveal whether the account exists.
     """
     user = db.scalar(select(User).where(User.email == body.email))
 
-    # verify_password returns False for a wrong password OR a user with no
-    # local password (a future Firebase-only account).
-    if user is None or not verify_password(body.password, user.password_hash):
+    if user is None:
+        # Equalize timing, then fail with the same generic error.
+        verify_password(body.password, _DUMMY_PASSWORD_HASH)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password.",
+        )
+
+    # verify_password also returns False for a user with no local password
+    # (a future Firebase-only account).
+    if not verify_password(body.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid email or password.",

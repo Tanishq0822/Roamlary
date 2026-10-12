@@ -100,6 +100,42 @@ def test_patch_me_rejects_blank_display_name(profile_client):
     assert resp.status_code == 422
 
 
+def test_patch_me_empty_body_is_noop(profile_client):
+    """PATCH {} returns the profile unchanged; updated_at is NOT bumped."""
+    token = _register_and_get_token(profile_client)
+    before = profile_client.get("/api/v1/users/me", headers=_auth(token)).json()
+    resp = profile_client.patch("/api/v1/users/me", headers=_auth(token), json={})
+    assert resp.status_code == 200
+    after = resp.json()
+    assert after["display_name"] == before["display_name"]
+    assert after["updated_at"] == before["updated_at"]
+
+
+def test_patch_me_real_change_bumps_updated_at(profile_client):
+    """A real display_name change must move updated_at forward."""
+    token = _register_and_get_token(profile_client)
+    before = profile_client.get("/api/v1/users/me", headers=_auth(token)).json()
+    resp = profile_client.patch(
+        "/api/v1/users/me", headers=_auth(token), json={"display_name": "Renamed"}
+    )
+    assert resp.status_code == 200
+    assert resp.json()["updated_at"] > before["updated_at"]
+
+
+def test_patch_me_rejects_email_and_firebase_uid(profile_client):
+    """email and firebase_uid are protected: 422, nothing changes."""
+    token = _register_and_get_token(profile_client)
+    resp = profile_client.patch(
+        "/api/v1/users/me",
+        headers=_auth(token),
+        json={"display_name": "X", "email": "stolen@example.com", "firebase_uid": "evil"},
+    )
+    assert resp.status_code == 422
+    me = profile_client.get("/api/v1/users/me", headers=_auth(token)).json()
+    assert me["email"] == "prof@example.com"
+    assert me["display_name"] == "Asha"
+
+
 def test_patch_me_requires_token(profile_client):
     resp = profile_client.patch("/api/v1/users/me", json={"display_name": "X"})
     assert resp.status_code == 401

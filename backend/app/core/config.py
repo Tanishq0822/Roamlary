@@ -12,9 +12,10 @@ class Settings(BaseSettings):
     Values come from environment variables (or an optional .env file).
     See .env.example for the documented keys.
 
-    Phase 1 scope: application metadata and CORS only. Database and
-    Firebase settings are intentionally absent - they belong to later
-    phases and will be added only when actually used.
+    Scope grows one phase at a time and each setting is added only when it
+    is actually used: app metadata + CORS (Phase 1), database_url (Phase 2),
+    JWT authentication (Phase 3). Firebase settings are still intentionally
+    absent - they belong to a later phase and will be added only when used.
     """
 
     model_config = SettingsConfigDict(

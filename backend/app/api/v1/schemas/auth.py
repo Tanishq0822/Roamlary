@@ -14,7 +14,17 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 
 class RegisterRequest(BaseModel):
-    """Body for POST /auth/register."""
+    """Body for POST /auth/register.
+
+    `extra="forbid"` makes this a STRICT schema: any field that is not
+    display_name/email/password (for example a smuggled `id`,
+    `password_hash`, or `firebase_uid`) is rejected with a 422 validation
+    error instead of being silently ignored. That turns accidental API
+    misuse into a visible error and keeps privileged fields impossible to
+    inject through this endpoint.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     display_name: str = Field(..., min_length=1, max_length=80)
     email: EmailStr
@@ -37,7 +47,13 @@ class RegisterRequest(BaseModel):
 
 
 class LoginRequest(BaseModel):
-    """Body for POST /auth/login."""
+    """Body for POST /auth/login.
+
+    Strict schema (`extra="forbid"`), same rationale as RegisterRequest:
+    unknown fields are a 422, never silently dropped.
+    """
+
+    model_config = ConfigDict(extra="forbid")
 
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=128)

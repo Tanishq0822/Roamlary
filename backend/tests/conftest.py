@@ -17,8 +17,21 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.db.base_class import Base
 from app.main import app
+
+# Fixed TEST-ONLY JWT secret. Every test signs and verifies with this value
+# instead of whatever is in the developer's real .env, so the suite is
+# hermetic (same results on any machine) and no real secret is ever needed
+# or exercised by tests. The fail-closed tests override it to "" on purpose.
+TEST_JWT_SECRET = "unit-test-only-secret-0123456789abcdefghijklmnop"
+
+
+@pytest.fixture(autouse=True)
+def _hermetic_jwt_secret(monkeypatch):
+    """Confine test secrets to test configuration (never the real .env)."""
+    monkeypatch.setattr(settings, "jwt_secret_key", TEST_JWT_SECRET)
 
 
 @pytest.fixture()

@@ -73,6 +73,16 @@ def _require_secret() -> str:
     return settings.jwt_secret_key
 
 
+def ensure_auth_configured() -> None:
+    """Raise 503 if no signing secret is configured; otherwise do nothing.
+
+    Public precheck so endpoints can FAIL CLOSED before doing any work
+    (for example before creating a database row), without needing a token
+    to exist yet.
+    """
+    _require_secret()
+
+
 def create_access_token(user_id: UUID) -> str:
     """Create a signed HS256 access token for a user.
 

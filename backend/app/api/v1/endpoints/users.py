@@ -50,23 +50,27 @@ def update_me(
     `extra="forbid"`, so attempting to send `id`, `email`, `password_hash`,
     or `firebase_uid` is rejected with a 422 validation error rather than
     being silently dropped - protected fields cannot be smuggled in.
+
+    A body with no editable field (for example `{}`) is a valid no-op:
+    the profile is returned unchanged and `updated_at` is NOT touched,
+    so the timestamp always means "last real change".
     """
     if body.display_name is not None:
         current_user.display_name = body.display_name
 
-    # Bump updated_at explicitly so the change is reflected even though we
-    # are mutating an already-loaded object.
-    current_user.updated_at = utc_now()
+        # Bump updated_at explicitly so the change is reflected even though
+        # we are mutating an already-loaded object.
+        current_user.updated_at = utc_now()
 
-    db.add(current_user)
-    try:
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Could not save profile changes.",
-        ) from exc
-    db.refresh(current_user)
+        db.add(current_user)
+        try:
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Could not save profile changes.",
+            ) from exc
+        db.refresh(current_user)
 
     return UserProfile.model_validate(current_user)

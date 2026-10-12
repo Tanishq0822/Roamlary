@@ -35,8 +35,8 @@ the project owner; the backend lead implements only assigned phases.**
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (Phases 1–2 pushed to `origin/backend`; Phase 3 uncommitted in working tree) |
-| History | `4761b41` initial setup → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → *(Phase 3 delta uncommitted, see §9)* |
+| Branch | `backend` (Phases 1–3 pushed to `origin/backend`; Phase 3 audit-fix delta uncommitted, see §9.14) |
+| History | `4761b41` initial setup → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → *(Phase 3 audit-fix delta uncommitted, see §9.14)* |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
 | PostgreSQL | **Running locally** — server 16.15 in the Docker container `roamlary-postgres-dev` (databases: `roamlary_dev`, `roamlary_test`). No system-wide install | 
@@ -48,15 +48,15 @@ the project owner; the backend lead implements only assigned phases.**
 
 ## 3. Development phases and status
 
-Roadmap assigned by the project owner (Phases 2+ are NOT started; the backend
-lead waits for each phase assignment):
+Roadmap assigned by the project owner (Phases 0–3 complete; Phases 4+ are NOT
+started — the backend lead waits for each phase assignment):
 
 | Phase | Name | Status |
 |---|---|---|
 | 0 | Repository inspection & planning | ✅ Complete (approved by owner: "ok you can do that") |
 | 1 | FastAPI foundation | ✅ **Complete — implemented & verified** (this report §7) |
 | 2 | PostgreSQL connection, models, migrations | ✅ **Complete — implemented & verified** (this report §8) |
-| 3 | Authentication & user profiles | 🔄 **In progress** — being implemented now (this report §9) |
+| 3 | Authentication & user profiles | ✅ **Complete** — implemented, committed `3d728ac`, pushed; owner-assigned audit & fix round done (§9.14), its delta uncommitted |
 | 4 | Trusted contacts & safety check-ins | ⏳ Not started |
 | 5 | SOS & emergency workflow (simulated) | ⏳ Not started |
 | 6 | Community safety reports & location data | ⏳ Not started |
@@ -82,6 +82,8 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-12 | Phase 0 (formal) | Formal read-only re-inspection & plan delivered (architecture, proposed API, proposed DB, Phases 0–11 plan, reporting standard). Zero changes made | no changes |
 | 2026-10-12 | **Phase 1** | Owner assigned Phase 1 → aligned health contract to owner-specified format, removed premature `database_url` setting, expanded tests 3→7, updated README, renamed `REPORT.md`→`report.md`, rewrote this report | committed as `5ea9b59`, pushed to `origin/backend` (owner later said "commit and push") |
 | 2026-10-12 | **Phase 2** | Owner assigned Phase 2 → started Docker engine (approved K4), ran `postgres:16-alpine` container, added `DATABASE_URL` config, engine/session/get_db, 5 models, Alembic + initial migration (applied to `roamlary_dev`), 28 new tests, README + this report | committed as `eb8e709`, pushed to `origin/backend` (owner approval) |
+| 2026-10-12 | **Phase 3** | Owner assigned Phase 3 → local JWT auth (register/login), Argon2id hashing, protected `/users/me`, `password_hash` column + migration `d9841015aec7` (applied to `roamlary_dev`), 34 new tests, README + this report | committed as `3d728ac`, pushed to `origin/backend` (owner said "commit and push") |
+| 2026-10-12 | **Phase 3 audit & fix** | Owner assigned Phase 3 verification round → audited all 4 endpoints, config, migration, and tests; fixed strict request schemas (422 on injected fields), login timing equalization, fail-closed-before-DB-write ordering, no-op PATCH `updated_at`, stale `config.py` docstring; added 12 new tests (fail-closed, required claims, race condition, impersonation, hermetic secret); corrected report/README contradictions | **uncommitted working-tree changes** (owner rule: no commits during a phase) |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
@@ -267,11 +269,14 @@ via HTTP headers, not inside a real browser.
 Complete: app starts; `GET /api/v1/health` returns the documented contract;
 7/7 tests pass; lint clean; CORS documented & verified; README + this report
 written; frontend untouched; **no commits, pushes, merges, or branch changes
-were performed in Phase 1** (all Phase 1 changes sit in the working tree for
-owner review).
+were performed in Phase 1** (all Phase 1 changes sat in the working tree for
+owner review). *Post-phase fact:* after the owner later said "commit and
+push", Phase 1 was committed as `5ea9b59` and pushed to `origin/backend`.
 
-Incomplete/blocked: nothing within Phase 1 scope. **PostgreSQL, SQLAlchemy,
-Alembic, and everything from Phase 2 onward are explicitly NOT implemented.**
+Incomplete/blocked: nothing within Phase 1 scope. *As of Phase 1's
+completion,* PostgreSQL, SQLAlchemy, Alembic, and everything from Phase 2
+onward were explicitly NOT implemented (Phases 2 and 3 have since been
+completed — see §8 and §9; this sentence records the Phase 1 point in time).
 
 Recommended next action: owner reviews the Phase 1 diff (`git diff` on
 `backend`), then **assigns Phase 2** (which will include starting Docker
@@ -658,7 +663,7 @@ stopped): `GET /api/v1/health` returned
 | PostgreSQL connectivity & migration verified | ✅ (real connection; migration applied) |
 | README updated | ✅ |
 | This report contains an accurate file-by-file explanation | ✅ |
-| Git branch and changes checked | ✅ (`backend`; zero commits/pushes) |
+| Git branch and changes checked | ✅ (`backend`; zero commits/pushes *during the phase* — Phase 2 was later committed as `eb8e709` and pushed after owner approval) |
 | No later-phase business workflows implemented | ✅ (no CRUD/auth/workflow code) |
 
 ### 8.14 Scope confirmation
@@ -886,7 +891,7 @@ permission system was added (out of scope).
 | Phase 1 & 2 functionality intact | ✅ (health contract re-verified live) |
 | Tests + migration reported honestly | ✅ (69 passed; live E2E run) |
 | README + this report updated | ✅ |
-| Git status reviewed; no commits/pushes this phase | ✅ |
+| Git status reviewed; no commits/pushes during the phase | ✅ (Phase 3 was later committed as `3d728ac` and pushed after the owner said "commit and push") |
 | No later-phase workflows implemented | ✅ (see §9.13) |
 
 ### 9.13 Scope confirmation
@@ -900,8 +905,105 @@ added on top of the existing health + DB foundation.
 
 **Recommended next step:** the owner reviews this phase (report + `git diff` on
 `backend`) and, when satisfied, **assigns Phase 4** (trusted contacts & safety
-check-ins). Phase 3 is **not committed** — it sits in the working tree until the
-owner says to commit/push, exactly like Phases 1 and 2 did.
+check-ins). Phase 3 was committed as `3d728ac` and pushed to `origin/backend`
+after the owner said "commit and push"; the owner-assigned audit & fix round
+(§9.14) sits uncommitted in the working tree, exactly as the earlier phases
+did before their approval.
+
+### 9.14 Phase 3 audit & fix round (owner-assigned verification)
+
+The owner assigned a fix-and-verify pass over Phase 3 *after* it was
+committed (`3d728ac`). This section records what the audit found, what was
+changed, and the actual results. Everything below is in the **uncommitted
+working tree** on top of `3d728ac`.
+
+#### 9.14.1 Audit method
+
+Every claim in §9.3–§9.13 was re-checked against the actual code, the
+applied database schema, and fresh test runs — not taken from the earlier
+report text. Preflight re-verified: branch `backend`, HEAD `3d728ac`,
+clean tree, migration history linear (`cc78d54068bb → d9841015aec7 head`)
+against the dedicated development database `roamlary_dev` only.
+
+#### 9.14.2 Findings and fixes
+
+Plain language: the audit found the auth flow **worked** (no critical
+security hole), but it identified four correctness/robustness gaps, one
+timing side-channel, and several documentation contradictions. Each is
+listed with the fix actually applied.
+
+| # | Finding | Severity | Fix applied |
+|---|---|---|---|
+| 1 | `RegisterRequest`/`LoginRequest` used Pydantic's default (`extra="ignore"`), so a smuggled `password_hash`, `id`, or `firebase_uid` was silently dropped instead of rejected. `UserProfileUpdate` was already strict — register/login were inconsistently lenient. | Medium (spec requires strict schemas) | Added `model_config = ConfigDict(extra="forbid")` to both request schemas → any unknown field is now a **422** |
+| 2 | **Timing side-channel:** login with an *unknown email* skipped Argon2 verification entirely, returning its 401 measurably faster than a wrong-password 401 → response time could reveal whether an account exists. | Low-Medium | Login now always runs one real Argon2 verification; for unknown emails it verifies against a dummy hash (`_DUMMY_PASSWORD_HASH`) so both paths cost the same. The dummy hash is generated once at import (~0.1 s startup). |
+| 3 | Register created the database row **before** the fail-closed secret check ran, so a missing `JWT_SECRET_KEY` could leave a half-created, unusable account. | Low | New public `ensure_auth_configured()` in `security.py`; register now calls it **before any database write**, so 503 happens with no row created. |
+| 4 | `PATCH /users/me` with an empty body (`{}`) still bumped `updated_at`, so the timestamp did not mean "last real change". | Low | `updated_at` is now bumped only when `display_name` actually changed; `{}` is a valid no-op returning the profile unchanged. |
+| 5 | Tests used the **real dev secret** from `.env` — not hermetic, and it exercised the actual signing key. | Low | New autouse fixture in `conftest.py` pins a fixed TEST-ONLY secret for every test (`TEST_JWT_SECRET`); the real `.env` secret is never used by tests. |
+| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. |
+
+#### 9.14.3 New tests added (12)
+
+| Test | Proves |
+|---|---|
+| `test_register_rejects_injected_internal_fields` | `password_hash`/`id`/`firebase_uid` in the register body → **422**, never stored |
+| `test_login_rejects_extra_fields` | strict login schema → unknown fields are **422** |
+| `test_register_race_duplicate_maps_to_409` | simulated concurrent duplicate (stale pre-check + real unique constraint) → **409**, no unhandled 500 |
+| `test_login_unknown_email_still_runs_password_verification` | timing equalization: unknown email still performs one Argon2 verification |
+| `test_token_missing_required_exp_claim_rejected` | correctly signed token without `exp` → **401** (required-claim validation) |
+| `test_token_missing_required_sub_claim_rejected` | correctly signed token without `sub` → **401** |
+| `test_token_with_non_uuid_sub_rejected` | signed token with a non-UUID `sub` → **401** |
+| `test_sub_claim_cannot_be_swapped_to_impersonate` | re-signing another user's `sub` with any key the attacker has → **401**; the victim's real token still works |
+| `test_missing_jwt_secret_blocks_token_issuance` | empty `JWT_SECRET_KEY` → register **and** login both return **503** |
+| `test_missing_jwt_secret_blocks_token_verification` | empty secret → even a once-valid token is refused (**503**) |
+| `test_missing_jwt_secret_does_not_create_account` | fail-closed happens **before** the DB write — no half-created account |
+| `test_health_works_without_jwt_secret` | regression: `/health` stays **200** with auth unconfigured |
+
+Plus profile hardening tests: `test_patch_me_empty_body_is_noop`,
+`test_patch_me_real_change_bumps_updated_at`,
+`test_patch_me_rejects_email_and_firebase_uid`.
+
+#### 9.14.4 Actual test results (2026-10-12, this round)
+
+- **Full suite (SQLite + PostgreSQL integration enabled): `84 passed`** in
+  ~21 s (77 offline + 7 PostgreSQL integration). Zero failures, zero skipped.
+- **Offline only (no `ROAMLARY_TEST_DATABASE_URL`): `77 passed`**, the 7
+  integration tests self-skip.
+- **Lint:** `ruff check app/ tests/` → *All checks passed*.
+- **Format:** `ruff format --check app/ tests/` → *33 files already formatted*.
+- **Live end-to-end (uvicorn, real PostgreSQL):** register → token issued;
+  `GET /users/me` returned the profile with `password_hash` **absent**;
+  `PATCH` updated the name; register with an injected `password_hash` →
+  **422**; `/api/v1/health` returned the exact Phase 1 contract. Throwaway
+  audit user deleted afterwards (dev DB left with 0 users).
+
+#### 9.14.5 Migration & database status (re-verified)
+
+No new migration was needed: `password_hash` already existed from
+`d9841015aec7`. Re-verified against the dedicated dev database
+`roamlary_dev`: `alembic current` → `d9841015aec7 (head)`; the
+`users.password_hash` column is present and nullable (VARCHAR 255); no
+records were dropped or altered. Integration tests again ran only against
+the disposable `roamlary_test` database.
+
+#### 9.14.6 Git state after this round
+
+- HEAD is still `3d728ac` (Phase 3 commit) — **no commits, pushes, merges,
+  resets, or branch changes were made in this audit round**, per the owner's
+  rule. All audit changes sit in the working tree for review (`git diff`).
+- `.env` and `.venv` remain gitignored; the frontend was not touched; a scan
+  of changed files found only documentation placeholders, no real secrets.
+
+#### 9.14.7 Deviations & remaining limitations
+
+Deviations from the original Phase 3 plan: none in scope — this round only
+hardened and corrected what Phase 3 already built. Known limitations are
+unchanged and still real: **this is a local hackathon prototype, not
+production-grade auth** — no refresh tokens, no password reset, no email
+verification, no rate limiting/lockout, no HTTPS, no token revocation/denylist,
+no secret rotation, and no roles/permissions. The dummy-hash timing fix
+equalizes the two failure paths but does not make login constant-time in a
+formal sense. Passing unit/integration tests is **not** a security audit or a
+production-readiness claim.
 
 ## 10. Known limitations (current)
 
@@ -915,17 +1017,19 @@ owner says to commit/push, exactly like Phases 1 and 2 did.
   notifications — those belong to later phases.
 - Dev-grade CORS and configuration only; no HTTPS.
 - Runs only on this laptop, local machine, port 8000.
-- The `backend` branch is pushed to GitHub (`origin/backend`) as of Phase 2
-  (`eb8e709`). Phase 3 changes are still uncommitted in the working tree.
+- The `backend` branch is pushed to GitHub (`origin/backend`) through Phase 3
+  (`3d728ac`). The Phase 3 audit-fix round (§9.14) is uncommitted in the
+  working tree.
 - Database lives in a Docker container; if that container's volume is removed,
   recreate the schema with `alembic upgrade head`.
 - Frontend cannot integrate beyond the health + auth contract until Phase 9.
 
 ## 11. Pending tasks and next steps
 
-1. Owner reviews Phase 3 (this report + `git diff` on `backend`).
-2. Owner decides whether to commit Phase 3 — the backend lead will not commit
-   or push without explicit instruction.
+1. Owner reviews the **Phase 3 audit & fix round** (§9.14 + `git diff` on
+   `backend`).
+2. Owner decides whether to commit the audit-fix round — the backend lead will
+   not commit or push without explicit instruction.
 3. Owner assigns Phase 4 (trusted contacts & safety check-ins).
 4. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
    planning and the `docs/merge-report.md` integration document.
