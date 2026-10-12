@@ -187,3 +187,154 @@ class UserProfile {
         updatedAt: DateTime.parse(json['updated_at'] as String),
       );
 }
+
+/// One verification request from the CALLER'S OWN account — mirrors backend
+/// `VerificationRequestSummary` (Phase 6, second assignment). The only free
+/// text is an optional short note: identity documents are NEVER collected.
+class VerificationRequest {
+  const VerificationRequest({
+    required this.id,
+    required this.status,
+    required this.createdAt,
+    this.reviewedAt,
+    this.reviewNote,
+    this.applicantNote,
+  });
+
+  final String id;
+  final VerificationRequestStatus status;
+  final DateTime createdAt;
+  final DateTime? reviewedAt;
+  final String? reviewNote;
+  final String? applicantNote;
+
+  factory VerificationRequest.fromJson(Map<String, dynamic> json) =>
+      VerificationRequest(
+        id: json['id'] as String,
+        status: VerificationRequestStatus.fromWire(json['status'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+        reviewedAt: json['reviewed_at'] == null
+            ? null
+            : DateTime.parse(json['reviewed_at'] as String),
+        reviewNote: json['review_note'] as String?,
+        applicantNote: json['applicant_note'] as String?,
+      );
+}
+
+/// Owner's queue view of someone's request — mirrors backend
+/// `VerificationRequestReview` (adds who submitted + who reviewed). Only
+/// owner-gated endpoints ever return this shape.
+class VerificationRequestReview {
+  const VerificationRequestReview({
+    required this.id,
+    required this.userId,
+    required this.displayName,
+    required this.status,
+    required this.createdAt,
+    this.reviewedAt,
+    this.reviewedBy,
+    this.reviewNote,
+    this.applicantNote,
+  });
+
+  final String id;
+  final String userId;
+  final String displayName;
+  final VerificationRequestStatus status;
+  final DateTime createdAt;
+  final DateTime? reviewedAt;
+  final String? reviewedBy;
+  final String? reviewNote;
+  final String? applicantNote;
+
+  factory VerificationRequestReview.fromJson(Map<String, dynamic> json) =>
+      VerificationRequestReview(
+        id: json['id'] as String,
+        userId: json['user_id'] as String,
+        displayName: json['display_name'] as String,
+        status: VerificationRequestStatus.fromWire(json['status'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+        reviewedAt: json['reviewed_at'] == null
+            ? null
+            : DateTime.parse(json['reviewed_at'] as String),
+        reviewedBy: json['reviewed_by'] as String?,
+        reviewNote: json['review_note'] as String?,
+        applicantNote: json['applicant_note'] as String?,
+      );
+}
+
+/// The caller's OWN verification picture — mirrors backend
+/// `VerificationStatusResponse`. `role` is the caller's OWN role only.
+class VerificationStatusInfo {
+  const VerificationStatusInfo({
+    required this.verificationStatus,
+    required this.role,
+    required this.socialAccessRequired,
+    this.latestRequest,
+  });
+
+  final VerificationStatus verificationStatus;
+  final UserRole role;
+  final bool socialAccessRequired;
+  final VerificationRequest? latestRequest;
+
+  /// Submitting is only possible from `unverified` or `rejected`
+  /// (mirrors the backend's 409 rules for pending/verified).
+  bool get canSubmitRequest =>
+      verificationStatus == VerificationStatus.unverified ||
+      verificationStatus == VerificationStatus.rejected;
+
+  factory VerificationStatusInfo.fromJson(Map<String, dynamic> json) =>
+      VerificationStatusInfo(
+        verificationStatus:
+            VerificationStatus.fromWire(json['verification_status'] as String),
+        role: UserRole.fromWire(json['role'] as String),
+        socialAccessRequired: json['social_access_required'] as bool,
+        latestRequest: json['latest_request'] == null
+            ? null
+            : VerificationRequest.fromJson(
+                json['latest_request'] as Map<String, dynamic>,
+              ),
+      );
+}
+
+/// Owner-only social-verification policy — mirrors backend `PolicyResponse`.
+class SocialPolicy {
+  const SocialPolicy({
+    required this.key,
+    required this.requiresVerification,
+    this.updatedAt,
+    this.updatedBy,
+  });
+
+  final String key;
+  final bool requiresVerification;
+  final DateTime? updatedAt;
+  final String? updatedBy;
+
+  factory SocialPolicy.fromJson(Map<String, dynamic> json) => SocialPolicy(
+        key: json['key'] as String,
+        requiresVerification: json['requires_verification'] as bool,
+        updatedAt: json['updated_at'] == null
+            ? null
+            : DateTime.parse(json['updated_at'] as String),
+        updatedBy: json['updated_by'] as String?,
+      );
+}
+
+/// Result of the gated social discovery call — mirrors backend
+/// `DiscoveryResponse`. Phase 6 ships an honest empty placeholder.
+class DiscoveryResult {
+  const DiscoveryResult({required this.profiles, required this.message});
+
+  final List<Map<String, dynamic>> profiles;
+  final String message;
+
+  factory DiscoveryResult.fromJson(Map<String, dynamic> json) =>
+      DiscoveryResult(
+        profiles: (json['profiles'] as List<dynamic>? ?? const [])
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(),
+        message: json['message'] as String? ?? '',
+      );
+}

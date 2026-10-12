@@ -69,3 +69,57 @@ enum ReportCategory {
         orElse: () => ReportCategory.other,
       );
 }
+
+/// Account-level identity-verification state — mirrors backend
+/// `app/models/enums.py::VerificationStatus` (Phase 6, second assignment).
+enum VerificationStatus {
+  unverified('unverified', 'Unverified'),
+  pending('pending', 'Pending review'),
+  verified('verified', 'Verified'),
+  rejected('rejected', 'Rejected');
+
+  const VerificationStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static VerificationStatus fromWire(String value) =>
+      VerificationStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => VerificationStatus.unverified,
+      );
+}
+
+/// State of ONE submitted verification request — mirrors backend
+/// `VerificationRequestStatus` (note: `approved` request vs `verified`
+/// account — the differing names are intentional, like the backend).
+enum VerificationRequestStatus {
+  pending('pending', 'Pending'),
+  approved('approved', 'Approved'),
+  rejected('rejected', 'Rejected');
+
+  const VerificationRequestStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static VerificationRequestStatus fromWire(String value) =>
+      VerificationRequestStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => VerificationRequestStatus.pending,
+      );
+}
+
+/// Authorization role — mirrors backend `UserRole`. The server is the only
+/// thing that can grant `owner`; the UI merely displays what it is told.
+enum UserRole {
+  user('user', 'Member'),
+  owner('owner', 'Owner');
+
+  const UserRole(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static UserRole fromWire(String value) => UserRole.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => UserRole.user,
+      );
+}

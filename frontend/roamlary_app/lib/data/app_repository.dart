@@ -8,6 +8,16 @@ class AuthSession {
   final UserProfile profile;
 }
 
+/// Thrown when the identity-verification gate denies social access (the
+/// backend's HTTP 403 for unverified accounts). Both data sources raise
+/// this so the UI renders one gate screen regardless of which is active.
+class SocialGateDeniedException implements Exception {
+  const SocialGateDeniedException();
+
+  @override
+  String toString() => 'Verification is required for social access.';
+}
+
 /// Data-access contract used by the UI.
 ///
 /// The UI only ever talks to this interface, never to a concrete backend, so
@@ -54,6 +64,27 @@ abstract class AppRepository {
     required double latitude,
     required double longitude,
   });
+
+  // Verification & social (Phase 6, second assignment) ----------------------
+  Future<VerificationStatusInfo> verificationStatus();
+  Future<VerificationRequest> submitVerificationRequest({String? note});
+  Future<DiscoveryResult> discovery();
+
+  // Owner-only review + policy (the backend answers 403 for ordinary
+  // accounts on every method below - the UI just surfaces that honestly).
+  Future<List<VerificationRequestReview>> listVerificationRequests({
+    VerificationRequestStatus? status,
+  });
+  Future<VerificationRequestReview> approveVerificationRequest(
+    String id, {
+    String? reviewNote,
+  });
+  Future<VerificationRequestReview> rejectVerificationRequest(
+    String id, {
+    String? reviewNote,
+  });
+  Future<SocialPolicy> getSocialPolicy();
+  Future<SocialPolicy> setSocialPolicy({required bool requiresVerification});
 
   // Health -----------------------------------------------------------------
   Future<bool> health();

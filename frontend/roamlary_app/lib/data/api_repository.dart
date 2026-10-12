@@ -295,6 +295,103 @@ class ApiRepository implements AppRepository {
     return CommunityReport.fromJson(data);
   }
 
+  // Verification & social (Phase 6, second assignment) ----------------------
+  @override
+  Future<VerificationStatusInfo> verificationStatus() async {
+    final data =
+        await _send('GET', '/verification/status') as Map<String, dynamic>;
+    return VerificationStatusInfo.fromJson(data);
+  }
+
+  @override
+  Future<VerificationRequest> submitVerificationRequest({String? note}) async {
+    final data = await _send(
+      'POST',
+      '/verification/requests',
+      body: {'note': ?note},
+    ) as Map<String, dynamic>;
+    return VerificationRequest.fromJson(data);
+  }
+
+  @override
+  Future<DiscoveryResult> discovery() async {
+    try {
+      final data =
+          await _send('GET', '/social/discovery') as Map<String, dynamic>;
+      return DiscoveryResult.fromJson(data);
+    } on ApiException catch (e) {
+      // The gate answers 403 for unverified accounts while the policy
+      // requires verification - translate to the shared gate exception.
+      if (e.statusCode == 403) {
+        throw const SocialGateDeniedException();
+      }
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<VerificationRequestReview>> listVerificationRequests({
+    VerificationRequestStatus? status,
+  }) async {
+    final data = await _send(
+      'GET',
+      '/admin/verification-requests',
+      query: {
+        if (status != null) 'status': status.wire,
+        'offset': '0',
+        'limit': '100',
+      },
+    ) as List<dynamic>;
+    return data
+        .map((e) => VerificationRequestReview.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<VerificationRequestReview> approveVerificationRequest(
+    String id, {
+    String? reviewNote,
+  }) async {
+    final data = await _send(
+      'POST',
+      '/admin/verification-requests/$id/approve',
+      body: {'review_note': ?reviewNote},
+    ) as Map<String, dynamic>;
+    return VerificationRequestReview.fromJson(data);
+  }
+
+  @override
+  Future<VerificationRequestReview> rejectVerificationRequest(
+    String id, {
+    String? reviewNote,
+  }) async {
+    final data = await _send(
+      'POST',
+      '/admin/verification-requests/$id/reject',
+      body: {'review_note': ?reviewNote},
+    ) as Map<String, dynamic>;
+    return VerificationRequestReview.fromJson(data);
+  }
+
+  @override
+  Future<SocialPolicy> getSocialPolicy() async {
+    final data = await _send('GET', '/admin/policy/social-verification')
+        as Map<String, dynamic>;
+    return SocialPolicy.fromJson(data);
+  }
+
+  @override
+  Future<SocialPolicy> setSocialPolicy({
+    required bool requiresVerification,
+  }) async {
+    final data = await _send(
+      'PATCH',
+      '/admin/policy/social-verification',
+      body: {'requires_verification': requiresVerification},
+    ) as Map<String, dynamic>;
+    return SocialPolicy.fromJson(data);
+  }
+
   // Health -----------------------------------------------------------------
   @override
   Future<bool> health() async {

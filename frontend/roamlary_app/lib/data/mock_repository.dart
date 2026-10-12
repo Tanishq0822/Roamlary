@@ -25,6 +25,10 @@ class MockRepository implements AppRepository {
   final List<CheckIn> _checkIns = [];
   final List<SosEvent> _sos = [];
   final List<CommunityReport> _reports = [];
+  final List<VerificationRequestReview> _reviewQueue = [];
+  VerificationStatus _verificationStatus = VerificationStatus.unverified;
+  VerificationRequest? _latestRequest;
+  bool _socialRequiresVerification = true;
 
   UserProfile _profile = UserProfile(
     id: 'u-demo-0001',
@@ -131,6 +135,29 @@ class MockRepository implements AppRepository {
         longitude: 72.8656,
         createdAt: now.subtract(const Duration(days: 2)),
         updatedAt: now.subtract(const Duration(days: 2)),
+      ),
+    ]);
+
+    // Verification queue (Phase 6b) — OTHER applicants only: the demo
+    // account may not review its own request, exactly like the backend.
+    _reviewQueue.addAll([
+      VerificationRequestReview(
+        id: _nextId('ver'),
+        userId: 'u-demo-0002',
+        displayName: 'Ananya Iyer',
+        status: VerificationRequestStatus.pending,
+        createdAt: now.subtract(const Duration(hours: 4)),
+        applicantNote: 'Need social features for a group trip to Leh.',
+      ),
+      VerificationRequestReview(
+        id: _nextId('ver'),
+        userId: 'u-demo-0003',
+        displayName: 'Rahul Verma',
+        status: VerificationRequestStatus.approved,
+        createdAt: now.subtract(const Duration(days: 3)),
+        reviewedAt: now.subtract(const Duration(days: 2)),
+        reviewedBy: _userId,
+        applicantNote: 'Frequent solo traveller — happy to be reviewed.',
       ),
     ]);
   }
@@ -380,6 +407,145 @@ class MockRepository implements AppRepository {
     );
     _reports.insert(0, report);
     return report;
+  }
+
+  // Verification & social (Phase 6, second assignment) ----------------------
+  // The seeded demo account is an OWNER so the moderation UI is explorable
+  // offline; the real backend defaults every account to `user` and only the
+  // server-side CLI can grant `owner`.
+  @override
+  Future<VerificationStatusInfo> verificationStatus() async {
+    await _delay(150);
+    return VerificationStatusInfo(
+      verificationStatus: _verificationStatus,
+      role: UserRole.owner,
+      socialAccessRequired: _socialRequiresVerification,
+      latestRequest: _latestRequest,
+    );
+  }
+
+  @override
+  Future<VerificationRequest> submitVerificationRequest({String? note}) async {
+    await _delay(500);
+    if (_verificationStatus == VerificationStatus.verified) {
+      throw StateError('Account is already verified; no new request is possible.');
+    }
+    if (_verificationStatus == VerificationStatus.pending) {
+      throw StateError('A verification request is already under review.');
+    }
+    final now = DateTime.now().toUtc();
+    final request = VerificationRequest(
+      id: _nextId('ver'),
+      status: VerificationRequestStatus.pending,
+      createdAt: now,
+      applicantNote: _blankToNull(note),
+    );
+    _latestRequest = request;
+    _verificationStatus = VerificationStatus.pending;
+    return request;
+  }
+
+  @override
+  Future<DiscoveryResult> discovery() async {
+    await _delay(350);
+    if (_socialRequiresVerification &&
+        _verificationStatus != VerificationStatus.verified) {
+      throw const SocialGateDeniedException();
+    }
+    return const DiscoveryResult(
+      profiles: [],
+      message: 'Travel-buddy discovery is not implemented yet (planned for '
+          'Phase 7+). This screen exists to demonstrate the identity-'
+          'verification gate.',
+    );
+  }
+
+  @override
+  Future<List<VerificationRequestReview>> listVerificationRequests({
+    VerificationRequestStatus? status,
+  }) async {
+    await _delay();
+    var items = List<VerificationRequestReview>.from(_reviewQueue);
+    if (status != null) {
+      items = items.where((r) => r.status == status).toList();
+    }
+    // Oldest submitted first, like the backend's FIFO queue.
+    items.sort((a, b) => a.createdAt.compareTo(b.createdAt));
+    return List.unmodifiable(items);
+  }
+
+  @override
+  Future<VerificationRequestReview> approveVerificationRequest(
+    String id, {
+    String? reviewNote,
+  }) =>
+      _review(id, approve: true, reviewNote: reviewNote);
+
+  @override
+  Future<VerificationRequestReview> rejectVerificationRequest(
+    String id, {
+    String? reviewNote,
+  }) =>
+      _review(id, approve: false, reviewNote: reviewNote);
+
+  Future<VerificationRequestReview> _review(
+    String id, {
+    required bool approve,
+    required String? reviewNote,
+  }) async {
+    await _delay(400);
+    final index = _reviewQueue.indexWhere((r) => r.id == id);
+    if (index == -1) {
+      throw StateError('Verification request not found');
+    }
+    final current = _reviewQueue[index];
+    if (current.userId == _userId) {
+      // Mirror the backend: self-review is refused, owner included.
+      throw StateError('You cannot review your own verification request.');
+    }
+    if (current.status != VerificationRequestStatus.pending) {
+      throw StateError('Only pending requests can be reviewed.');
+    }
+    final updated = VerificationRequestReview(
+      id: current.id,
+      userId: current.userId,
+      displayName: current.displayName,
+      status: approve
+          ? VerificationRequestStatus.approved
+          : VerificationRequestStatus.rejected,
+      createdAt: current.createdAt,
+      reviewedAt: DateTime.now().toUtc(),
+      reviewedBy: _userId,
+      reviewNote: _blankToNull(reviewNote),
+      applicantNote: current.applicantNote,
+    );
+    _reviewQueue[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<SocialPolicy> getSocialPolicy() async {
+    await _delay(150);
+    return SocialPolicy(
+      key: 'social_requires_verification',
+      requiresVerification: _socialRequiresVerification,
+      updatedAt: DateTime.now().toUtc().subtract(const Duration(hours: 20)),
+      updatedBy: _userId,
+    );
+  }
+
+  @override
+  Future<SocialPolicy> setSocialPolicy({
+    required bool requiresVerification,
+  }) async {
+    await _delay(400);
+    _socialRequiresVerification = requiresVerification;
+    return SocialPolicy(
+      key: 'social_requires_verification',
+      requiresVerification: requiresVerification,
+      updatedAt: DateTime.now().toUtc(),
+      updatedBy: _userId,
+    );
   }
 
   // Health -----------------------------------------------------------------
