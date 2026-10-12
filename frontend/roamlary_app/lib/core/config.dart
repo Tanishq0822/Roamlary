@@ -9,7 +9,7 @@ class AppConfig {
 
   /// When true the UI is backed by [MockRepository] and never opens a socket.
   /// Flip to false to talk to the real backend.
-  static const bool useMocks = true;
+  static const bool useMocks = false;
 
   /// Base URL of the FastAPI backend, including the version prefix.
   ///
@@ -18,7 +18,7 @@ class AppConfig {
   ///
   /// From the Android emulator the host machine is reached via `10.0.2.2`, not
   /// `127.0.0.1`. From a physical device you must use your machine's LAN IP.
-  static const String apiBaseUrl = 'http://10.0.2.2:8000/api/v1';
+  static const String apiBaseUrl = 'http://127.0.0.1:8000/api/v1';
 
   /// Name shown on the splash / app bar.
   static const String appName = 'Roamlary';
