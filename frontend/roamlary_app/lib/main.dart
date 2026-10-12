@@ -39,7 +39,9 @@ class RoamlaryApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.system,
+        // Owner-directed palette (white + light green + light purple) is the
+        // light theme - force it so the requested look always shows.
+        themeMode: ThemeMode.light,
         home: const LoginScreen(),
       ),
     );
