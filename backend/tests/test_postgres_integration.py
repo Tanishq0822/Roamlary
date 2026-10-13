@@ -32,6 +32,7 @@ from app.models.enums import CheckInStatus
 from tests.conftest import (
     insert_raw_phase8_rows,
     insert_raw_phase912_rows,
+    insert_raw_phase1415_rows,
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
@@ -1027,7 +1028,7 @@ def test_pg_phase7_downgrade_upgrade_roundtrip(pg_engine) -> None:
     )
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
 
 
 # ----------------------- Phase 8 chat/block/session surface on PostgreSQL
@@ -1203,11 +1204,11 @@ def test_pg_phase8_downgrade_refuses_when_phase8_data_exists(pg_engine) -> None:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
         body = conn.execute(sa.text("SELECT body FROM messages")).scalar_one()
     # PostgreSQL runs the whole downgrade command in ONE transaction, so
-    # the refusal rolls back the already-passed Phases 9-12 step too and
-    # the version stays at head (on SQLite each step commits separately,
-    # so the version rests at 7f3a9c1e5b42 there - same refusal, same
+    # the refusal rolls back the already-passed later steps too and the
+    # version stays at head (on SQLite each step commits separately, so
+    # the version rests at 7f3a9c1e5b42 there - same refusal, same
     # intact data, different stamp).
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
     assert body == "hello"
 
 
@@ -1244,7 +1245,7 @@ def test_pg_phase8_downgrade_upgrade_roundtrip(pg_engine) -> None:
     )
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
 
 
 # ----------------------- Phases 9-12 surface on PostgreSQL
@@ -1397,7 +1398,10 @@ def test_pg_phases912_downgrade_refuses_when_data_exists(pg_engine) -> None:
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
         status_value = conn.execute(sa.text("SELECT status FROM community_reports")).scalar_one()
-    assert version == "b8e2f4a1c6d9"
+    # Same single-transaction rollback as the Phase 8 guard above: the
+    # refusal unwinds the passed Phases 14-15 step, so the version stays
+    # at head with all data intact.
+    assert version == "c4d9e2f7a1b3"
     assert status_value == "resolved"
 
 
@@ -1442,4 +1446,149 @@ def test_pg_phases912_downgrade_upgrade_roundtrip(pg_engine) -> None:
     } <= set(inspector.get_table_names())
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "c4d9e2f7a1b3"
+
+
+# ----------------------- Phases 14-15 billing/safety surface on PostgreSQL
+
+
+def test_phases1415_payment_keys_unique_on_pg(pg_engine) -> None:
+    """Duplicate idempotency keys and provider references fail at the
+    database on PostgreSQL (no double charges, no double webhooks)."""
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Pay', now(), now())"
+            ),
+            {"id": uid},
+        )
+        base = (
+            "INSERT INTO post_payments (id, user_id, category, amount_paise, currency, status, "
+            "provider, idempotency_key, attempts, created_at, updated_at) "
+            "VALUES (:pid, :uid, 'meetup', 1000, 'INR', 'pending', 'mock', :key, 0, now(), now())"
+        )
+        conn.execute(sa.text(base), {"pid": uuid.uuid4(), "uid": uid, "key": "dup-key"})
+        with pytest.raises(IntegrityError):
+            conn.execute(sa.text(base), {"pid": uuid.uuid4(), "uid": uid, "key": "dup-key"})
+        conn.rollback()
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Pay', now(), now())"
+            ),
+            {"id": uid},
+        )
+        base = (
+            "INSERT INTO post_payments (id, user_id, category, amount_paise, currency, status, "
+            "provider, provider_reference, idempotency_key, attempts, created_at, updated_at) "
+            "VALUES (:pid, :uid, 'meetup', 1000, 'INR', 'succeeded', 'mock', 'ref-1', :key, "
+            "1, now(), now())"
+        )
+        conn.execute(sa.text(base), {"pid": uuid.uuid4(), "uid": uid, "key": "k1"})
+        with pytest.raises(IntegrityError):
+            conn.execute(sa.text(base), {"pid": uuid.uuid4(), "uid": uid, "key": "k2"})
+        conn.rollback()
+
+
+def test_phases1415_free_counter_defaults_zero_on_pg(pg_engine) -> None:
+    """users.free_posts_used is NOT NULL defaulting to 0 on PostgreSQL."""
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Free', now(), now())"
+            ),
+            {"id": uid},
+        )
+        used = conn.execute(
+            sa.text("SELECT free_posts_used FROM users WHERE id = :id"), {"id": uid}
+        ).scalar_one()
+        assert used == 0
+        conn.rollback()
+
+
+def test_phases1415_consent_decision_check_on_pg(pg_engine) -> None:
+    """Out-of-set consent decisions fail at the database on PostgreSQL."""
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Consent', now(), now())"
+            ),
+            {"id": uid},
+        )
+        with pytest.raises(IntegrityError):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO safety_consents (id, user_id, subject_type, subject_id, "
+                    "decision, disclosure_version, created_at, updated_at) "
+                    "VALUES (:cid, :uid, 'meetup', :uid, 'maybe', '2026-10-15.v1', now(), now())"
+                ),
+                {"cid": uuid.uuid4(), "uid": uid},
+            )
+        conn.rollback()
+
+
+def test_pg_phases1415_downgrade_refuses_when_data_exists(pg_engine) -> None:
+    """DATA-DEPENDENT DOWNGRADE on real PostgreSQL: payment/consent rows
+    make the rollback REFUSE cleanly."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_phase1415_rows(pg_engine)
+
+    downgrade = _run_alembic_on_pg(["downgrade", "b8e2f4a1c6d9"])
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while Phases 14-15 data exists, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(pg_engine)
+    assert {"post_payments", "safety_consents"} <= set(inspector.get_table_names())
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(sa.text("SELECT status FROM post_payments")).scalar_one()
+    assert version == "c4d9e2f7a1b3"
+    assert status_value == "succeeded"
+
+
+def test_pg_phases1415_downgrade_upgrade_roundtrip(pg_engine) -> None:
+    """Normal path on REAL PostgreSQL: clean state downgrades (tables +
+    counter removed); upgrading restores everything."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_checkin(pg_engine, "pending")  # unrelated row survives
+
+    downgrade = _run_alembic_on_pg(["downgrade", "b8e2f4a1c6d9"])
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(pg_engine)
+    names = set(inspector.get_table_names())
+    assert "post_payments" not in names
+    assert "safety_consents" not in names
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        user_cols = {c["name"] for c in inspector.get_columns("users")}
     assert version == "b8e2f4a1c6d9"
+    assert "free_posts_used" not in user_cols
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(pg_engine)
+    assert {"post_payments", "safety_consents"} <= set(inspector.get_table_names())
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "c4d9e2f7a1b3"

@@ -14,6 +14,7 @@ from app.models.conversation import Conversation
 from app.models.enums import (
     BuddyRequestStatus,
     CheckInStatus,
+    ConsentDecision,
     ConversationStatus,
     InvitationStatus,
     MeetupCategory,
@@ -23,6 +24,7 @@ from app.models.enums import (
     MembershipStatus,
     NotificationStatus,
     ParticipationPolicy,
+    PaymentStatus,
     PlanVisibility,
     ReportStatus,
     SosStatus,
@@ -38,6 +40,8 @@ from app.models.meetup_announcement import MeetupAnnouncement
 from app.models.meetup_membership import MeetupMembership
 from app.models.message import ChatMessage
 from app.models.notification import Notification
+from app.models.post_payment import POST_CATEGORIES, PostPayment
+from app.models.safety_consent import SafetyConsent
 from app.models.setting_change import SettingChange
 from app.models.sos_event import SosEvent
 from app.models.travel_partner_request import TravelPartnerRequest
@@ -56,6 +60,7 @@ __all__ = [
     "CheckIn",
     "CheckInStatus",
     "CommunityReport",
+    "ConsentDecision",
     "Conversation",
     "ConversationStatus",
     "EventInvitation",
@@ -72,8 +77,12 @@ __all__ = [
     "Notification",
     "NotificationStatus",
     "ParticipationPolicy",
+    "PaymentStatus",
     "PlanVisibility",
+    "PostPayment",
+    "POST_CATEGORIES",
     "ReportStatus",
+    "SafetyConsent",
     "SettingChange",
     "SosEvent",
     "SosStatus",

@@ -47,6 +47,12 @@ from app.models.conversation import Conversation
 from app.models.enums import ConversationStatus
 from app.models.message import ChatMessage
 from app.models.user import User
+from app.services.billing import (
+    PaymentRequiredError,
+    authorize_post,
+    consume_payment,
+    raise_payment_required,
+)
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
@@ -218,12 +224,35 @@ def send_message_request(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="You already have an accepted conversation with this user.",
             )
+
+    # Phase 14 pay-per-post gate (free grant consumed atomically, a
+    # SUCCEEDED payment verified, or 402 with the exact charge). Placed
+    # AFTER the duplicate checks above (like travel requests): duplicate
+    # asks stay 409 whether or not the asker could pay, and invalid asks
+    # never burn funding. NOTHING below publishes unpaid.
+    try:
+        funding = authorize_post(
+            db,
+            user=current_user,
+            category="chat_request",
+            payment_id=body.payment_id,
+            idempotency_key=body.idempotency_key,
+        )
+    except PaymentRequiredError as exc:
+        # Persist ONLY the PENDING payment row (the flush added nothing
+        # else at this point); the ask itself is never created here.
+        db.commit()
+        raise_payment_required(exc)
+
+    if existing is not None:
         # Rejected/cancelled: an explicit new ask reopens THIS row.
         existing.status = ConversationStatus.PENDING
         existing.requested_by = current_user.id
         existing.responded_at = None
         db.commit()
         db.refresh(existing)
+        consume_payment(db, payment=funding, subject_type="conversation", subject_id=existing.id)
+        db.commit()
         return _conversation_read(_load_conversation(db, existing.id), current_user.id)
 
     row = Conversation(
@@ -244,6 +273,11 @@ def send_message_request(
             detail="A message request is already pending between you two.",
         ) from exc
     db.refresh(row)
+    # Link the funding authorized above (free grant or the SUCCEEDED
+    # payment the caller supplied) to THIS conversation, exactly once:
+    # a succeeded payment can never fund a second ask.
+    consume_payment(db, payment=funding, subject_type="conversation", subject_id=row.id)
+    db.commit()
     return _conversation_read(_load_conversation(db, row.id), current_user.id)
 
 

@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     admin,
     ai,
     auth,
+    billing,
     blocks,
     chat,
     check_ins,
@@ -14,6 +15,7 @@ from app.api.v1.endpoints import (
     meetups,
     notifications,
     parties,
+    safety,
     social,
     sos_events,
     travel_buddies,
@@ -28,6 +30,9 @@ from app.api.v1.endpoints import (
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(auth.router)
+api_router.include_router(billing.router)
+api_router.include_router(admin.router)
+api_router.include_router(billing.admin_router)
 api_router.include_router(users.router)
 api_router.include_router(blocks.router)
 api_router.include_router(chat.router)
@@ -35,6 +40,7 @@ api_router.include_router(meetups.router)
 api_router.include_router(parties.router)
 api_router.include_router(parties.invitations_router)
 api_router.include_router(notifications.router)
+api_router.include_router(safety.router)
 api_router.include_router(trip_shares.router)
 api_router.include_router(ai.router)
 api_router.include_router(trusted_contacts.router)
@@ -42,7 +48,6 @@ api_router.include_router(check_ins.router)
 api_router.include_router(sos_events.router)
 api_router.include_router(community_reports.router)
 api_router.include_router(verification.router)
-api_router.include_router(admin.router)
 api_router.include_router(social.router)
 api_router.include_router(travel_profile.router)
 api_router.include_router(travel_plans.router)

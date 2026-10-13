@@ -359,3 +359,41 @@ class NotificationStatus(StrEnum):
     FAILED = "failed"
     UNAVAILABLE = "unavailable"
     UNKNOWN = "unknown"
+
+
+class PaymentStatus(StrEnum):
+    """Lifecycle of a pay-per-post payment (Phase 14).
+
+        pending   -> created with the post attempt; awaiting provider
+                     confirmation (or a mock test payment)
+        succeeded -> provider (or mock) confirmed the charge; exactly one
+                     post may be published against it (consumed once)
+        failed    -> provider declined / bad token; never unlocks
+                     publishing (a new payment may be attempted)
+        cancelled -> payer withdrew the pending payment (terminal)
+        refunded  -> owner-recorded refund of a succeeded payment
+                     (record-only without a real provider - documented)
+
+    Amounts are integer paise (INR 10 = 1000). The amount is ALWAYS
+    server-set from the live billing policy - no request body carries
+    one, so clients cannot tamper with it; and no client route can mark
+    a payment successful (only provider verification does that).
+    """
+
+    PENDING = "pending"
+    SUCCEEDED = "succeeded"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+    REFUNDED = "refunded"
+
+
+class ConsentDecision(StrEnum):
+    """Accepted vs declined safety acknowledgement (Phase 15).
+
+    Both are RECORDED rows (declining is not the absence of a row - it
+    is an explicit, timestamped acknowledgement of the risk disclosure
+    with the optional features left off).
+    """
+
+    ACCEPTED = "accepted"
+    DECLINED = "declined"

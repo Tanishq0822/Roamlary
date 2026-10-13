@@ -6,6 +6,7 @@ from sqlalchemy import create_engine, inspect
 
 from app.db.base_class import Base
 from app.models import (
+    POST_CATEGORIES,
     AppSetting,
     AuthSession,
     ChatMessage,
@@ -18,6 +19,8 @@ from app.models import (
     MeetupAnnouncement,
     MeetupMembership,
     Notification,
+    PostPayment,
+    SafetyConsent,
     SettingChange,
     SosEvent,
     TravelPartnerRequest,
@@ -31,6 +34,7 @@ from app.models import (
 from app.models.enums import (
     BuddyRequestStatus,
     CheckInStatus,
+    ConsentDecision,
     ConversationStatus,
     InvitationStatus,
     MeetupCategory,
@@ -40,6 +44,7 @@ from app.models.enums import (
     MembershipStatus,
     NotificationStatus,
     ParticipationPolicy,
+    PaymentStatus,
     PlanVisibility,
     ReportCategory,
     ReportStatus,
@@ -72,6 +77,8 @@ EXPECTED_TABLES = {
     "meetup_announcements",
     "notifications",
     "trip_shares",
+    "post_payments",
+    "safety_consents",
 }
 
 
@@ -581,3 +588,64 @@ def test_event_enums_match_the_contract() -> None:
         "unavailable",
         "unknown",
     }
+
+
+# ----------------------- Phases 14-15 billing/safety table metadata
+
+
+def test_billing_safety_tables_map_to_expected_classes() -> None:
+    assert PostPayment.__tablename__ == "post_payments"
+    assert SafetyConsent.__tablename__ == "safety_consents"
+
+
+def test_billing_safety_foreign_keys_reference_parent_tables() -> None:
+    """Payments and consents reference users (RESTRICT)."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    for table_name in ("post_payments", "safety_consents"):
+        parents = {fk["referred_table"] for fk in inspector.get_foreign_keys(table_name)}
+        assert parents == {"users"}, table_name
+    engine.dispose()
+
+
+def test_billing_safety_check_constraints_exist() -> None:
+    """Payment status + non-negative amount CHECKs; consent decision CHECK."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    pay_names = {c["name"] for c in inspector.get_check_constraints("post_payments")}
+    assert "ck_post_payments_status_valid" in pay_names
+    assert "ck_post_payments_amount_non_negative" in pay_names
+    consent_names = {c["name"] for c in inspector.get_check_constraints("safety_consents")}
+    assert "ck_safety_consents_decision_valid" in consent_names
+    engine.dispose()
+
+
+def test_billing_uniqueness_structures_exist() -> None:
+    """One row per idempotency key and per provider reference
+    (duplicate charges/callbacks lose at the database)."""
+    payments = Base.metadata.tables["post_payments"]
+    names = {getattr(c, "name", None) for c in payments.constraints}
+    assert "uq_post_payments_idempotency_key" in names
+    assert "uq_post_payments_provider_reference" in names
+
+
+def test_users_free_posts_used_column() -> None:
+    """Free-post counter: NOT NULL integer defaulting to 0."""
+    column = Base.metadata.tables["users"].columns["free_posts_used"]
+    assert column.nullable is False
+    assert column.default.arg == 0
+
+
+def test_billing_safety_enums_match_the_contract() -> None:
+    """Phase 14-15 closed sets hold exactly the documented values."""
+    assert {s.value for s in PaymentStatus} == {
+        "pending",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "refunded",
+    }
+    assert {s.value for s in ConsentDecision} == {"accepted", "declined"}
+    assert POST_CATEGORIES == {"travel_partner", "chat_request", "meetup", "house_party"}

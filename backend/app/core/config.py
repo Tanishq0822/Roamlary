@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     ai_api_key: str = ""
     ai_timeout_seconds: int = 20
 
+    # Pay-per-post provider (Phase 14). `none` (default) means no payment
+    # provider is configured: paid publishing stays explicitly
+    # pending/unavailable, never faked. `mock` is reserved for tests
+    # (deterministic, no network). Keys stay server-side (never in
+    # responses, logs, or the repo).
+    billing_provider: str = "none"
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def split_cors_origins(cls, value: object) -> object:

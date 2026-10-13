@@ -237,16 +237,24 @@ def test_send_with_plan_context_validates_ownership_and_eligibility(
 
 def test_send_rate_limited_after_burst(api_client, sqlite_engine) -> None:
     from app.core.rate_limit import reset_rate_limits
+    from tests.conftest import prefund_payment
 
     reset_rate_limits()
     a_email, a_h, _, _, _ = _pair(api_client, sqlite_engine)
+    # The first send is free; sends 2..30 are funded with prefunded
+    # SUCCEEDED payments (the billing handshake itself is proven in
+    # test_billing.py - here the travel-request limiter is under test).
+    funded = [prefund_payment(sqlite_engine, a_email, "travel_partner") for _ in range(29)]
     # Each burst recipient must be eligible (discoverable + plan), or the
     # send would 404 before ever reaching the rate limiter.
     allowed = 0
     blocked = None
     for i in range(32):
         rid, _, _ = _seed_recipient(api_client, sqlite_engine, tag=f"burst{i}")
-        resp = api_client.post(REQUESTS_PATH, json={"recipient_id": rid}, headers=a_h)
+        body = {"recipient_id": rid}
+        if i > 0 and i - 1 < len(funded):
+            body["payment_id"] = funded[i - 1]
+        resp = api_client.post(REQUESTS_PATH, json=body, headers=a_h)
         if resp.status_code == 201:
             allowed += 1
         elif resp.status_code == 429:
@@ -355,10 +363,22 @@ def test_terminal_states_refuse_further_moves(api_client, sqlite_engine) -> None
 
 def test_resend_after_rejection_is_allowed(api_client, sqlite_engine) -> None:
     """A rejected request does not permanently block a new attempt."""
+    from tests.conftest import prefund_payment
+
     sent, a_h, b_h = _pending_request(api_client, sqlite_engine)
     assert api_client.post(f"{REQUESTS_PATH}/{sent['id']}/reject", headers=b_h).status_code == 200
     b_id = sent["recipient_id"]
-    resend = api_client.post(REQUESTS_PATH, json={"recipient_id": b_id}, headers=a_h)
+    # The first send consumed the free post: fund the resend (the
+    # resend-allowed rule is under test, not billing).
+    db = _session(sqlite_engine)
+    try:
+        asker = db.scalar(select(User).where(User.id == uuid.UUID(sent["requester_id"])))
+        payment_id = prefund_payment(sqlite_engine, asker.email, "travel_partner")
+    finally:
+        db.close()
+    resend = api_client.post(
+        REQUESTS_PATH, json={"recipient_id": b_id, "payment_id": payment_id}, headers=a_h
+    )
     assert resend.status_code == 201
 
 

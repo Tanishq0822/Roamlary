@@ -16,7 +16,7 @@ import uuid
 import pytest
 import sqlalchemy as sa
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -477,3 +477,80 @@ def insert_raw_phase912_rows(engine) -> None:
             ),
             {"rid": rep_id, "uid": uid_a},
         )
+
+
+def insert_raw_phase1415_rows(engine) -> None:
+    """Insert one user + a payment row and a consent row with RAW SQL.
+
+    Same purpose as the other raw helpers: the Phases 14-15 downgrade
+    guard must be tested against rows no matter who wrote them. Works
+    on a schema at revision c4d9e2f7a1b3. Only NOT NULL columns are
+    written; everything else takes column defaults.
+    """
+    if engine.dialect.name == "postgresql":
+        uid, pay_id, consent_id = (uuid.uuid4() for _ in range(3))
+    else:
+        uid, pay_id, consent_id = (str(uuid.uuid4()) for _ in range(3))
+    with engine.begin() as conn:
+        conn.execute(
+            sa.text(
+                "INSERT INTO users "
+                "(id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'Migration Probe', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"id": uid},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO post_payments "
+                "(id, user_id, category, amount_paise, currency, status, provider, "
+                "idempotency_key, attempts, created_at, updated_at) "
+                "VALUES (:pid, :uid, 'meetup', 1000, 'INR', 'succeeded', 'mock', "
+                "'probe-key', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"pid": pay_id, "uid": uid},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO safety_consents "
+                "(id, user_id, subject_type, subject_id, decision, disclosure_version, "
+                "created_at, updated_at) "
+                "VALUES (:cid, :uid, 'meetup', :uid, 'declined', '2026-10-15.v1', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"cid": consent_id, "uid": uid},
+        )
+
+
+def prefund_payment(engine, email: str, category: str) -> str:
+    """Insert a SUCCEEDED mock payment row for a user; returns its id.
+
+    Test-only shortcut for suites that predate pay-per-post: the
+    billing handshake itself is proven in test_billing.py, so older
+    multi-create tests fund their 2nd+ posts directly instead of
+    re-testing the 402/pay/resubmit loop. The row is real (consumed
+    atomically by the endpoint like any payment).
+    """
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models import PostPayment, User
+
+    factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+    db = factory()
+    try:
+        user = db.scalar(select(User).where(User.email == email))
+        row = PostPayment(
+            user_id=user.id,
+            category=category,
+            amount_paise=1000,
+            currency="INR",
+            status="succeeded",
+            provider="mock",
+            provider_reference=f"prefund-{uuid.uuid4().hex}",
+            idempotency_key=f"prefund-{uuid.uuid4().hex}",
+        )
+        db.add(row)
+        db.commit()
+        return str(row.id)
+    finally:
+        db.close()

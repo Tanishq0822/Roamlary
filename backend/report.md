@@ -93,7 +93,7 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-12 | **Phase 6 (second assignment)** | Owner assigned a second Phase 6 brief (identity verification & social access foundation) → `users.verification_status` + `users.role` columns, `identity_verifications` request history, `app_settings` policy row + append-only `setting_changes` audit (fail-closed `get_policy`), `require_owner` / `require_verified_user` server-side gates, 7 new routes (verification status/submit, owner queue approve/reject, owner policy read/patch with 5/hour rate limit, gated social discovery placeholder), server CLI `python -m app.cli make-owner <email>`, migration `3e285edb0896` (downgrade guarded by data), 52 new tests; live E2E 54/54 + live guard-refusal + live downgrade/upgrade roundtrip on `roamlary_dev`, README + this report + `PHASE6_IDENTITY_CHANGES.md` | *was* uncommitted at the time; owner later authorized → committed as `30977c0`, pushed to `origin/backend` |
 | 2026-10-13 | **Phase 7** | Owner assigned Phase 7 (travel buddies & social discovery) → audit-first (§14.1, recorded before any code); 3 new tables (`travel_profiles`, `travel_plans`, `travel_partner_requests`) + 3 new VARCHAR-backed CHECK enums + migration `426dcef31e27` (downgrade data-guarded); pure-function matching engine (`app/core/matching.py`, documented weights summing to 100, honesty note in every response) + discovery service (`app/services/discovery.py`: indexed SQL prefilter, self/partner/pending exclusion, verification join, grace-widened date window as a documented superset, Python precise overlap classification, dedupe, deterministic ranking, offset/limit pagination, `MAX_CANDIDATE_ROWS=500`); 12 new routes (travel-profile CRUD, travel-plan CRUD, `/travel-buddies/discover`, `/travel-buddies/{user_id}`, request send/list/get/accept/reject/cancel) reusing the Phase 6b `require_verified_user` gate unchanged for outward-facing actions; `/social/discovery` reimplemented over `broad_feed()` keeping the `{profiles, message}` contract; in-process 30/hour send rate limit; 94 new tests (88 offline: 79 in four new files + 6 model-contract + 3 SQLite migration; + 6 real-PostgreSQL integration); live E2E 24/24 on `roamlary_dev` + live `alembic upgrade head`; README + this report + `PHASE7_TRAVEL_BUDDIES.md` | *was* uncommitted at the time; owner later authorized → committed as `2b52ec2`, pushed to `origin/backend` |
 | 2026-10-14 | **Phase 8** | Owner assigned Phase 8 (stranger chat, blocking & account security) → focused audit-first (§17.1, Phase 7 verified present as commit `2b52ec2`); 4 new tables (`user_blocks`, `conversations`, `messages`, `auth_sessions`) + `ConversationStatus` enum + `users.token_version` + travel canonical-pair columns/index (migration `7f3a9c1e5b42`, downgrade data-guarded; closes the Phase 7 cross-direction race at the database); pure `canonical_pair` helper + shared `blocked_user_ids` rule; JWT `sid`/`tv` claims with per-request revocation enforcement; every login mints a session row; 16 chat routes (request lifecycle, conversations, paginated history, text-only send, sender-only soft delete) with NO auto-chat from travel partners; 3 block routes on plain auth (safety tool); 5 session routes (list/logout/revoke/revoke-others/revoke-all); blocks integrated into discovery, public profiles, travel send/accept; in-process 30/hour ask + 60/hour message limiters (shared mechanism, documented caveat); 67 new tests (60 offline + 7 real-PostgreSQL); live E2E 29/29 on `roamlary_dev`; README + this report + `PHASE8_CHAT_BLOCKS_SESSIONS.md` | *was* uncommitted at the time; owner later authorized → committed as `a0123dc`, pushed to `origin/backend` |
-| 2026-10-15 | **Phases 9–13 (combined)** | Owner assigned one coordinated implementation (meetups, house parties, report moderation, notifications/trip-sharing/SOS, AI companion) → focused audit-first (§18.1; Phase 8 verified present as commit `a0123dc`, no messaging/event/notification/AI code existed); shared event foundation (`meetups` + `meetup_memberships` + `event_invitations` + `meetup_announcements`), owner-only report moderation with `resolved` state + audit stamps, honest notification service (in-app delivered, external unavailable, idempotent retries), trip shares for accepted partners with server-side expiry/revocation, SOS acknowledge + per-contact attempt tracking, read-time overdue check-ins, mock/unavailable AI provider abstraction; migration `b8e2f4a1c6d9` (downgrade data-guarded); 35 new API paths (84 OpenAPI paths total); 66 new tests (472 passed total: 430 offline + 42 PostgreSQL); live E2E 30/30 on `roamlary_dev`; README + this report + `PHASE9_13_REVIEW.md` | **uncommitted working-tree changes** (owner rule: no commits during the phase) → awaiting owner review |
+| 2026-10-15 | **Phases 9–13 (combined)** | Owner assigned one coordinated implementation (meetups, house parties, report moderation, notifications/trip-sharing/SOS, AI companion) → focused audit-first (§18.1; Phase 8 verified present as commit `a0123dc`, no messaging/event/notification/AI code existed); shared event foundation (`meetups` + `meetup_memberships` + `event_invitations` + `meetup_announcements`), owner-only report moderation with `resolved` state + audit stamps, honest notification service (in-app delivered, external unavailable, idempotent retries), trip shares for accepted partners with server-side expiry/revocation, SOS acknowledge + per-contact attempt tracking, read-time overdue check-ins, mock/unavailable AI provider abstraction; migration `b8e2f4a1c6d9` (downgrade data-guarded); 35 new API paths (84 OpenAPI paths total); 66 new tests (508 passed total: 461 offline + 47 PostgreSQL); live E2E 30/30 on `roamlary_dev`; README + this report + `PHASE9_13_REVIEW.md` | **uncommitted working-tree changes** (owner rule: no commits during the phase) → awaiting owner review |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
@@ -3352,8 +3352,8 @@ carries the Phase 7 change set as 13 modified + 14 untracked files
    (19 modified + 15 untracked files, all under `backend/`.
    `frontend/` has **zero** changes.)
 9. ⏳ **Awaiting owner review (2026-10-15):** Phases 9–13 (§18 +
-   `PHASE9_13_REVIEW.md` + test results: **472 passed, 0 skipped** —
-   430 offline + 42 real-PostgreSQL; live E2E 30/30 on `roamlary_dev`)
+   `PHASE9_13_REVIEW.md` + test results: **508 passed, 0 skipped** —
+   461 offline + 47 real-PostgreSQL; live E2E 30/30 on `roamlary_dev`)
    is ready for review; the change set stays **uncommitted** until the
    owner approves (owner rule: no commits during a phase). Exact
    `git status --short` output (branch `backend`, HEAD `a0123dc` =
@@ -4088,6 +4088,175 @@ committed and pushed to `origin/backend` (verified HEAD = remote, tree
 clean); `main` and `frontend/` untouched throughout. The commit hash is
 recorded in the §16 settled annotation that follows the push, following
 the same pattern as items 6–8.
+
+---
+
+## 19. Monetization & meeting-safety record (supplement to §18)
+
+### 19.1 Scope note
+
+The combined assignment's §§14–16 add two cross-cutting requirements
+onto Phases 9–13: pay-per-post monetization (travel-partner requests,
+chat asks, meetup and party creates) and a consent-based meeting/trip
+safety workflow. They are recorded here — not as new phase numbers
+(the roadmap proposals at §§3.14–16 stand unchanged) — because they
+reuse the Phases 7–13 surfaces rather than creating new ones.
+
+### 19.2 Chargeable categories
+
+Exactly four, closed set (`POST_CATEGORIES`, validated server-side):
+`travel_partner` (POST /travel-buddies/requests), `chat_request`
+(POST /chat/requests), `meetup` (POST /meetups), `house_party`
+(POST /parties). Ordinary chat messages, edits, accepts/rejects,
+invitations (host action on an existing event), retries, and reads are
+never posts and never create charges (proven: chat-message test shows
+3 messages → 1 zero-amount row).
+
+### 19.3 First-free entitlement, price, concurrency
+
+One free qualifying post per account ACROSS all categories (combined,
+not per-category — proven by cross-category test); then **₹10 =
+1000 paise, INR**, both configurable at runtime via `app_settings`
+keys `post_price_paise` / `free_posts_per_account` (owner-only PATCH
+/admin/policy/billing, validated non-negative integers, audited per
+key like the social policy). The free grant is consumed by conditional
+UPDATE (`free_posts_used < limit` in the WHERE clause) inside the
+post-creation transaction: concurrent first-posts cannot both win
+(proven: double-consume returns True then False), invalid requests
+never burn grants (gate runs after all other validation; failures roll
+back), and consumed grants are NEVER restored by deleting/rejecting/
+cancelling/moderating posts (documented anti-regain policy — no
+device fingerprinting, no new identity requirements).
+
+### 19.4 Price, provider status, payment tests
+
+`GET /billing/policy` shows the live price, currency, free
+total/used/remaining, exact next charge (0 while entitled), provider
+readiness, and standing refund terms — the price display before
+confirmation. No payment provider is configured (`BILLING_PROVIDER`
+default `none`; keys via environment, never committed/printed/logged):
+paid publishing stays explicitly pending/unavailable — never faked.
+Tests run against the deterministic `MockProvider` (no network, no
+money): verified mock payments publish the correct post exactly once
+(compare-and-set consumption; reuse is 409); tampered tokens fail;
+failed/cancelled never unlock; re-paying failed rows re-attempts
+honestly. Integration is NOT marked complete beyond this: only the
+database + provider abstraction + mock exist (brief honesty rule).
+
+### 19.5 Refunds, unconfigured-provider limits
+
+Succeeded payments may be marked `refunded` by the owner only
+(record-only until a real provider exists — no money moves, no
+subscriptions, no hidden charges; the terms text is served verbatim in
+the policy view). Refunding preserves history (post stays published,
+free counters untouched); only succeeded rows refund. Admin visibility:
+owner-only `GET /admin/payments` (status filter, paginated) — ordinary
+users see only their own rows (identical 404s elsewhere).
+
+### 19.6 Safety features actually implemented
+
+Offered (all real): trip-detail sharing (via trip shares), check-in
+reminders (in-app notifications), SOS notify attempts (recorded).
+Explicitly unavailable: live location sharing (no GPS pipeline),
+microphone/camera (never). `GET /safety/capabilities` states this;
+consenting to unavailable features is refused (422) — consent can
+never authorize what does not exist.
+
+### 19.7 Permissions: optional, recorded, withdrawable
+
+Per-feature columns (no broad checkbox); accepted AND declined rows
+recorded with user + activity + disclosure version + timestamp;
+stale versions refused (409); expiry optional (expired reads as
+withdrawn); withdrawal appends new all-off rows (no update/delete
+routes — tamper-resistant history); server-side enforcement; nobody
+reads/writes another user's rows. Consent never widens access
+(invisible activities 404 first).
+
+### 19.8 Disclosure version + legal review
+
+Version `2026-10-15.v1`, served verbatim with `legal_review_pending:
+true`. It states support-only scope, risk precautions, no safety/
+conduct/connectivity/delivery guarantees, no rights waiver, no
+liability elimination. **Outstanding: review by an Indian lawyer
+alongside the platform's actual role and applicable law before any
+production reliance.**
+
+### 19.9 Guarantees: what the platform does and does not do
+
+Does: record choices honestly, enforce them server-side, keep history
+immutable, refuse unavailable authorizations, keep declining free of
+new exposure. Does NOT: guarantee safety, certify people/places/
+events, ensure connectivity or delivery, monitor surroundings, or
+treat consent as liability elimination. SOS creation is recorded with
+honest attempt states — never presented as confirmed assistance.
+
+### 19.10 Tests executed and real results
+
+`tests/test_billing.py` (13) + `tests/test_safety.py` (9) + model (6)
++ migration (3) + PG (5) = **36 new tests**, all passing inside the
+consolidated runs (§18.10 totals updated: **508 passed** — 461 offline
++ 47 PostgreSQL, 0 failed, 0 skipped). No failures hidden, none
+weakened: mid-phase findings (402-before-commit, gate ordering vs
+duplicate-409s, pay-on-failed semantics, old-suite funding via
+prefunded rows) fixed in code, not in assertions. Admin manual test
+(15 checks, live): owner role (not verification) gates admin; social
+stays verification-gated; tanishqroamlary@gmail.com login verified;
+no security-question endpoint exists anywhere (backend + frontend
+greps clean) — the provided Q&A has no API to exercise and no such
+feature was built.
+
+### 19.11 Migration and integration results
+
+Migration `c4d9e2f7a1b3` (head, applied to `roamlary_dev`): tables
+`post_payments` (UNIQUE idempotency + reference, amount/status
+CHECKs), `safety_consents` (decision CHECK, subject index), column
+`users.free_posts_used` (NOT NULL default 0). Upgrade unguarded;
+downgrade data-guarded (refuses on any payment/consent row) — proven
+SQLite + PostgreSQL + clean roundtrips both backends. Prior guards
+re-verified through the new head (version pins repointed per
+convention; PG transactional-vs-SQLite stepwise downgrade semantics
+documented in-test).
+
+### 19.12 Live API/E2E performed
+
+Consolidated live smoke (30/30, §18.11) plus the admin-panel manual
+test (15/15, §19.10): register/login ×3 accounts, owner CLI,
+admin-matrix 401/403/200s, billing policy read/write gates, payment
+ledger gates, verification-request availability, social gating with
+policy ON, account usability, absence of security-question routes.
+Cleanup removed every test row (verified: 0 remain,
+`user@example.com` restored to role=user as sole dev user, policy ON).
+Health contract byte-identical; 96 OpenAPI paths (+12).
+
+### 19.13 Known limitations and dependencies
+
+No real payment provider (mock/unavailable only); no SMS/email/push
+delivery; no live GPS (shares carry plan facts); no background jobs;
+terminal moderation/consent states lock; in-process limiters keep all
+caveats; AI unchanged (mock/unavailable); no client UI for new routes.
+Needs: a signed payment provider for real charges/refunds; an Indian
+lawyer's review of the disclosure; Laptop 2 frontend for any UI.
+
+### 19.14 Compatibility and regression
+
+Full suites green with zero skips (508): duplicate-409 contracts
+preserved (billing gates placed after duplicate checks); old
+multi-create suites funded via prefunded SUCCEEDED rows (their
+features, not billing, under test); SOS/report/check-in shapes
+extended additively; migration chain single + linear (10 revisions);
+all prior downgrade guards re-verified.
+
+### 19.15 Git status and authorization
+
+Branch `backend`. Implementation done with no commits/pushes (owner
+rule); docs written LAST per the brief. The owner authorized commit +
+push on completion (“commit and push this code” / “commit and push it
+after you done”): committed and pushed to `origin/backend` (verified
+HEAD = remote, tree clean); `main` and `frontend/` untouched
+throughout. The commit hash is recorded in the §16 settled annotation
+that follows the push, following the same pattern as items 6–8.
+Teammate commit `22e3dab` (Phases 9–13) preserved untouched underneath
+— no reset, no revert, no history rewrite at any point.
 
 ---
 

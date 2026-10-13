@@ -55,6 +55,12 @@ from app.models.meetup import Meetup
 from app.models.meetup_membership import MeetupMembership
 from app.models.user import User
 from app.services import events as event_svc
+from app.services.billing import (
+    PaymentRequiredError,
+    authorize_post,
+    consume_payment,
+    raise_payment_required,
+)
 from app.services.notifications import record_notification
 
 router = APIRouter(prefix="/parties", tags=["house-parties"])
@@ -110,6 +116,22 @@ def create_party(body: MeetupCreate, current_user: SocialUser, db: DbSession) ->
         limit=_CREATE_LIMIT_PER_HOUR,
         window_seconds=3600,
     )
+    # Phase 14 pay-per-post gate (category house_party): same rule as
+    # meetups - free grant, verified payment, or 402 with the charge.
+    try:
+        funding = authorize_post(
+            db,
+            user=current_user,
+            category="house_party",
+            payment_id=body.payment_id,
+            idempotency_key=body.idempotency_key,
+        )
+    except PaymentRequiredError as exc:
+        # Persist ONLY the PENDING payment row (the flush added nothing
+        # else at this point); the party itself is never created here.
+        db.commit()
+        raise_payment_required(exc)
+
     event = Meetup(
         host_id=current_user.id,
         kind=MeetupKind.HOUSE_PARTY,
@@ -137,6 +159,10 @@ def create_party(body: MeetupCreate, current_user: SocialUser, db: DbSession) ->
         ) from exc
     db.refresh(event)
     event = event_svc.load_event(db, event.id)
+    # Link the funding (free grant or paid payment) to THIS party,
+    # exactly once.
+    consume_payment(db, payment=funding, subject_type="meetup", subject_id=event.id)
+    db.commit()
     return MeetupRead.model_validate(event_svc.to_meetup_read(db, event, current_user))
 
 

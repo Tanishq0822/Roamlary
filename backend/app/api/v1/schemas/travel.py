@@ -339,12 +339,19 @@ class BuddyRequestCreate(BaseModel):
     discovery, giving the request context. It is validated server-side:
     it must belong to the recipient and be discoverable/active/unexpired
     at send time.
+
+    `payment_id` (optional, Phase 14) funds publishing with a SUCCEEDED
+    payment: first posts are free (no payment needed); later posts
+    answer 402 with a payment to confirm, then re-submit WITH its id.
+    `idempotency_key` (optional) guards double-clicks/retries.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     recipient_id: UUID
     plan_id: UUID | None = None
+    payment_id: UUID | None = None
+    idempotency_key: str | None = Field(None, max_length=100)
 
 
 class BuddyRequestRead(BaseModel):

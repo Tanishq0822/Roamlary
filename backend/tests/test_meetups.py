@@ -113,10 +113,22 @@ def test_create_gated_while_policy_on(api_client, sqlite_engine) -> None:
 
 
 def test_discovery_filters_and_hides_parties(api_client, sqlite_engine) -> None:
-    _, h = _host(api_client, sqlite_engine)
+    from tests.conftest import prefund_payment
+
+    host_email, h = _host(api_client, sqlite_engine)
     assert _create(api_client, h, category="food", title="Food Walk").status_code == 201
-    # A private meetup and a house party exist but must never surface.
-    assert _create(api_client, h, visibility="private", title="Secret").status_code == 201
+    # The first create consumed the free post: fund the rest (discovery
+    # behavior is under test, not billing).
+    assert (
+        _create(
+            api_client,
+            h,
+            visibility="private",
+            title="Secret",
+            payment_id=prefund_payment(sqlite_engine, host_email, "meetup"),
+        ).status_code
+        == 201
+    )
     party = api_client.post(
         "/api/v1/parties",
         json={
@@ -124,6 +136,7 @@ def test_discovery_filters_and_hides_parties(api_client, sqlite_engine) -> None:
             "category": "leisure",
             "start_at": START,
             "end_at": END,
+            "payment_id": prefund_payment(sqlite_engine, host_email, "house_party"),
         },
         headers=h,
     )
@@ -336,9 +349,24 @@ def test_blocked_host_vanishes_from_discovery(api_client, sqlite_engine) -> None
 
 def test_create_rate_limit_429(api_client, sqlite_engine) -> None:
     reset_rate_limits()
-    _, h = _host(api_client, sqlite_engine)
+    host_email, h = _host(api_client, sqlite_engine)
+    # The first create is free; the rest are funded with prefunded
+    # SUCCEEDED payments (the create limiter is under test, not
+    # billing - proven separately in test_billing.py).
+    from tests.conftest import prefund_payment
+
+    funded = [prefund_payment(sqlite_engine, host_email, "meetup") for _ in range(19)]
     for n in range(20):
-        resp = _create(api_client, h, title=f"Event {n}")
+        body = {"title": f"Event {n}"}
+        if n > 0:
+            body["payment_id"] = funded[n - 1]
+        resp = _create(api_client, h, **body)
         assert resp.status_code == 201, (n, resp.text)
-    assert _create(api_client, h, title="one too many").status_code == 429
+    over = _create(
+        api_client,
+        h,
+        title="one too many",
+        payment_id=prefund_payment(sqlite_engine, host_email, "meetup"),
+    )
+    assert over.status_code == 429
     reset_rate_limits()

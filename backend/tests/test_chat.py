@@ -70,8 +70,11 @@ def _chat_pair(api_client, engine, policy_off=True):
     return a_email, a_h, b_email, b_id, b_h
 
 
-def _ask(api_client, sender_h, recipient_id):
-    return api_client.post(REQUESTS_PATH, json={"recipient_id": recipient_id}, headers=sender_h)
+def _ask(api_client, sender_h, recipient_id, payment_id=None):
+    body = {"recipient_id": recipient_id}
+    if payment_id is not None:
+        body["payment_id"] = payment_id
+    return api_client.post(REQUESTS_PATH, json=body, headers=sender_h)
 
 
 def _accepted_pair(api_client, engine):
@@ -330,7 +333,9 @@ def test_delete_others_message_is_404(api_client, sqlite_engine) -> None:
 def test_conversation_list_orders_recent_first(api_client, sqlite_engine) -> None:
     """Sending a message refreshes the conversation row, so the recently
     active chat sorts above the newer-but-quiet one."""
-    _, a_h, _, b_id, b_h = _chat_pair(api_client, sqlite_engine)
+    from tests.conftest import prefund_payment
+
+    a_email, a_h, _, b_id, b_h = _chat_pair(api_client, sqlite_engine)
     c_email = f"chatter-c-{uuid.uuid4().hex[:8]}@example.com"
     _, c_h = register_user(api_client, c_email, display_name="chatter-c")
     db = _session(sqlite_engine)
@@ -343,7 +348,11 @@ def test_conversation_list_orders_recent_first(api_client, sqlite_engine) -> Non
         api_client.post(f"{REQUESTS_PATH}/{first.json()['id']}/accept", headers=b_h).status_code
         == 200
     )
-    second = _ask(api_client, a_h, c_id)
+    # The first ask consumed the free post: fund the second ask (the
+    # recent-first ordering is under test, not billing).
+    payment_id = prefund_payment(sqlite_engine, a_email, "chat_request")
+    second = _ask(api_client, a_h, c_id, payment_id=payment_id)
+    assert second.status_code == 201, second.text
     assert (
         api_client.post(f"{REQUESTS_PATH}/{second.json()['id']}/accept", headers=c_h).status_code
         == 200
@@ -392,8 +401,12 @@ def test_travel_accept_does_not_open_chat(api_client, sqlite_engine) -> None:
 
     convs = api_client.get(CONVERSATIONS_PATH, headers=a_h).json()
     assert convs["total"] == 0
-    # A message request is still required - and still allowed.
-    assert _ask(api_client, a_h, b_id).status_code == 201
+    # A message request is still required - and still allowed (funded:
+    # the travel request above consumed the free post).
+    from tests.conftest import prefund_payment
+
+    payment_id = prefund_payment(sqlite_engine, a_email, "chat_request")
+    assert _ask(api_client, a_h, b_id, payment_id=payment_id).status_code == 201
 
 
 def test_block_stops_sending_but_history_stays(api_client, sqlite_engine) -> None:

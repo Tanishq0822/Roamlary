@@ -68,6 +68,12 @@ from app.models.travel_partner_request import TravelPartnerRequest
 from app.models.travel_plan import TravelPlan
 from app.models.travel_profile import TravelProfile
 from app.models.user import User
+from app.services.billing import (
+    PaymentRequiredError,
+    authorize_post,
+    consume_payment,
+    raise_payment_required,
+)
 from app.services.discovery import (
     Candidate,
     DiscoveryFilters,
@@ -409,6 +415,25 @@ def send_request(
     # simultaneous opposite-direction sends cannot both land (the
     # pending-only UNIQUE index on the pair rejects the loser).
     pair_low_id, pair_high_id = canonical_pair(current_user.id, body.recipient_id)
+
+    # Phase 14 pay-per-post gate (AFTER all validation above, so invalid
+    # requests never burn free posts or mint payment rows): free grant
+    # consumed atomically, or a SUCCEEDED payment verified, or 402 with
+    # the exact charge to confirm first. NOTHING below publishes unpaid.
+    try:
+        funding = authorize_post(
+            db,
+            user=current_user,
+            category="travel_partner",
+            payment_id=body.payment_id,
+            idempotency_key=body.idempotency_key,
+        )
+    except PaymentRequiredError as exc:
+        # Persist ONLY the PENDING payment row (the flush added nothing
+        # else at this point); the post itself is never created here.
+        db.commit()
+        raise_payment_required(exc)
+
     request_row = TravelPartnerRequest(
         requester_id=current_user.id,
         recipient_id=body.recipient_id,
@@ -429,6 +454,12 @@ def send_request(
             detail="A pending travel-partner request already exists between you two.",
         ) from exc
     db.refresh(request_row)
+    # Link the funding (free grant or paid payment) to THIS post, exactly
+    # once: a succeeded payment can never fund a second post.
+    consume_payment(
+        db, payment=funding, subject_type="travel_partner_request", subject_id=request_row.id
+    )
+    db.commit()
     return _request_read(_load_request(db, request_row.id))
 
 

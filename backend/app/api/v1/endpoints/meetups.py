@@ -40,6 +40,12 @@ from app.models.meetup_announcement import MeetupAnnouncement
 from app.models.meetup_membership import MeetupMembership
 from app.models.user import User
 from app.services import events as event_svc
+from app.services.billing import (
+    PaymentRequiredError,
+    authorize_post,
+    consume_payment,
+    raise_payment_required,
+)
 from app.services.notifications import record_notification
 
 router = APIRouter(prefix="/meetups", tags=["meetups"])
@@ -103,6 +109,23 @@ def create_meetup(body: MeetupCreate, current_user: SocialUser, db: DbSession) -
         limit=_CREATE_LIMIT_PER_HOUR,
         window_seconds=3600,
     )
+    # Phase 14 pay-per-post gate: free grant consumed atomically, a
+    # SUCCEEDED payment verified, or 402 with the exact charge. NOTHING
+    # below publishes unpaid.
+    try:
+        funding = authorize_post(
+            db,
+            user=current_user,
+            category="meetup",
+            payment_id=body.payment_id,
+            idempotency_key=body.idempotency_key,
+        )
+    except PaymentRequiredError as exc:
+        # Persist ONLY the PENDING payment row (the flush added nothing
+        # else at this point); the event itself is never created here.
+        db.commit()
+        raise_payment_required(exc)
+
     event = Meetup(
         host_id=current_user.id,
         kind=MeetupKind.MEETUP,
@@ -130,6 +153,10 @@ def create_meetup(body: MeetupCreate, current_user: SocialUser, db: DbSession) -
         ) from exc
     db.refresh(event)
     event = event_svc.load_event(db, event.id)
+    # Link the funding (free grant or paid payment) to THIS event,
+    # exactly once.
+    consume_payment(db, payment=funding, subject_type="meetup", subject_id=event.id)
+    db.commit()
     return MeetupRead.model_validate(event_svc.to_meetup_read(db, event, current_user))
 
 

@@ -17,6 +17,7 @@ import sqlalchemy as sa
 from tests.conftest import (
     insert_raw_phase8_rows,
     insert_raw_phase912_rows,
+    insert_raw_phase1415_rows,
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
@@ -47,6 +48,8 @@ EXPECTED_TABLES = {
     "meetup_announcements",
     "notifications",
     "trip_shares",
+    "post_payments",
+    "safety_consents",
 }
 
 
@@ -553,7 +556,7 @@ def test_phase7_upgrade_creates_the_three_travel_tables(tmp_path) -> None:
                 "AND name LIKE 'uq_travel_partner_requests_pending%'"
             )
         ).scalars()
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
     assert set(index_names) == {
         "uq_travel_partner_requests_pending_pair_ab",
         "uq_travel_partner_requests_pending_pair_ba",
@@ -648,7 +651,7 @@ def test_phase7_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> 
     assert tables == EXPECTED_TABLES
     with engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
     engine.dispose()
 
 
@@ -678,7 +681,7 @@ def test_phase8_upgrade_creates_the_four_new_tables(tmp_path) -> None:
                 "AND name = 'uq_travel_partner_requests_pending_canonical_pair'"
             )
         ).scalars()
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
     assert token_version == []  # no users yet; the column itself exists
     assert {"pair_low_id", "pair_high_id"} <= pair_cols
     assert list(canonical) == ["uq_travel_partner_requests_pending_canonical_pair"]
@@ -795,7 +798,7 @@ def test_phase8_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> 
     assert tables == EXPECTED_TABLES
     with engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
     engine.dispose()
 
 
@@ -822,7 +825,7 @@ def test_phases912_upgrade_creates_tables_and_widens_report_check(tmp_path) -> N
         ).scalar_one()
         report_cols = {c["name"] for c in sa.inspect(engine).get_columns("community_reports")}
         sos_cols = {c["name"] for c in sa.inspect(engine).get_columns("sos_events")}
-    assert version == "b8e2f4a1c6d9"
+    assert version == "c4d9e2f7a1b3"
     assert "'resolved'" in report_ddl  # CHECK widened (batch path on SQLite)
     assert {"reviewed_by", "reviewed_at"} <= report_cols
     assert "acknowledged_at" in sos_cols
@@ -912,5 +915,104 @@ def test_phases912_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) 
     assert tables == EXPECTED_TABLES
     with engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "c4d9e2f7a1b3"
+    engine.dispose()
+
+
+# ----------------------- Phases 14-15 migration tests
+
+
+def test_phases1415_upgrade_creates_tables_and_counter(tmp_path) -> None:
+    """Upgrading to head creates the payment + consent tables and the
+    users.free_posts_used counter."""
+    db_file = tmp_path / "migration_phases1415_tables.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    tables = set(sa.inspect(engine).get_table_names()) - {"alembic_version"}
+    assert tables == EXPECTED_TABLES
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        free_col = conn.execute(sa.text("SELECT free_posts_used FROM users")).all()
+        unique_names = {
+            c["name"] for c in sa.inspect(engine).get_unique_constraints("post_payments")
+        }
+    assert version == "c4d9e2f7a1b3"
+    assert free_col == []  # no users yet; the column itself exists
+    assert unique_names == {
+        "uq_post_payments_idempotency_key",
+        "uq_post_payments_provider_reference",
+    }
+    engine.dispose()
+
+
+def test_phases1415_downgrade_refuses_when_data_exists(tmp_path) -> None:
+    """DATA-DEPENDENT DOWNGRADE (regression): any payment or consent row
+    must make the downgrade REFUSE cleanly, before any schema change."""
+    db_file = tmp_path / "migration_phases1415_guard.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_phase1415_rows(engine)
+
+    downgrade = _run_alembic(["downgrade", "b8e2f4a1c6d9"], url)
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while Phases 14-15 data exists, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(engine)
+    names = {t for t in inspector.get_table_names() if t != "alembic_version"}
+    assert {"post_payments", "safety_consents"} <= names
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(sa.text("SELECT status FROM post_payments")).scalar_one()
+    assert version == "c4d9e2f7a1b3"  # still at the Phases 14-15 revision
+    assert status_value == "succeeded"  # the charge record is untouched
+    engine.dispose()
+
+
+def test_phases1415_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> None:
+    """NORMAL PATH: with no Phases 14-15 rows the downgrade succeeds
+    (tables + counter removed); upgrading again restores the schema."""
+    db_file = tmp_path / "migration_phases1415_roundtrip.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_checkin(engine, "pending")  # unrelated row survives
+
+    downgrade = _run_alembic(["downgrade", "b8e2f4a1c6d9"], url)
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(engine)
+    names = set(inspector.get_table_names())
+    assert "post_payments" not in names
+    assert "safety_consents" not in names
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        user_cols = {c["name"] for c in inspector.get_columns("users")}
     assert version == "b8e2f4a1c6d9"
+    assert "free_posts_used" not in user_cols
+
+    upgrade_again = _run_alembic(["upgrade", "head"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(engine)
+    tables = set(inspector.get_table_names()) - {"alembic_version"}
+    assert tables == EXPECTED_TABLES
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "c4d9e2f7a1b3"
     engine.dispose()

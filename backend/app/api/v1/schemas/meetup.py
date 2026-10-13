@@ -25,7 +25,11 @@ from app.models.enums import (
 
 class MeetupCreate(BaseModel):
     """Body for POST /meetups (and POST /parties, which forces the party
-    kind and private visibility server-side)."""
+    kind and private visibility server-side).
+
+    `payment_id` (optional, Phase 14) funds publishing with a SUCCEEDED
+    payment; `idempotency_key` (optional) guards double-clicks/retries.
+    First events are free (no payment needed)."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -40,6 +44,8 @@ class MeetupCreate(BaseModel):
     participation: ParticipationPolicy = ParticipationPolicy.APPROVAL
     location_text: str | None = Field(None, max_length=200)
     venue_details: str | None = Field(None, max_length=500)
+    payment_id: UUID | None = None
+    idempotency_key: str | None = Field(None, max_length=100)
 
     @field_validator("title")
     @classmethod

@@ -8,13 +8,13 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phases 6–13: reports, verification, travel buddies, chat, events, moderation, notifications, sharing, SOS, AI companion)
+## Current scope (Phases 6–15: reports through pay-per-post monetization and safety workflow)
 
 Implemented now (on top of the Phase 1 foundation + Phase 2 database +
 Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS +
 Phase 6 reports + Phase 6 second assignment identity verification +
 Phase 7 travel buddies + Phase 8 messaging + Phases 9–13 events and
-services):
+services + Phases 14–15 pay-per-post and safety workflow):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -22,12 +22,12 @@ services):
 - CORS configured for Flutter development origins
 - Interactive API documentation (Swagger UI / ReDoc)
 - **PostgreSQL persistence** via SQLAlchemy 2.x (engine + per-request sessions)
-- **Twenty-one domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
+- **Twenty-three domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
   `CommunityReport`, `IdentityVerification`, `AppSetting`, `SettingChange`,
   `TravelProfile`, `TravelPlan`, `TravelPartnerRequest`,
   `UserBlock`, `Conversation`, `ChatMessage`, `AuthSession`,
   `Meetup`, `MeetupMembership`, `EventInvitation`, `MeetupAnnouncement`,
-  `Notification`, `TripShare` —
+  `Notification`, `TripShare`, `PostPayment`, `SafetyConsent` —
   with UUID keys, timestamps, CHECK constraints and
   `ON DELETE RESTRICT` foreign keys
 - **Alembic migrations** (initial schema + `password_hash` column +
@@ -112,11 +112,11 @@ services):
   explicit "unavailable" with no provider (never fabricated)
 - **Owner provisioning CLI**: `python -m app.cli make-owner <email>` (the
   only path that grants the `owner` role)
-- Automated test suite: **472 tests** (430 offline + 42 real-PostgreSQL
+- Automated test suite: **508 tests** (461 offline + 47 real-PostgreSQL
   integration; contacts + check-ins + SOS + reports + verification +
   admin/policy + auth + profiles + travel buddies + chat + blocks +
   sessions + meetups + parties + moderation + notifications + shares +
-  AI + models + migrations)
+  AI + billing + safety + models + migrations)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
 them to exist): Firebase Authentication, refresh tokens, password reset, email
@@ -218,7 +218,7 @@ Four separate concerns, so each stays small and testable:
 `create_all()` in production — Alembic owns the schema, so every change is a
 reviewed, replayable file.
 
-### The twenty-one tables
+### The twenty-three tables
 
 | Table | Purpose | Key columns |
 | --- | --- | --- |
@@ -243,6 +243,8 @@ reviewed, replayable file.
 | `meetup_announcements` | One host bulletin for one event (Phases 9–10; no replies by design) | `meetup_id` + `author_id` (FKs), `body` (text) |
 | `notifications` | One notification attempt for one user (Phase 12) | `user_id` (FK), `kind`, `channel` (only `in_app` delivers), honest `status` set, `attempts`, `last_error`, UNIQUE `idempotency_key` |
 | `trip_shares` | One trip-sharing grant (Phase 12) | `owner_id` + optional `plan_id` (FKs), `expires_at` (≤90 days), `revoked_at` (NULL = live) |
+| `post_payments` | One pay-per-post charge (Phase 14) | `user_id` (FK), `category` (4-value set), `amount_paise` (server-set) + `currency` INR, `status` (pending/succeeded/failed/cancelled/refunded), UNIQUE `idempotency_key` + UNIQUE `provider_reference` |
+| `safety_consents` | One safety decision per user per activity (Phase 15) | `user_id` (FK), `subject_type` + `subject_id`, per-feature flags, `decision` (accepted/declined), `disclosure_version`, `expires_at` |
 
 All children use **`ON DELETE RESTRICT`**: deleting a user who still has safety
 records is blocked at the database level, so safety history can never vanish by
@@ -1079,6 +1081,44 @@ answer carries uncertainty + emergency footers; provider faults return
 honest 503s, never crashes or fabricated fallbacks. No safety verdicts
 about people, places, or events — ever.
 
+## Pay-per-post monetization (Phase 14)
+
+First qualifying post per account is free (one across all categories —
+travel-partner requests, chat asks, meetup and party creates); every
+later post costs **₹10** (1000 paise, INR, server-set from the live
+billing policy). Ordinary messages, edits, accepts/rejects, and retries
+are never charged. Unpaid publishing answers **402** with the exact
+charge (`payment_id`, amount, currency, free state) — the price display
+before confirmation; paying (mock-verified in tests) then re-submitting
+WITH the succeeded `payment_id` publishes exactly once (compare-and-set
+consumption defeats refresh/double-click/webhook duplicates). No
+provider configured (default) means paid publishing stays honestly
+pending — never faked. Failed/cancelled payments never unlock; refunds
+are owner-recorded (record-only without a provider — no money moves, no
+subscriptions, no hidden charges). Free grants are consumed atomically
+(racing first-posts: one wins) and never restored by deleting posts.
+`GET /billing/policy` shows the live price + your free state + refund
+terms; owners manage pricing (`PATCH /admin/policy/billing`, audited)
+and inspect/refund transactions (`GET /admin/payments`, `POST
+/admin/payments/{id}/refund`).
+
+## Meeting & trip safety workflow (Phase 15)
+
+Consent-based safety support — never a safety guarantee. `GET
+/safety/disclosure` serves the versioned draft acknowledgement
+(`2026-10-15.v1`, flagged pending Indian-lawyer review — not a waiver);
+`GET /safety/capabilities` names what actually exists (trip-detail
+sharing, check-in reminders, SOS notify attempts) vs what does not
+(location sharing: no GPS pipeline; microphone/camera: never).
+`POST /safety/consents` records per-feature choices (accepted AND
+declined rows, current disclosure version required, expiry optional)
+for meetups and trip shares you can already see; unavailable features
+are refused, stale versions 409, withdrawals append new all-off rows
+(no update/delete — tamper-resistant history), expired rows read as
+withdrawn. Nobody reads or writes anyone else's rows. Declining keeps
+protections off with the risks explained — never a safety claim, never
+a rights waiver, never new data exposure.
+
 ## Migrations (Alembic)
 
 Alembic creates and evolves the schema. The migration files live in
@@ -1174,6 +1214,17 @@ Applied migrations on `roamlary_dev`:
   carries status `resolved`, it **refuses** before touching the schema.
   Round-trip verified on SQLite and PostgreSQL, plus live on
   `roamlary_dev`. `alembic current` → `b8e2f4a1c6d9 (head)`.
+- `c4d9e2f7a1b3` — Phases 14–15: adds the pay-per-post `post_payments`
+  table (UNIQUE idempotency key + UNIQUE provider reference,
+  non-negative amount CHECK, status CHECK), the `safety_consents` table
+  (decision CHECK, subject index; append-only by design), and the NOT
+  NULL `users.free_posts_used` counter (server default 0). The
+  **upgrade** needs no data guard (new tables; the counter backfills to
+  0 — nobody loses a free post). The **downgrade** is guarded the same
+  way as all prior guarded migrations: while any payment or consent row
+  exists it **refuses** before touching the schema. Round-trip verified
+  on SQLite and PostgreSQL, plus live on `roamlary_dev`.
+  `alembic current` → `c4d9e2f7a1b3 (head)`.
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -1323,6 +1374,9 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `unavailable` notification status | No external provider is configured (SMS/email/push) | Expected and honest: nothing was sent. In-app rows show `delivered`; retry only re-attempts failed/unavailable rows |
 | AI answers "not configured" | `AI_PROVIDER` is `none` (default) | Expected: set `AI_PROVIDER=mock` for deterministic test answers, or configure a real provider (never commit keys) |
 | `RuntimeError: Refusing to downgrade migration b8e2f4a1c6d9 …` | Event, invitation, notification, or share rows exist, or a report carries status `resolved` | Intentional data-safety guard: nothing was changed (exact counts listed). Export or delete those rows first, then re-run — or keep the schema |
+| `402` with a charge detail on posting | Free post already used and no succeeded `payment_id` supplied | Expected: confirm the payment (`POST /billing/payments/{id}/pay`), then re-submit WITH its id; check `GET /billing/policy` for your free state |
+| `409` reusing a `payment_id` | That payment already funded a post (consumed exactly once) | One payment funds one post — create a new payment for the next post |
+| `RuntimeError: Refusing to downgrade migration c4d9e2f7a1b3 …` | Payment or consent rows exist | Intentional data-safety guard: nothing was changed. Export or delete those rows first, then re-run — or keep the schema |
 
 ## Development log
 

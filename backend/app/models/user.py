@@ -100,6 +100,13 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     # `tv` that pre-Phase-8 legacy tokens implicitly carry).
     token_version: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
 
+    # Pay-per-post free entitlement (Phase 14): how many free qualifying
+    # posts this account has consumed. Consumed atomically (conditional
+    # UPDATE against the live policy limit), so concurrent first-posts
+    # cannot both win. Consumed grants are NEVER restored (deleted,
+    # rejected, cancelled, or moderated posts keep their consumption -
+    # the documented anti-regain policy).
+    free_posts_used: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
     # Relationships ("one user has many X"). Deleting a user who still
     # has safety records is deliberately BLOCKED at the database level
     # (ON DELETE RESTRICT on each child table) so safety history can

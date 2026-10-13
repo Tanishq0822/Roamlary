@@ -12,11 +12,15 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class MessageRequestCreate(BaseModel):
-    """Body for POST /chat/requests. Exactly one field: who to ask."""
+    """Body for POST /chat/requests. Who to ask, plus optional Phase 14
+    payment funding (`payment_id` with a SUCCEEDED payment;
+    `idempotency_key` against double-clicks). First asks are free."""
 
     model_config = ConfigDict(extra="forbid")
 
     recipient_id: UUID
+    payment_id: UUID | None = None
+    idempotency_key: str | None = Field(None, max_length=100)
 
 
 class ConversationRead(BaseModel):
