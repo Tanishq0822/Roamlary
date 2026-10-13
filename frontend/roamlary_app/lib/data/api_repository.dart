@@ -392,6 +392,152 @@ class ApiRepository implements AppRepository {
     return SocialPolicy.fromJson(data);
   }
 
+  // Chat (Phase 8) ----------------------------------------------------------
+  @override
+  Future<List<DiscoveryCandidate>> discover({
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    try {
+      final data = await _send(
+        'GET',
+        '/travel-buddies/discover',
+        query: {'offset': '$offset', 'limit': '$limit'},
+      ) as Map<String, dynamic>;
+      return (data['results'] as List<dynamic>? ?? const [])
+          .map((e) =>
+              DiscoveryCandidate.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on ApiException catch (e) {
+      if (e.statusCode == 403) throw const SocialGateDeniedException();
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<Conversation>> listConversations() async {
+    final data = await _send('GET', '/chat/conversations')
+        as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<Conversation>> listChatRequests({
+    required String direction,
+  }) async {
+    final data = await _send(
+      'GET',
+      '/chat/requests',
+      query: {'direction': direction},
+    ) as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => Conversation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> sendChatRequest({required String recipientId}) async {
+    await _send('POST', '/chat/requests', body: {'recipient_id': recipientId});
+  }
+
+  @override
+  Future<Conversation> acceptChatRequest(String id) async {
+    final data =
+        await _send('POST', '/chat/requests/$id/accept') as Map<String, dynamic>;
+    return Conversation.fromJson(data);
+  }
+
+  @override
+  Future<void> rejectChatRequest(String id) async {
+    await _send('POST', '/chat/requests/$id/reject');
+  }
+
+  @override
+  Future<void> cancelChatRequest(String id) async {
+    await _send('POST', '/chat/requests/$id/cancel');
+  }
+
+  @override
+  Future<List<ChatMessage>> listMessages(String conversationId) async {
+    final data = await _send(
+      'GET',
+      '/chat/conversations/$conversationId/messages',
+      query: {'limit': '100'},
+    ) as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<ChatMessage> sendMessage(String conversationId, String body) async {
+    final data = await _send(
+      'POST',
+      '/chat/conversations/$conversationId/messages',
+      body: {'body': body},
+    ) as Map<String, dynamic>;
+    return ChatMessage.fromJson(data);
+  }
+
+  // Travel-buddy requests (Phase 7) ------------------------------------------
+  @override
+  Future<List<BuddyRequest>> listBuddyRequests({
+    required String direction,
+  }) async {
+    final data = await _send(
+      'GET',
+      '/travel-buddies/requests',
+      query: {'direction': direction, 'limit': '50'},
+    ) as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => BuddyRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> sendBuddyRequest({
+    required String recipientId,
+    String? planId,
+  }) async {
+    await _send('POST', '/travel-buddies/requests', body: {
+      'recipient_id': recipientId,
+      'plan_id': ?planId,
+    });
+  }
+
+  @override
+  Future<BuddyRequest> acceptBuddyRequest(String id) async {
+    final data = await _send('POST', '/travel-buddies/requests/$id/accept')
+        as Map<String, dynamic>;
+    return BuddyRequest.fromJson(data);
+  }
+
+  @override
+  Future<void> rejectBuddyRequest(String id) async {
+    await _send('POST', '/travel-buddies/requests/$id/reject');
+  }
+
+  // Blocking ----------------------------------------------------------------
+  @override
+  Future<List<BlockedUser>> listBlocks() async {
+    final data = await _send('GET', '/blocks') as Map<String, dynamic>;
+    return (data['blocks'] as List<dynamic>? ?? const [])
+        .map((e) => BlockedUser.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> blockUser(String blockedId) async {
+    await _send('POST', '/blocks', body: {'blocked_id': blockedId});
+  }
+
+  @override
+  Future<void> unblockUser(String blockedId) async {
+    await _send('DELETE', '/blocks/$blockedId');
+  }
+
   // Health -----------------------------------------------------------------
   @override
   Future<bool> health() async {

@@ -338,3 +338,194 @@ class DiscoveryResult {
         message: json['message'] as String? ?? '',
       );
 }
+
+/// One chat conversation as a participant sees it — mirrors backend
+/// `ConversationRead` (Phase 8). The row stores no direction: "the other
+/// user" is resolved relative to the caller.
+class Conversation {
+  const Conversation({
+    required this.id,
+    required this.otherUserId,
+    required this.otherDisplayName,
+    required this.status,
+    required this.requestedByMe,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String otherUserId;
+  final String otherDisplayName;
+  final ConversationStatus status;
+  final bool requestedByMe;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  /// Accepted conversations are the ones you can actually message in.
+  bool get isOpen => status == ConversationStatus.accepted;
+
+  factory Conversation.fromJson(Map<String, dynamic> json) => Conversation(
+        id: json['id'] as String,
+        otherUserId: json['other_user_id'] as String,
+        otherDisplayName: json['other_display_name'] as String,
+        status: ConversationStatus.fromWire(json['status'] as String),
+        requestedByMe: json['requested_by_me'] as bool,
+        createdAt: DateTime.parse(json['created_at'] as String),
+        updatedAt: DateTime.parse(json['updated_at'] as String),
+      );
+}
+
+/// One message inside a conversation — mirrors backend `MessageRead`.
+/// A soft-deleted message keeps its place with a null [body].
+class ChatMessage {
+  const ChatMessage({
+    required this.id,
+    required this.conversationId,
+    required this.senderId,
+    required this.mine,
+    required this.body,
+    required this.isDeleted,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String conversationId;
+  final String senderId;
+  final bool mine;
+  final String? body;
+  final bool isDeleted;
+  final DateTime createdAt;
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
+        id: json['id'] as String,
+        conversationId: json['conversation_id'] as String,
+        senderId: json['sender_id'] as String,
+        mine: json['mine'] as bool,
+        body: json['body'] as String?,
+        isDeleted: json['is_deleted'] as bool,
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+/// A discovery candidate: limited public travel profile + best plan +
+/// compatibility score — mirrors backend `DiscoveryCandidateRead`.
+/// Never carries email, phone, role or verification state.
+class DiscoveryCandidate {
+  const DiscoveryCandidate({
+    required this.userId,
+    required this.displayName,
+    this.bio,
+    this.homeRegion,
+    this.languages,
+    this.travelStyles,
+    this.interests,
+    this.groupSizePref,
+    required this.destination,
+    this.startDate,
+    this.endDate,
+    required this.compatibilityScore,
+    required this.existingRequest,
+  });
+
+  final String userId;
+  final String displayName;
+  final String? bio;
+  final String? homeRegion;
+  final List<String>? languages;
+  final List<String>? travelStyles;
+  final List<String>? interests;
+  final int? groupSizePref;
+  final String destination;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final int compatibilityScore;
+  final String existingRequest; // none | pending_sent | pending_received
+
+  factory DiscoveryCandidate.fromJson(Map<String, dynamic> json) {
+    final plan = (json['plan'] as Map<String, dynamic>?) ?? const {};
+    return DiscoveryCandidate(
+      userId: json['user_id'] as String,
+      displayName: json['display_name'] as String,
+      bio: json['bio'] as String?,
+      homeRegion: json['home_region'] as String?,
+      languages: (json['languages'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      travelStyles: (json['travel_styles'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      interests: (json['interests'] as List<dynamic>?)
+          ?.map((e) => e as String)
+          .toList(),
+      groupSizePref: json['group_size_pref'] as int?,
+      destination: plan['destination'] as String? ?? '',
+      startDate: plan['start_date'] == null
+          ? null
+          : DateTime.tryParse(plan['start_date'] as String),
+      endDate: plan['end_date'] == null
+          ? null
+          : DateTime.tryParse(plan['end_date'] as String),
+      compatibilityScore: json['compatibility_score'] as int? ?? 0,
+      existingRequest: json['existing_request'] as String? ?? 'none',
+    );
+  }
+}
+
+/// A travel-buddy request between two users — mirrors backend
+/// `BuddyRequestRead`.
+class BuddyRequest {
+  const BuddyRequest({
+    required this.id,
+    required this.requesterId,
+    required this.requesterDisplayName,
+    required this.recipientId,
+    required this.recipientDisplayName,
+    required this.status,
+    required this.createdAt,
+    this.planDestination,
+  });
+
+  final String id;
+  final String requesterId;
+  final String requesterDisplayName;
+  final String recipientId;
+  final String recipientDisplayName;
+  final BuddyRequestStatus status;
+  final DateTime createdAt;
+  final String? planDestination;
+
+  bool get isIncoming => status == BuddyRequestStatus.pending;
+
+  factory BuddyRequest.fromJson(Map<String, dynamic> json) => BuddyRequest(
+        id: json['id'] as String,
+        requesterId: json['requester_id'] as String,
+        requesterDisplayName: json['requester_display_name'] as String,
+        recipientId: json['recipient_id'] as String,
+        recipientDisplayName: json['recipient_display_name'] as String,
+        status: BuddyRequestStatus.fromWire(json['status'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+        planDestination: json['plan_destination'] as String?,
+      );
+}
+
+/// One blocked account as the blocker sees it — mirrors `BlockRead`.
+class BlockedUser {
+  const BlockedUser({
+    required this.id,
+    required this.blockedId,
+    required this.blockedDisplayName,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String blockedId;
+  final String blockedDisplayName;
+  final DateTime createdAt;
+
+  factory BlockedUser.fromJson(Map<String, dynamic> json) => BlockedUser(
+        id: json['id'] as String,
+        blockedId: json['blocked_id'] as String,
+        blockedDisplayName: json['blocked_display_name'] as String,
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}

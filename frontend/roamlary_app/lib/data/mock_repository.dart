@@ -160,6 +160,73 @@ class MockRepository implements AppRepository {
         applicantNote: 'Frequent solo traveller — happy to be reviewed.',
       ),
     ]);
+
+    // Social seed (Phase 7/8): one accepted conversation with history, one
+    // incoming request, and a pending buddy request so the chat UI has
+    // content in mock mode too.
+    final convAccepted = Conversation(
+      id: _nextId('cv'),
+      otherUserId: 'u-demo-1001',
+      otherDisplayName: 'Aarav Mehta',
+      status: ConversationStatus.accepted,
+      requestedByMe: false,
+      createdAt: now.subtract(const Duration(days: 2)),
+      updatedAt: now.subtract(const Duration(hours: 3)),
+    );
+    _conversations.addAll([
+      convAccepted,
+      Conversation(
+        id: _nextId('cv'),
+        otherUserId: 'u-demo-1002',
+        otherDisplayName: 'Sofia Reyes',
+        status: ConversationStatus.pending,
+        requestedByMe: false,
+        createdAt: now.subtract(const Duration(hours: 6)),
+        updatedAt: now.subtract(const Duration(hours: 6)),
+      ),
+    ]);
+    _messages.addAll([
+      ChatMessage(
+        id: _nextId('msg'),
+        conversationId: convAccepted.id,
+        senderId: 'u-demo-1001',
+        mine: false,
+        body: "Hey! Saw you're heading to Goa too - want to share a cab "
+            'from the airport?',
+        isDeleted: false,
+        createdAt: now.subtract(const Duration(hours: 4)),
+      ),
+      ChatMessage(
+        id: _nextId('msg'),
+        conversationId: convAccepted.id,
+        senderId: _userId,
+        mine: true,
+        body: 'Yes please! I land at 6pm on the 20th.',
+        isDeleted: false,
+        createdAt: now.subtract(const Duration(hours: 3, minutes: 50)),
+      ),
+      ChatMessage(
+        id: _nextId('msg'),
+        conversationId: convAccepted.id,
+        senderId: 'u-demo-1001',
+        mine: false,
+        body: "Perfect. I'll book it and send the details here.",
+        isDeleted: false,
+        createdAt: now.subtract(const Duration(hours: 3)),
+      ),
+    ]);
+    _buddyRequests.add(
+      BuddyRequest(
+        id: _nextId('br'),
+        requesterId: 'u-demo-1001',
+        requesterDisplayName: 'Aarav Mehta',
+        recipientId: _userId,
+        recipientDisplayName: _profile.displayName,
+        status: BuddyRequestStatus.pending,
+        createdAt: now.subtract(const Duration(hours: 5)),
+        planDestination: 'Manali',
+      ),
+    );
   }
 
   // Auth -------------------------------------------------------------------
@@ -546,6 +613,233 @@ class MockRepository implements AppRepository {
       updatedAt: DateTime.now().toUtc(),
       updatedBy: _userId,
     );
+  }
+
+  // Chat (Phase 8) ----------------------------------------------------------
+  final List<Conversation> _conversations = [];
+  final List<ChatMessage> _messages = [];
+  final List<BuddyRequest> _buddyRequests = [];
+  final List<BlockedUser> _blocks = [];
+
+  @override
+  Future<List<DiscoveryCandidate>> discover({
+    int offset = 0,
+    int limit = 20,
+  }) async {
+    await _delay();
+    if (_socialRequiresVerification &&
+        _verificationStatus != VerificationStatus.verified) {
+      throw const SocialGateDeniedException();
+    }
+    return [
+      DiscoveryCandidate(
+        userId: 'u-demo-1001',
+        displayName: 'Aarav Mehta',
+        bio: 'Backpacking through India for 6 months.',
+        homeRegion: 'Goa, India',
+        languages: const ['English', 'Hindi'],
+        travelStyles: const ['backpacker', 'solo'],
+        interests: const ['hiking', 'food', 'photography'],
+        destination: 'Manali',
+        compatibilityScore: 85,
+        existingRequest: 'none',
+      ),
+      DiscoveryCandidate(
+        userId: 'u-demo-1002',
+        displayName: 'Sofia Reyes',
+        bio: 'Slow travel + street food.',
+        homeRegion: 'Barcelona, Spain',
+        languages: const ['Spanish', 'English'],
+        travelStyles: const ['slow_travel', 'cultural'],
+        interests: const ['food', 'history', 'museums'],
+        destination: 'Jaipur',
+        compatibilityScore: 72,
+        existingRequest: 'pending_received',
+      ),
+      DiscoveryCandidate(
+        userId: 'u-demo-1003',
+        displayName: 'Kenji Tanaka',
+        bio: 'Photographer chasing sunrises.',
+        homeRegion: 'Tokyo, Japan',
+        languages: const ['Japanese', 'English'],
+        travelStyles: const ['road_trip', 'adventure'],
+        interests: const ['photography', 'wildlife'],
+        destination: 'Ladakh',
+        compatibilityScore: 64,
+        existingRequest: 'pending_sent',
+      ),
+    ];
+  }
+
+  @override
+  Future<List<Conversation>> listConversations() async {
+    await _delay();
+    return List.unmodifiable(_conversations
+        .where((c) => c.status == ConversationStatus.accepted));
+  }
+
+  @override
+  Future<List<Conversation>> listChatRequests({
+    required String direction,
+  }) async {
+    await _delay();
+    return List.unmodifiable(_conversations.where((c) =>
+        c.status == ConversationStatus.pending &&
+        (direction == 'incoming' ? !c.requestedByMe : c.requestedByMe)));
+  }
+
+  @override
+  Future<void> sendChatRequest({required String recipientId}) async {
+    await _delay();
+    _conversations.insert(
+      0,
+      Conversation(
+        id: _nextId('cv'),
+        otherUserId: recipientId,
+        otherDisplayName: 'Traveller',
+        status: ConversationStatus.pending,
+        requestedByMe: true,
+        createdAt: DateTime.now().toUtc(),
+        updatedAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
+  @override
+  Future<Conversation> acceptChatRequest(String id) async {
+    await _delay();
+    final i = _conversations.indexWhere((c) => c.id == id);
+    if (i < 0) throw StateError('Request not found');
+    final updated = Conversation(
+      id: _conversations[i].id,
+      otherUserId: _conversations[i].otherUserId,
+      otherDisplayName: _conversations[i].otherDisplayName,
+      status: ConversationStatus.accepted,
+      requestedByMe: _conversations[i].requestedByMe,
+      createdAt: _conversations[i].createdAt,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _conversations[i] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> rejectChatRequest(String id) async {
+    await _delay();
+    _conversations.removeWhere((c) => c.id == id);
+  }
+
+  @override
+  Future<void> cancelChatRequest(String id) async {
+    await _delay();
+    _conversations.removeWhere((c) => c.id == id);
+  }
+
+  @override
+  Future<List<ChatMessage>> listMessages(String conversationId) async {
+    await _delay(150);
+    return List.unmodifiable(
+        _messages.where((m) => m.conversationId == conversationId));
+  }
+
+  @override
+  Future<ChatMessage> sendMessage(String conversationId, String body) async {
+    await _delay(150);
+    final msg = ChatMessage(
+      id: _nextId('msg'),
+      conversationId: conversationId,
+      senderId: _userId,
+      mine: true,
+      body: body,
+      isDeleted: false,
+      createdAt: DateTime.now().toUtc(),
+    );
+    _messages.add(msg);
+    return msg;
+  }
+
+  // Travel-buddy requests (Phase 7) ------------------------------------------
+  @override
+  Future<List<BuddyRequest>> listBuddyRequests({
+    required String direction,
+  }) async {
+    await _delay();
+    return List.unmodifiable(_buddyRequests.where((r) =>
+        direction == 'incoming' ? r.recipientId == _userId
+                                : r.requesterId == _userId));
+  }
+
+  @override
+  Future<void> sendBuddyRequest({
+    required String recipientId,
+    String? planId,
+  }) async {
+    await _delay();
+    _buddyRequests.insert(
+      0,
+      BuddyRequest(
+        id: _nextId('br'),
+        requesterId: _userId,
+        requesterDisplayName: _profile.displayName,
+        recipientId: recipientId,
+        recipientDisplayName: 'Traveller',
+        status: BuddyRequestStatus.pending,
+        createdAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
+  @override
+  Future<BuddyRequest> acceptBuddyRequest(String id) async {
+    await _delay();
+    final i = _buddyRequests.indexWhere((r) => r.id == id);
+    if (i < 0) throw StateError('Request not found');
+    final updated = BuddyRequest(
+      id: _buddyRequests[i].id,
+      requesterId: _buddyRequests[i].requesterId,
+      requesterDisplayName: _buddyRequests[i].requesterDisplayName,
+      recipientId: _buddyRequests[i].recipientId,
+      recipientDisplayName: _buddyRequests[i].recipientDisplayName,
+      status: BuddyRequestStatus.accepted,
+      createdAt: _buddyRequests[i].createdAt,
+      planDestination: _buddyRequests[i].planDestination,
+    );
+    _buddyRequests[i] = updated;
+    return updated;
+  }
+
+  @override
+  Future<void> rejectBuddyRequest(String id) async {
+    await _delay();
+    _buddyRequests.removeWhere((r) => r.id == id);
+  }
+
+  // Blocking ----------------------------------------------------------------
+  @override
+  Future<List<BlockedUser>> listBlocks() async {
+    await _delay();
+    return List.unmodifiable(_blocks);
+  }
+
+  @override
+  Future<void> blockUser(String blockedId) async {
+    await _delay();
+    if (_blocks.any((b) => b.blockedId == blockedId)) return;
+    _blocks.insert(
+      0,
+      BlockedUser(
+        id: _nextId('blk'),
+        blockedId: blockedId,
+        blockedDisplayName: 'Traveller',
+        createdAt: DateTime.now().toUtc(),
+      ),
+    );
+  }
+
+  @override
+  Future<void> unblockUser(String blockedId) async {
+    await _delay();
+    _blocks.removeWhere((b) => b.blockedId == blockedId);
   }
 
   // Health -----------------------------------------------------------------

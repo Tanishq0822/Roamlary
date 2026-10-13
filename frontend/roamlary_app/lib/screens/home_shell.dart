@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import 'chat_screen.dart';
+import 'chat_hub_screen.dart';
 import 'contacts_screen.dart';
 import 'home_dashboard.dart';
 import 'reports_screen.dart';
@@ -21,7 +21,7 @@ class _HomeShellState extends State<HomeShell> {
   static const _pages = <Widget>[
     HomeDashboard(),
     SafeModeScreen(),
-    ChatScreen(),
+    ChatHubScreen(),
     ReportsScreen(),
     ContactsScreen(),
     VerificationScreen(),
@@ -46,9 +46,9 @@ class _HomeShellState extends State<HomeShell> {
             label: 'Safe',
           ),
           NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            selectedIcon: Icon(Icons.chat_bubble),
-            label: 'Companion',
+            icon: Icon(Icons.forum_outlined),
+            selectedIcon: Icon(Icons.forum),
+            label: 'Connect',
           ),
           NavigationDestination(
             icon: Icon(Icons.map_outlined),

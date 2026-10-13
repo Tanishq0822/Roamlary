@@ -86,6 +86,28 @@ abstract class AppRepository {
   Future<SocialPolicy> getSocialPolicy();
   Future<SocialPolicy> setSocialPolicy({required bool requiresVerification});
 
+  // Chat: discover -> request -> accepted conversation -> messages --------
+  Future<List<DiscoveryCandidate>> discover({int offset = 0, int limit = 20});
+  Future<List<Conversation>> listConversations();
+  Future<List<Conversation>> listChatRequests({required String direction});
+  Future<void> sendChatRequest({required String recipientId});
+  Future<Conversation> acceptChatRequest(String id);
+  Future<void> rejectChatRequest(String id);
+  Future<void> cancelChatRequest(String id);
+  Future<List<ChatMessage>> listMessages(String conversationId);
+  Future<ChatMessage> sendMessage(String conversationId, String body);
+
+  // Travel-buddy (connect) requests ---------------------------------------
+  Future<List<BuddyRequest>> listBuddyRequests({required String direction});
+  Future<void> sendBuddyRequest({required String recipientId, String? planId});
+  Future<BuddyRequest> acceptBuddyRequest(String id);
+  Future<void> rejectBuddyRequest(String id);
+
+  // Blocking (safety switch) ----------------------------------------------
+  Future<List<BlockedUser>> listBlocks();
+  Future<void> blockUser(String blockedId);
+  Future<void> unblockUser(String blockedId);
+
   // Health -----------------------------------------------------------------
   Future<bool> health();
 }

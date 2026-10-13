@@ -108,6 +108,44 @@ enum VerificationRequestStatus {
       );
 }
 
+/// Lifecycle of a one-to-one chat conversation / message request — mirrors
+/// backend `ConversationStatus` (Phase 8).
+enum ConversationStatus {
+  pending('pending', 'Pending'),
+  accepted('accepted', 'Accepted'),
+  rejected('rejected', 'Rejected'),
+  cancelled('cancelled', 'Cancelled');
+
+  const ConversationStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static ConversationStatus fromWire(String value) =>
+      ConversationStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => ConversationStatus.pending,
+      );
+}
+
+/// State of a travel-buddy (connect) request — mirrors backend
+/// `BuddyRequestStatus` (Phase 7).
+enum BuddyRequestStatus {
+  pending('pending', 'Pending'),
+  accepted('accepted', 'Accepted'),
+  rejected('rejected', 'Rejected'),
+  cancelled('cancelled', 'Cancelled');
+
+  const BuddyRequestStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static BuddyRequestStatus fromWire(String value) =>
+      BuddyRequestStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => BuddyRequestStatus.pending,
+      );
+}
+
 /// Authorization role — mirrors backend `UserRole`. The server is the only
 /// thing that can grant `owner`; the UI merely displays what it is told.
 enum UserRole {
