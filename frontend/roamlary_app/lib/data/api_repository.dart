@@ -602,9 +602,13 @@ class ApiRepository implements AppRepository {
   // Meetups & house parties (Phase 9) ----------------------------------------
   @override
   Future<List<Meetup>> listMeetups() async {
+    // GET /meetups answers with a BARE JSON array (`response_model` is
+    // `list[MeetupRead]`), not a `{results: [...]}` envelope like the other
+    // collection endpoints. Casting it to Map<String, dynamic> throws
+    // "type 'List<dynamic>' is not a subtype of type 'Map<String,dynamic>'".
     final data = await _send('GET', '/meetups', query: {'limit': '50'})
-        as Map<String, dynamic>;
-    return (data['results'] as List<dynamic>? ?? const [])
+        as List<dynamic>;
+    return data
         .map((e) => Meetup.fromJson(e as Map<String, dynamic>))
         .toList();
   }

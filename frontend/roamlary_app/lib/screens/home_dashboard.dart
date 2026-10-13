@@ -23,6 +23,14 @@ String _sosLabel(SosStatus status) => switch (status) {
       SosStatus.cancelled => 'Cancelled',
     };
 
+/// Human label for a report status — `ReportStatus` only carries the wire
+/// value (no `label` field, unlike `ReportCategory`).
+String _reportStatusLabel(ReportStatus status) => switch (status) {
+      ReportStatus.pending => 'Under review',
+      ReportStatus.approved => 'Approved',
+      ReportStatus.rejected => 'Rejected',
+    };
+
 /// Landing dashboard.
 ///
 /// Layout follows the product brief, top to bottom:
@@ -86,6 +94,70 @@ class _HomeDashboardState extends State<HomeDashboard> {
       repo.listChatRequests(direction: 'incoming'),
       <Conversation>[],
     );
+
+    // "Recent activity" (bottom card): four feeds merged and sorted newest
+    // first. Each is independently protected so one failing feed cannot
+    // blank the card, let alone the page.
+    final reports = await _safe(repo.listReports(limit: 20), <CommunityReport>[]);
+    final meetups = await _safe(repo.listMeetups(), <Meetup>[]);
+    final invitations = await _safe(repo.listInvitations(), <Invitation>[]);
+    final tripShares = await _safe(repo.listTripShares(), <TripShare>[]);
+    final doneCheckIns = await _safe(
+      repo.listCheckIns(status: CheckInStatus.safe),
+      <CheckIn>[],
+    );
+
+    final activity = <_ActivityItem>[
+      for (final r in reports)
+        _ActivityItem(
+          icon: Icons.report_gmailerrorred_outlined,
+          color: AppTheme.danger,
+          title: r.description,
+          subtitle: '${r.category.label} report · '
+              '${_reportStatusLabel(r.status)}',
+          at: r.createdAt,
+          pending: r.status == ReportStatus.pending,
+        ),
+      for (final m in meetups)
+        _ActivityItem(
+          icon: Icons.event_available_outlined,
+          color: AppTheme.green,
+          title: m.title,
+          subtitle: m.kind == 'house_party'
+              ? 'House party · ${m.hostDisplayName}'
+              : 'Meetup · ${m.hostDisplayName}',
+          at: m.startAt,
+          pending: m.myMembership == MembershipStatus.approved,
+        ),
+      for (final i in invitations)
+        _ActivityItem(
+          icon: Icons.mail_outline,
+          color: AppTheme.purple,
+          title: i.eventTitle,
+          subtitle: 'House-party invite · ${i.status.label}',
+          at: i.createdAt,
+          pending: i.isPending,
+        ),
+      for (final s in tripShares)
+        _ActivityItem(
+          icon: Icons.link_outlined,
+          color: AppTheme.purple,
+          title: s.planDestination ?? 'Itinerary link',
+          subtitle: s.revokedAt != null ? 'Trip share · revoked' : 'Trip share · active',
+          at: s.createdAt,
+          pending: s.revokedAt == null,
+        ),
+      for (final c in doneCheckIns)
+        _ActivityItem(
+          icon: Icons.check_circle_outline,
+          color: AppTheme.green,
+          title: c.note ?? 'Check-in completed',
+          subtitle: 'Check-in · completed',
+          at: c.completedAt ?? c.createdAt,
+          pending: false,
+        ),
+    ]..sort((a, b) => b.at.compareTo(a.at));
+
     return _DashboardData(
       openCheckIns: openCheckIns,
       sosEvents: sosEvents,
@@ -94,6 +166,7 @@ class _HomeDashboardState extends State<HomeDashboard> {
       candidates: candidates,
       incomingRequests: incomingRequests.length,
       socialDenied: socialDenied,
+      activity: activity,
     );
   }
 
@@ -226,6 +299,10 @@ class _HomeDashboardState extends State<HomeDashboard> {
                     socialDenied: data.socialDenied,
                     onChanged: _refresh,
                   ),
+                  // Deliberately last: reports, meetups, invites, shares and
+                  // finished check-ins merged into one newest-first feed.
+                  const SizedBox(height: 16),
+                  _RecentActivityCard(items: data.activity),
                 ],
               ],
             ),
@@ -245,6 +322,7 @@ class _DashboardData {
     required this.candidates,
     required this.incomingRequests,
     required this.socialDenied,
+    required this.activity,
   });
 
   final List<CheckIn> openCheckIns;
@@ -254,6 +332,29 @@ class _DashboardData {
   final List<DiscoveryCandidate> candidates;
   final int incomingRequests;
   final bool socialDenied;
+
+  /// Reports, meetups, invitations, shares and completed check-ins merged
+  /// and sorted newest first — rendered by the bottom activity card.
+  final List<_ActivityItem> activity;
+}
+
+/// One row of the merged recent-activity feed.
+class _ActivityItem {
+  const _ActivityItem({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.at,
+    required this.pending,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final DateTime at;
+  final bool pending;
 }
 
 // ---------------------------------------------------------------------------
@@ -1280,6 +1381,149 @@ class _AddConnectionSectionState extends State<_AddConnectionSection> {
         ],
       ),
     );
+  }
+}
+
+/// Merged "recent activity" feed — reports, meetups, house-party invites,
+/// trip shares and completed check-ins in one newest-first list. Sits at the
+/// very bottom of the dashboard.
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.items});
+
+  final List<_ActivityItem> items;
+
+  static const int _visible = 8;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    if (items.isEmpty) {
+      return SectionCard(
+        title: 'Recent activity',
+        child: Text(
+          'Nothing yet — file a report, join a meetup or finish a check-in '
+          'and it will show up here.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    }
+
+    final shown = items.take(_visible).toList();
+
+    return SectionCard(
+      title: 'Recent activity',
+      trailing: TextButton(
+        onPressed: items.length <= _visible
+            ? null
+            : () => ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      'Showing the ${shown.length} most recent of '
+                      '${items.length} items.',
+                    ),
+                  ),
+                ),
+        child: Text('${items.length} total'),
+      ),
+      child: Column(
+        children: [
+          for (var i = 0; i < shown.length; i++) ...[
+            if (i > 0) const Divider(height: 14),
+            _ActivityTile(item: shown[i]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityTile extends StatelessWidget {
+  const _ActivityTile({required this.item});
+
+  final _ActivityItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: item.color.withValues(alpha: 0.13),
+          ),
+          child: Icon(item.icon, size: 18, color: item.color),
+        ),
+        const SizedBox(width: 11),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                item.title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                item.subtitle,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text(
+              _relative(item.at),
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+            if (item.pending) ...[
+              const SizedBox(height: 4),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                decoration: BoxDecoration(
+                  color: item.color.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  'Open',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: item.color,
+                  ),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ],
+    );
+  }
+
+  static String _relative(DateTime at) {
+    final diff = DateTime.now().toUtc().difference(at.toUtc());
+    if (diff.inMinutes < 1) return 'now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return formatDateTime(at);
   }
 }
 
