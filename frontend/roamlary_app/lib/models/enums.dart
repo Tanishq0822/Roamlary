@@ -146,6 +146,84 @@ enum BuddyRequestStatus {
       );
 }
 
+/// Category of a community meetup (Phase 9).
+enum MeetupCategory {
+  hiking('hiking', 'Hiking'),
+  food('food', 'Food'),
+  culture('culture', 'Culture'),
+  adventure('adventure', 'Adventure'),
+  leisure('leisure', 'Leisure'),
+  nightlife('nightlife', 'Nightlife'),
+  other('other', 'Other');
+
+  const MeetupCategory(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static MeetupCategory fromWire(String value) =>
+      MeetupCategory.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => MeetupCategory.other,
+      );
+}
+
+/// Lifecycle of a meetup/house-party event (Phase 9).
+enum MeetupStatus {
+  active('active', 'Active'),
+  cancelled('cancelled', 'Cancelled'),
+  completed('completed', 'Completed');
+
+  const MeetupStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static MeetupStatus fromWire(String value) =>
+      MeetupStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => MeetupStatus.active,
+      );
+}
+
+/// The caller's membership state on one meetup (Phase 9).
+enum MembershipStatus {
+  none('none', 'Not joined'),
+  requested('requested', 'Requested'),
+  approved('approved', 'Going'),
+  declined('declined', 'Declined'),
+  removed('removed', 'Removed'),
+  left('left', 'Left');
+
+  const MembershipStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static MembershipStatus fromWire(String value) =>
+      MembershipStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => MembershipStatus.none,
+      );
+}
+
+/// Delivery state of one outbound notification attempt (Phase 11).
+enum NotificationStatus {
+  queued('queued', 'Queued'),
+  attempted('attempted', 'Attempted'),
+  delivered('delivered', 'Delivered'),
+  failed('failed', 'Failed'),
+  unavailable('unavailable', 'Unavailable'),
+  unknown('unknown', 'Unknown');
+
+  const NotificationStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static NotificationStatus fromWire(String value) =>
+      NotificationStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => NotificationStatus.unknown,
+      );
+}
+
 /// Authorization role — mirrors backend `UserRole`. The server is the only
 /// thing that can grant `owner`; the UI merely displays what it is told.
 enum UserRole {

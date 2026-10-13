@@ -50,6 +50,9 @@ abstract class AppRepository {
   Future<CheckIn> completeCheckIn(String id);
   Future<CheckIn> updateCheckInStatus(String id, CheckInStatus status);
 
+  /// Patch a check-in's note (used to refresh the shared location marker).
+  Future<CheckIn> updateCheckInNote(String id, {required String note});
+
   // SOS --------------------------------------------------------------------
   Future<List<SosEvent>> listSosEvents();
   Future<SosEvent> createSos({String? description, double? latitude, double? longitude});
@@ -107,6 +110,56 @@ abstract class AppRepository {
   Future<List<BlockedUser>> listBlocks();
   Future<void> blockUser(String blockedId);
   Future<void> unblockUser(String blockedId);
+
+  // SOS workflow (Phase 10) -------------------------------------------------
+  Future<SosEvent> acknowledgeSos(String id);
+  Future<List<AppNotification>> retrySosNotifications(String id);
+  Future<List<AppNotification>> listSosNotifications(String id);
+
+  // Check-ins: overdue view (Phase 12) --------------------------------------
+  Future<List<CheckIn>> listOverdueCheckIns();
+
+  // Meetups & house parties (Phase 9) ---------------------------------------
+  Future<List<Meetup>> listMeetups();
+  Future<Meetup> createMeetup({
+    required String title,
+    String? description,
+    required MeetupCategory category,
+    required DateTime startAt,
+    required DateTime endAt,
+    String? locationText,
+    int capacity = 20,
+  });
+  Future<void> joinMeetup(String id);
+  Future<void> leaveMeetup(String id);
+  Future<void> cancelMeetup(String id);
+
+  // Notifications inbox (Phase 11) -------------------------------------------
+  Future<List<AppNotification>> listNotifications();
+  Future<void> markNotificationRead(String id);
+
+  // Trip sharing (Phase 11) --------------------------------------------------
+  Future<List<TripShare>> listTripShares();
+  Future<TripShare> createTripShare({
+    String? planId,
+    required DateTime expiresAt,
+  });
+  Future<void> revokeTripShare(String id);
+  Future<List<SharedItinerary>> listSharedWithMe();
+
+  // AI companion (Phase 13) --------------------------------------------------
+  Future<AiStatus> aiStatus();
+  Future<AiAnswer> askAi(String message);
+
+  // Filtered discovery for the home "add connection" rail --------------------
+  Future<List<DiscoveryCandidate>> discoverFiltered({
+    String? destination,
+    String? travelStyle,
+    String? language,
+    List<String> interests = const [],
+    int minScore = 0,
+    int limit = 20,
+  });
 
   // Health -----------------------------------------------------------------
   Future<bool> health();

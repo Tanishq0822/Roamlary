@@ -59,6 +59,29 @@ class CheckIn {
 
   bool get isOpen => status == CheckInStatus.pending;
 
+  /// Location shared with this check-in, if any.
+  ///
+  /// The backend's check-in contract has no coordinate fields, so the app
+  /// writes a `📍 lat,lng` marker into the (500-char) note and reads it back
+  /// here. Keeps every screen in one place: [location] and [noteWithoutLocation].
+  CheckInLocation? get location {
+    final match = _locationPattern.firstMatch(note ?? '');
+    if (match == null) return null;
+    final lat = double.tryParse(match.group(1)!);
+    final lng = double.tryParse(match.group(2)!);
+    if (lat == null || lng == null) return null;
+    if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+    return CheckInLocation(lat: lat, lng: lng);
+  }
+
+  /// The note with the location marker stripped, for tidy display.
+  String? get noteWithoutLocation {
+    final stripped = (note ?? '').replaceAll(_locationPattern, '').trim();
+    return stripped.isEmpty ? null : stripped;
+  }
+
+  static final _locationPattern = RegExp(r'📍\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)');
+
   factory CheckIn.fromJson(Map<String, dynamic> json) => CheckIn(
         id: json['id'] as String,
         userId: json['user_id'] as String,
@@ -75,6 +98,16 @@ class CheckIn {
       );
 }
 
+/// A lat/lng pair shared alongside a check-in (parsed from the note marker).
+class CheckInLocation {
+  const CheckInLocation({required this.lat, required this.lng});
+
+  final double lat;
+  final double lng;
+
+  String get mapsUrl => 'https://maps.google.com/?q=$lat,$lng';
+}
+
 /// An SOS incident — mirrors backend `SosEventRead`.
 class SosEvent {
   const SosEvent({
@@ -89,6 +122,7 @@ class SosEvent {
     required this.updatedAt,
     this.cancelledAt,
     this.resolvedAt,
+    this.acknowledgedAt,
   });
 
   final String id;
@@ -102,8 +136,11 @@ class SosEvent {
   final DateTime updatedAt;
   final DateTime? cancelledAt;
   final DateTime? resolvedAt;
+  final DateTime? acknowledgedAt;
 
   bool get isActive => status == SosStatus.active;
+  bool get isOpen => status == SosStatus.active ||
+      status == SosStatus.acknowledged;
 
   factory SosEvent.fromJson(Map<String, dynamic> json) => SosEvent(
         id: json['id'] as String,
@@ -123,6 +160,9 @@ class SosEvent {
         resolvedAt: json['resolved_at'] == null
             ? null
             : DateTime.parse(json['resolved_at'] as String),
+        acknowledgedAt: json['acknowledged_at'] == null
+            ? null
+            : DateTime.parse(json['acknowledged_at'] as String),
       );
 }
 
@@ -527,5 +567,230 @@ class BlockedUser {
         blockedId: json['blocked_id'] as String,
         blockedDisplayName: json['blocked_display_name'] as String,
         createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+/// A community meetup / house party — mirrors backend `MeetupRead`
+/// (Phase 9).
+class Meetup {
+  const Meetup({
+    required this.id,
+    required this.hostId,
+    required this.hostDisplayName,
+    required this.title,
+    this.description,
+    required this.category,
+    required this.startAt,
+    required this.endAt,
+    required this.capacity,
+    required this.approvedCount,
+    required this.participation,
+    required this.status,
+    this.locationText,
+    required this.myMembership,
+    required this.kind,
+  });
+
+  final String id;
+  final String hostId;
+  final String hostDisplayName;
+  final String title;
+  final String? description;
+  final MeetupCategory category;
+  final DateTime startAt;
+  final DateTime endAt;
+  final int capacity;
+  final int approvedCount;
+  final String participation; // open | approval
+  final MeetupStatus status;
+  final String? locationText;
+  final MembershipStatus myMembership;
+  final String kind; // meetup | house_party
+
+  bool get canJoin =>
+      status == MeetupStatus.active &&
+      myMembership != MembershipStatus.approved &&
+      myMembership != MembershipStatus.requested &&
+      approvedCount < capacity;
+
+  factory Meetup.fromJson(Map<String, dynamic> json) => Meetup(
+        id: json['id'] as String,
+        hostId: json['host_id'] as String,
+        hostDisplayName: json['host_display_name'] as String,
+        title: json['title'] as String,
+        description: json['description'] as String?,
+        category: MeetupCategory.fromWire(json['category'] as String),
+        startAt: DateTime.parse(json['start_at'] as String),
+        endAt: DateTime.parse(json['end_at'] as String),
+        capacity: json['capacity'] as int,
+        approvedCount: json['approved_count'] as int,
+        participation: json['participation'] as String? ?? 'open',
+        status: MeetupStatus.fromWire(json['status'] as String),
+        locationText: json['location_text'] as String?,
+        myMembership: MembershipStatus.fromWire(
+            json['my_membership'] as String? ?? 'none'),
+        kind: json['kind'] as String? ?? 'meetup',
+      );
+}
+
+/// One notification row — mirrors backend `NotificationRead` (Phase 11).
+/// Also used for per-SOS contact-attempt rows.
+class AppNotification {
+  const AppNotification({
+    required this.id,
+    required this.kind,
+    required this.title,
+    required this.body,
+    required this.channel,
+    required this.status,
+    required this.attempts,
+    this.lastError,
+    this.readAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String kind;
+  final String title;
+  final String body;
+  final String channel;
+  final NotificationStatus status;
+  final int attempts;
+  final String? lastError;
+  final DateTime? readAt;
+  final DateTime createdAt;
+
+  bool get isRead => readAt != null;
+
+  factory AppNotification.fromJson(Map<String, dynamic> json) =>
+      AppNotification(
+        id: json['id'] as String,
+        kind: json['kind'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        body: json['body'] as String? ?? '',
+        channel: json['channel'] as String? ?? '',
+        status: NotificationStatus.fromWire(
+            json['status'] as String? ?? 'unknown'),
+        attempts: json['attempts'] as int? ?? 0,
+        lastError: json['last_error'] as String?,
+        readAt: json['read_at'] == null
+            ? null
+            : DateTime.parse(json['read_at'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+/// A shareable link to one of my travel plans — mirrors `TripShareRead`
+/// (Phase 11). Anyone holding `shareUrl` can view the plan until
+/// `expiresAt` (or until revoked).
+class TripShare {
+  const TripShare({
+    required this.id,
+    required this.shareUrl,
+    required this.expiresAt,
+    this.planId,
+    this.planDestination,
+    this.revokedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String shareUrl;
+  final DateTime expiresAt;
+  final String? planId;
+  final String? planDestination;
+  final DateTime? revokedAt;
+  final DateTime createdAt;
+
+  bool get isActive => revokedAt == null && DateTime.now().isBefore(expiresAt);
+
+  factory TripShare.fromJson(Map<String, dynamic> json) => TripShare(
+        id: json['id'] as String,
+        shareUrl: json['share_url'] as String? ?? '',
+        expiresAt: DateTime.parse(json['expires_at'] as String),
+        planId: json['plan_id'] as String?,
+        planDestination: json['plan_destination'] as String?,
+        revokedAt: json['revoked_at'] == null
+            ? null
+            : DateTime.parse(json['revoked_at'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+/// Someone else's plan shared with me — mirrors `SharedItineraryRead`.
+class SharedItinerary {
+  const SharedItinerary({
+    required this.id,
+    required this.ownerDisplayName,
+    required this.shareUrl,
+    required this.expiresAt,
+    this.planDestination,
+    this.revokedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String ownerDisplayName;
+  final String shareUrl;
+  final DateTime expiresAt;
+  final String? planDestination;
+  final DateTime? revokedAt;
+  final DateTime createdAt;
+
+  bool get isActive => revokedAt == null && DateTime.now().isBefore(expiresAt);
+
+  factory SharedItinerary.fromJson(Map<String, dynamic> json) =>
+      SharedItinerary(
+        id: json['id'] as String,
+        ownerDisplayName: json['owner_display_name'] as String? ?? 'Someone',
+        shareUrl: json['share_url'] as String? ?? '',
+        expiresAt: DateTime.parse(json['expires_at'] as String),
+        planDestination: json['plan_destination'] as String?,
+        revokedAt: json['revoked_at'] == null
+            ? null
+            : DateTime.parse(json['revoked_at'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+/// AI companion configuration state — `GET /ai/status` (Phase 13).
+/// `configured` is a boolean: the API never returns the key itself.
+class AiStatus {
+  const AiStatus({required this.provider, required this.configured});
+
+  final String provider;
+  final bool configured;
+
+  factory AiStatus.fromJson(Map<String, dynamic> json) => AiStatus(
+        provider: json['provider'] as String? ?? 'unavailable',
+        configured: json['configured'] as bool? ?? false,
+      );
+}
+
+/// One AI answer — `POST /ai/chat` (Phase 13). `verified` is false when
+/// the provider is unconfigured; the UI must show the honesty footer.
+class AiAnswer {
+  const AiAnswer({
+    required this.answer,
+    required this.verified,
+    this.honestyFooter,
+    this.emergencyFooter,
+    required this.generatedAt,
+  });
+
+  final String answer;
+  final bool verified;
+  final String? honestyFooter;
+  final String? emergencyFooter;
+  final DateTime generatedAt;
+
+  factory AiAnswer.fromJson(Map<String, dynamic> json) => AiAnswer(
+        answer: json['answer'] as String? ?? '',
+        verified: json['verified'] as bool? ?? false,
+        honestyFooter: json['honesty_footer'] as String?,
+        emergencyFooter: json['emergency_footer'] as String?,
+        generatedAt: json['generated_at'] == null
+            ? DateTime.now().toUtc()
+            : DateTime.parse(json['generated_at'] as String),
       );
 }

@@ -24,6 +24,11 @@ class MockRepository implements AppRepository {
   final List<TrustedContact> _contacts = [];
   final List<CheckIn> _checkIns = [];
   final List<SosEvent> _sos = [];
+  final List<AppNotification> _sosNotifications = [];
+  final List<AppNotification> _inbox = [];
+  final List<Meetup> _meetups = [];
+  final List<TripShare> _tripShares = [];
+  final List<SharedItinerary> _sharedWithMe = [];
   final List<CommunityReport> _reports = [];
   final List<VerificationRequestReview> _reviewQueue = [];
   VerificationStatus _verificationStatus = VerificationStatus.unverified;
@@ -227,6 +232,99 @@ class MockRepository implements AppRepository {
         planDestination: 'Manali',
       ),
     );
+
+    // Phase 9-13 seed: meetups, notifications inbox, trip shares.
+    _meetups.addAll([
+      Meetup(
+        id: _nextId('mtp'),
+        hostId: 'u-demo-1002',
+        hostDisplayName: 'Sofia Reyes',
+        title: 'Sunrise hike at Annapurna base',
+        description: 'Early start, moderate pace, coffee after.',
+        category: MeetupCategory.hiking,
+        startAt: now.add(const Duration(days: 4)).add(const Duration(hours: 5)),
+        endAt: now.add(const Duration(days: 4)).add(const Duration(hours: 11)),
+        capacity: 12,
+        approvedCount: 5,
+        participation: 'open',
+        status: MeetupStatus.active,
+        locationText: 'Pokhara, Nepal',
+        myMembership: MembershipStatus.none,
+        kind: 'meetup',
+      ),
+      Meetup(
+        id: _nextId('mtp'),
+        hostId: 'u-demo-1001',
+        hostDisplayName: 'Aarav Mehta',
+        title: 'Old-town food walk',
+        description: 'Six stops, vegetarians welcome.',
+        category: MeetupCategory.food,
+        startAt: now.add(const Duration(days: 2)).add(const Duration(hours: 18)),
+        endAt: now.add(const Duration(days: 2)).add(const Duration(hours: 21)),
+        capacity: 8,
+        approvedCount: 8,
+        participation: 'approval',
+        status: MeetupStatus.active,
+        locationText: 'Jaipur, India',
+        myMembership: MembershipStatus.none,
+        kind: 'meetup',
+      ),
+    ]);
+
+    _inbox.addAll([
+      AppNotification(
+        id: _nextId('ntf'),
+        kind: 'chat_request',
+        title: 'New chat request',
+        body: 'Sofia Reyes would like to chat with you.',
+        channel: 'in_app',
+        status: NotificationStatus.delivered,
+        attempts: 1,
+        createdAt: now.subtract(const Duration(hours: 6)),
+      ),
+      AppNotification(
+        id: _nextId('ntf'),
+        kind: 'checkin_due',
+        title: 'Check-in due soon',
+        body: 'Your check-in "Night walk along Marine Drive" is due in 3 hours.',
+        channel: 'in_app',
+        status: NotificationStatus.delivered,
+        attempts: 1,
+        createdAt: now.subtract(const Duration(hours: 1)),
+      ),
+      AppNotification(
+        id: _nextId('ntf'),
+        kind: 'buddy_request',
+        title: 'Travel-buddy request',
+        body: 'Aarav Mehta wants to join your Manali leg.',
+        channel: 'in_app',
+        status: NotificationStatus.delivered,
+        attempts: 1,
+        createdAt: now.subtract(const Duration(minutes: 42)),
+        readAt: now.subtract(const Duration(minutes: 30)),
+      ),
+    ]);
+
+    _tripShares.add(
+      TripShare(
+        id: _nextId('shr'),
+        shareUrl: 'https://roamlary.app/s/k-demo-7f3a',
+        expiresAt: now.add(const Duration(days: 6)),
+        planDestination: 'Manali',
+        createdAt: now.subtract(const Duration(hours: 8)),
+      ),
+    );
+
+    _sharedWithMe.add(
+      SharedItinerary(
+        id: _nextId('shi'),
+        ownerDisplayName: 'Sofia Reyes',
+        shareUrl: 'https://roamlary.app/s/k-demo-9b2c',
+        expiresAt: now.add(const Duration(days: 2)),
+        planDestination: 'Jaipur',
+        createdAt: now.subtract(const Duration(days: 1)),
+      ),
+    );
   }
 
   // Auth -------------------------------------------------------------------
@@ -340,6 +438,26 @@ class MockRepository implements AppRepository {
     return _transitionCheckIn(id, status);
   }
 
+  @override
+  Future<CheckIn> updateCheckInNote(String id, {required String note}) async {
+    await _delay(350);
+    final index = _checkIns.indexWhere((c) => c.id == id);
+    if (index == -1) throw StateError('Check-in not found');
+    final current = _checkIns[index];
+    final updated = CheckIn(
+      id: current.id,
+      userId: current.userId,
+      status: current.status,
+      note: _blankToNull(note),
+      dueAt: current.dueAt,
+      completedAt: current.completedAt,
+      createdAt: current.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _checkIns[index] = updated;
+    return updated;
+  }
+
   CheckIn _transitionCheckIn(String id, CheckInStatus target) {
     final index = _checkIns.indexWhere((c) => c.id == id);
     if (index == -1) {
@@ -406,6 +524,8 @@ class MockRepository implements AppRepository {
   @override
   Future<SosEvent> resolveSos(String id) => _closeSos(id, SosStatus.resolved);
 
+  /// Backend CAS rules: `active` may move anywhere; `acknowledged` may still
+  /// go to resolved/cancelled. Anything else is a 409.
   Future<SosEvent> _closeSos(String id, SosStatus target) async {
     await _delay(400);
     final index = _sos.indexWhere((e) => e.id == id);
@@ -413,19 +533,15 @@ class MockRepository implements AppRepository {
       throw StateError('SOS incident not found');
     }
     final current = _sos[index];
-    if (current.status != SosStatus.active) {
-      throw StateError('Only an active SOS can be closed');
+    if (current.status != SosStatus.active &&
+        current.status != SosStatus.acknowledged) {
+      throw StateError(
+          'This SOS incident is already closed (${current.status.wire})');
     }
     final now = DateTime.now().toUtc();
-    final updated = SosEvent(
-      id: current.id,
-      userId: current.userId,
+    final updated = _copySos(
+      current,
       status: target,
-      description: current.description,
-      latitude: current.latitude,
-      longitude: current.longitude,
-      locationRecordedAt: current.locationRecordedAt,
-      createdAt: current.createdAt,
       updatedAt: now,
       cancelledAt: target == SosStatus.cancelled ? now : null,
       resolvedAt: target == SosStatus.resolved ? now : null,
@@ -433,6 +549,29 @@ class MockRepository implements AppRepository {
     _sos[index] = updated;
     return updated;
   }
+
+  SosEvent _copySos(
+    SosEvent e, {
+    SosStatus? status,
+    DateTime? updatedAt,
+    DateTime? cancelledAt,
+    DateTime? resolvedAt,
+    DateTime? acknowledgedAt,
+  }) =>
+      SosEvent(
+        id: e.id,
+        userId: e.userId,
+        status: status ?? e.status,
+        description: e.description,
+        latitude: e.latitude,
+        longitude: e.longitude,
+        locationRecordedAt: e.locationRecordedAt,
+        createdAt: e.createdAt,
+        updatedAt: updatedAt ?? e.updatedAt,
+        cancelledAt: cancelledAt,
+        resolvedAt: resolvedAt,
+        acknowledgedAt: acknowledgedAt ?? e.acknowledgedAt,
+      );
 
   // Reports ----------------------------------------------------------------
   @override
@@ -840,6 +979,326 @@ class MockRepository implements AppRepository {
   Future<void> unblockUser(String blockedId) async {
     await _delay();
     _blocks.removeWhere((b) => b.blockedId == blockedId);
+  }
+
+  // SOS workflow (Phase 10) ---------------------------------------------------
+  @override
+  Future<SosEvent> acknowledgeSos(String id) async {
+    await _delay(400);
+    final i = _sos.indexWhere((e) => e.id == id);
+    if (i < 0) throw StateError('SOS incident not found');
+    final current = _sos[i];
+    if (current.status != SosStatus.active) {
+      throw StateError('Only an active SOS incident can be acknowledged');
+    }
+    final now = DateTime.now().toUtc();
+    final updated = _copySos(
+      current,
+      status: SosStatus.acknowledged,
+      acknowledgedAt: now,
+      updatedAt: now,
+    );
+    _sos[i] = updated;
+    return updated;
+  }
+
+  @override
+  Future<List<AppNotification>> retrySosNotifications(String id) async {
+    await _delay(400);
+    final i = _sos.indexWhere((e) => e.id == id);
+    if (i < 0) throw StateError('SOS incident not found');
+    // Simulate a re-attempt landing: queued -> delivered.
+    return _sosNotifications
+        .map((n) => AppNotification(
+              id: n.id,
+              kind: n.kind,
+              title: n.title,
+              body: n.body,
+              channel: n.channel,
+              status: NotificationStatus.delivered,
+              attempts: n.attempts + 1,
+              lastError: null,
+              readAt: n.readAt,
+              createdAt: n.createdAt,
+            ))
+        .toList();
+  }
+
+  @override
+  Future<List<AppNotification>> listSosNotifications(String id) async {
+    await _delay(200);
+    if (_sosNotifications.isEmpty) {
+      final now = DateTime.now().toUtc();
+      _sosNotifications.addAll([
+        AppNotification(
+          id: _nextId('ntf'),
+          kind: 'sos_contact',
+          title: 'SOS relay to trusted contacts',
+          body: 'Meera Patel was notified by SMS.',
+          channel: 'sms',
+          status: NotificationStatus.delivered,
+          attempts: 1,
+          createdAt: now,
+        ),
+        AppNotification(
+          id: _nextId('ntf'),
+          kind: 'sos_contact',
+          title: 'SOS relay to trusted contacts',
+          body: 'Aarav Sharma email could not be delivered.',
+          channel: 'email',
+          status: NotificationStatus.failed,
+          attempts: 2,
+          lastError: 'Mailbox unavailable',
+          createdAt: now.add(const Duration(seconds: 30)),
+        ),
+      ]);
+    }
+    return List.unmodifiable(_sosNotifications);
+  }
+
+  // Check-ins: overdue view (Phase 12) ----------------------------------------
+  @override
+  Future<List<CheckIn>> listOverdueCheckIns() async {
+    await _delay();
+    final now = DateTime.now().toUtc();
+    final items = _checkIns
+        .where((c) =>
+            c.status == CheckInStatus.pending &&
+            c.dueAt != null &&
+            c.dueAt!.isBefore(now))
+        .toList()
+      ..sort((a, b) => a.dueAt!.compareTo(b.dueAt!));
+    return List.unmodifiable(items);
+  }
+
+  // Meetups & house parties (Phase 9) -----------------------------------------
+  @override
+  Future<List<Meetup>> listMeetups() async {
+    await _delay();
+    return List.unmodifiable(_meetups);
+  }
+
+  @override
+  Future<Meetup> createMeetup({
+    required String title,
+    String? description,
+    required MeetupCategory category,
+    required DateTime startAt,
+    required DateTime endAt,
+    String? locationText,
+    int capacity = 20,
+  }) async {
+    await _delay(500);
+    final meetup = Meetup(
+      id: _nextId('mtp'),
+      hostId: _userId,
+      hostDisplayName: _profile.displayName,
+      title: title.trim(),
+      description: _blankToNull(description),
+      category: category,
+      startAt: startAt.toUtc(),
+      endAt: endAt.toUtc(),
+      capacity: capacity,
+      approvedCount: 0,
+      participation: 'open',
+      status: MeetupStatus.active,
+      locationText: _blankToNull(locationText),
+      myMembership: MembershipStatus.approved,
+      kind: 'meetup',
+    );
+    _meetups.insert(0, meetup);
+    return meetup;
+  }
+
+  @override
+  Future<void> joinMeetup(String id) async {
+    await _delay(400);
+    final i = _meetups.indexWhere((m) => m.id == id);
+    if (i < 0) throw StateError('Meetup not found');
+    final m = _meetups[i];
+    _meetups[i] = _copyMeetup(
+      m,
+      approvedCount: m.approvedCount + 1,
+      myMembership: MembershipStatus.approved,
+    );
+  }
+
+  @override
+  Future<void> leaveMeetup(String id) async {
+    await _delay(400);
+    final i = _meetups.indexWhere((m) => m.id == id);
+    if (i < 0) throw StateError('Meetup not found');
+    final m = _meetups[i];
+    _meetups[i] = _copyMeetup(
+      m,
+      approvedCount: m.approvedCount > 0 ? m.approvedCount - 1 : 0,
+      myMembership: MembershipStatus.left,
+    );
+  }
+
+  @override
+  Future<void> cancelMeetup(String id) async {
+    await _delay(400);
+    final i = _meetups.indexWhere((m) => m.id == id);
+    if (i < 0) throw StateError('Meetup not found');
+    _meetups[i] = _copyMeetup(_meetups[i], status: MeetupStatus.cancelled);
+  }
+
+  Meetup _copyMeetup(
+    Meetup m, {
+    MeetupStatus? status,
+    int? approvedCount,
+    MembershipStatus? myMembership,
+  }) =>
+      Meetup(
+        id: m.id,
+        hostId: m.hostId,
+        hostDisplayName: m.hostDisplayName,
+        title: m.title,
+        description: m.description,
+        category: m.category,
+        startAt: m.startAt,
+        endAt: m.endAt,
+        capacity: m.capacity,
+        approvedCount: approvedCount ?? m.approvedCount,
+        participation: m.participation,
+        status: status ?? m.status,
+        locationText: m.locationText,
+        myMembership: myMembership ?? m.myMembership,
+        kind: m.kind,
+      );
+
+  // Notifications inbox (Phase 11) ---------------------------------------------
+  @override
+  Future<List<AppNotification>> listNotifications() async {
+    await _delay();
+    return List.unmodifiable(_inbox);
+  }
+
+  @override
+  Future<void> markNotificationRead(String id) async {
+    await _delay(200);
+    final i = _inbox.indexWhere((n) => n.id == id);
+    if (i < 0) return;
+    final n = _inbox[i];
+    _inbox[i] = AppNotification(
+      id: n.id,
+      kind: n.kind,
+      title: n.title,
+      body: n.body,
+      channel: n.channel,
+      status: n.status,
+      attempts: n.attempts,
+      lastError: n.lastError,
+      readAt: DateTime.now().toUtc(),
+      createdAt: n.createdAt,
+    );
+  }
+
+  // Trip sharing (Phase 11) ----------------------------------------------------
+  @override
+  Future<List<TripShare>> listTripShares() async {
+    await _delay();
+    return List.unmodifiable(_tripShares);
+  }
+
+  @override
+  Future<TripShare> createTripShare({
+    String? planId,
+    required DateTime expiresAt,
+  }) async {
+    await _delay(400);
+    final share = TripShare(
+      id: _nextId('shr'),
+      shareUrl: 'https://roamlary.app/s/${_nextId('k')}',
+      expiresAt: expiresAt.toUtc(),
+      planId: planId,
+      planDestination: 'Manali',
+      createdAt: DateTime.now().toUtc(),
+    );
+    _tripShares.insert(0, share);
+    return share;
+  }
+
+  @override
+  Future<void> revokeTripShare(String id) async {
+    await _delay(300);
+    final i = _tripShares.indexWhere((s) => s.id == id);
+    if (i < 0) return;
+    final s = _tripShares[i];
+    _tripShares[i] = TripShare(
+      id: s.id,
+      shareUrl: s.shareUrl,
+      expiresAt: s.expiresAt,
+      planId: s.planId,
+      planDestination: s.planDestination,
+      revokedAt: DateTime.now().toUtc(),
+      createdAt: s.createdAt,
+    );
+  }
+
+  @override
+  Future<List<SharedItinerary>> listSharedWithMe() async {
+    await _delay();
+    return List.unmodifiable(_sharedWithMe);
+  }
+
+  // AI companion (Phase 13) -----------------------------------------------------
+  @override
+  Future<AiStatus> aiStatus() async {
+    await _delay(150);
+    return const AiStatus(provider: 'mock', configured: false);
+  }
+
+  @override
+  Future<AiAnswer> askAi(String message) async {
+    await _delay(700);
+    return AiAnswer(
+      answer: 'In mock mode the AI companion is not connected, so this is a '
+          'canned reply: "$message". Run against the backend for real answers.',
+      verified: false,
+      honestyFooter: 'Canned demo reply — not AI-generated travel advice.',
+      generatedAt: DateTime.now().toUtc(),
+    );
+  }
+
+  // Filtered discovery ----------------------------------------------------------
+  @override
+  Future<List<DiscoveryCandidate>> discoverFiltered({
+    String? destination,
+    String? travelStyle,
+    String? language,
+    List<String> interests = const [],
+    int minScore = 0,
+    int limit = 20,
+  }) async {
+    var items = await discover(limit: limit);
+    if (destination != null && destination.isNotEmpty) {
+      items = items
+          .where((c) =>
+              c.destination.toLowerCase().contains(destination.toLowerCase()))
+          .toList();
+    }
+    if (travelStyle != null && travelStyle.isNotEmpty) {
+      items = items
+          .where((c) => (c.travelStyles ?? [])
+              .any((s) => s.toLowerCase() == travelStyle.toLowerCase()))
+          .toList();
+    }
+    if (language != null && language.isNotEmpty) {
+      items = items
+          .where((c) =>
+              (c.languages ?? []).any((l) => l.toLowerCase() == language.toLowerCase()))
+          .toList();
+    }
+    for (final interest in interests) {
+      items = items
+          .where((c) =>
+              (c.interests ?? []).any((i) => i.toLowerCase() == interest.toLowerCase()))
+          .toList();
+    }
+    items = items.where((c) => c.compatibilityScore >= minScore).toList();
+    return items.take(limit).toList();
   }
 
   // Health -----------------------------------------------------------------

@@ -38,9 +38,27 @@ class ApiRepository implements AppRepository {
 
   void setToken(String? token) => _token = token;
 
-  Uri _uri(String path, [Map<String, String>? query]) {
+  Uri _uri(String path, [Map<String, dynamic>? query]) {
     final normalized = path.startsWith('/') ? path : '/$path';
-    return Uri.parse('$_baseUrl$normalized').replace(queryParameters: query);
+    final base = Uri.parse('$_baseUrl$normalized');
+    if (query == null || query.isEmpty) return base;
+    // Build the query by hand so a value may be a String OR a List of
+    // Strings (repeated params, e.g. `interests=a&interests=b`), which
+    // FastAPI parses into list-valued Query params.
+    final parts = <String>[];
+    query.forEach((key, value) {
+      final values = value is Iterable && value is! String
+          ? value
+          : <Object?>[value];
+      for (final v in values) {
+        if (v == null) continue;
+        parts.add(
+          '${Uri.encodeQueryComponent(key)}=${Uri.encodeQueryComponent('$v')}',
+        );
+      }
+    });
+    if (parts.isEmpty) return base;
+    return Uri.parse('$base?${parts.join('&')}');
   }
 
   Map<String, String> _headers({bool auth = true}) {
@@ -53,7 +71,7 @@ class ApiRepository implements AppRepository {
   Future<dynamic> _send(
     String method,
     String path, {
-    Map<String, String>? query,
+    Map<String, dynamic>? query,
     Object? body,
     bool auth = true,
   }) async {
@@ -210,6 +228,16 @@ class ApiRepository implements AppRepository {
       'PATCH',
       '/check-ins/$id',
       body: {'status': status.wire},
+    ) as Map<String, dynamic>;
+    return CheckIn.fromJson(data);
+  }
+
+  @override
+  Future<CheckIn> updateCheckInNote(String id, {required String note}) async {
+    final data = await _send(
+      'PATCH',
+      '/check-ins/$id',
+      body: {'note': note},
     ) as Map<String, dynamic>;
     return CheckIn.fromJson(data);
   }
@@ -536,6 +564,210 @@ class ApiRepository implements AppRepository {
   @override
   Future<void> unblockUser(String blockedId) async {
     await _send('DELETE', '/blocks/$blockedId');
+  }
+
+  // SOS workflow (Phase 10) --------------------------------------------------
+  @override
+  Future<SosEvent> acknowledgeSos(String id) async {
+    final data = await _send('POST', '/sos/$id/acknowledge')
+        as Map<String, dynamic>;
+    return SosEvent.fromJson(data);
+  }
+
+  @override
+  Future<List<AppNotification>> retrySosNotifications(String id) async {
+    final data = await _send('POST', '/sos/$id/notify-retry') as List<dynamic>;
+    return data
+        .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<AppNotification>> listSosNotifications(String id) async {
+    final data = await _send('GET', '/sos/$id/notifications') as List<dynamic>;
+    return data
+        .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // Check-ins: overdue view (Phase 12) ---------------------------------------
+  @override
+  Future<List<CheckIn>> listOverdueCheckIns() async {
+    final data = await _send('GET', '/check-ins/overdue') as List<dynamic>;
+    return data
+        .map((e) => CheckIn.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // Meetups & house parties (Phase 9) ----------------------------------------
+  @override
+  Future<List<Meetup>> listMeetups() async {
+    final data = await _send('GET', '/meetups', query: {'limit': '50'})
+        as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => Meetup.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<Meetup> createMeetup({
+    required String title,
+    String? description,
+    required MeetupCategory category,
+    required DateTime startAt,
+    required DateTime endAt,
+    String? locationText,
+    int capacity = 20,
+  }) async {
+    final data = await _send(
+      'POST',
+      '/meetups',
+      body: {
+        'title': title,
+        'description': ?description,
+        'category': category.wire,
+        'start_at': startAt.toUtc().toIso8601String(),
+        'end_at': endAt.toUtc().toIso8601String(),
+        'capacity': capacity,
+        'location_text': ?locationText,
+      },
+    ) as Map<String, dynamic>;
+    return Meetup.fromJson(data);
+  }
+
+  @override
+  Future<void> joinMeetup(String id) async {
+    await _send('POST', '/meetups/$id/join');
+  }
+
+  @override
+  Future<void> leaveMeetup(String id) async {
+    await _send('POST', '/meetups/$id/leave');
+  }
+
+  @override
+  Future<void> cancelMeetup(String id) async {
+    await _send('POST', '/meetups/$id/cancel');
+  }
+
+  // Notifications inbox (Phase 11) --------------------------------------------
+  @override
+  Future<List<AppNotification>> listNotifications() async {
+    final data = await _send(
+      'GET',
+      '/notifications',
+      query: {'limit': '50'},
+    ) as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> markNotificationRead(String id) async {
+    await _send('POST', '/notifications/$id/read');
+  }
+
+  // Trip sharing (Phase 11) ---------------------------------------------------
+  @override
+  Future<List<TripShare>> listTripShares() async {
+    final data =
+        await _send('GET', '/trip-shares', query: {'limit': '50'})
+            as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => TripShare.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<TripShare> createTripShare({
+    String? planId,
+    required DateTime expiresAt,
+  }) async {
+    final data = await _send(
+      'POST',
+      '/trip-shares',
+      body: {
+        'plan_id': ?planId,
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+      },
+    ) as Map<String, dynamic>;
+    return TripShare.fromJson(data);
+  }
+
+  @override
+  Future<void> revokeTripShare(String id) async {
+    await _send('DELETE', '/trip-shares/$id');
+  }
+
+  @override
+  Future<List<SharedItinerary>> listSharedWithMe() async {
+    final data = await _send(
+      'GET',
+      '/trip-shares/shared-with-me',
+      query: {'limit': '50'},
+    ) as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => SharedItinerary.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  // AI companion (Phase 13) ----------------------------------------------------
+  @override
+  Future<AiStatus> aiStatus() async {
+    final data = await _send('GET', '/ai/status') as Map<String, dynamic>;
+    return AiStatus.fromJson(data);
+  }
+
+  @override
+  Future<AiAnswer> askAi(String message) async {
+    try {
+      final data = await _send(
+        'POST',
+        '/ai/chat',
+        body: {'message': message},
+      ) as Map<String, dynamic>;
+      return AiAnswer.fromJson(data);
+    } on ApiException catch (e) {
+      // The chat gate answers 403 for unverified accounts.
+      if (e.statusCode == 403) throw const SocialGateDeniedException();
+      rethrow;
+    }
+  }
+
+  // Filtered discovery ---------------------------------------------------------
+  @override
+  Future<List<DiscoveryCandidate>> discoverFiltered({
+    String? destination,
+    String? travelStyle,
+    String? language,
+    List<String> interests = const [],
+    int minScore = 0,
+    int limit = 20,
+  }) async {
+    try {
+      final data = await _send(
+        'GET',
+        '/travel-buddies/discover',
+        query: {
+          if (destination != null && destination.isNotEmpty)
+            'destination': destination,
+          if (travelStyle != null && travelStyle.isNotEmpty)
+            'travel_style': travelStyle,
+          if (language != null && language.isNotEmpty) 'language': language,
+          if (interests.isNotEmpty) 'interests': interests,
+          'min_score': '$minScore',
+          'offset': '0',
+          'limit': '$limit',
+        },
+      ) as Map<String, dynamic>;
+      return (data['results'] as List<dynamic>? ?? const [])
+          .map((e) => DiscoveryCandidate.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on ApiException catch (e) {
+      if (e.statusCode == 403) throw const SocialGateDeniedException();
+      rethrow;
+    }
   }
 
   // Health -----------------------------------------------------------------

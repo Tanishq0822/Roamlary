@@ -39,6 +39,7 @@ dependencies:
   # app resolves and builds reliably for the hackathon demo.
   provider: ^6.1.2
   http: ^1.2.0
+  geolocator: ^14.1.1
 
 dev_dependencies:
   flutter_test:
