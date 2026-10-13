@@ -30,13 +30,13 @@ Flutter (`frontend` branch) · Laptop 3 = AI/ML + QA (`ai-ml` branch) ·
 Project owner = reviews and merges into `main`. **Phase assignments come from
 the project owner; the backend lead implements only assigned phases.**
 
-## 2. Current environment and baseline (verified 2026-10-12)
+## 2. Current environment and baseline (verified 2026-10-14)
 
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (all work pushed to `origin/backend`: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; **Phase 6 committed and pushed after the owner's instruction, 2026-10-12** as `9029047` — see `git log`; working tree clean). **Owner also decided (2026-10-12) to fast-forward `main` to this branch and add `docs/README.md`** — both done, see §15 |
-| History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → `9029047` Phase 6 (+ docs placeholder commit) → **`main` fast-forwarded to match** (2026-10-12, owner-instructed) |
+| Branch | `backend` (all work pushed to `origin/backend` through Phase 7: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; Phase 6 as `9029047`; Phase 6 second assignment as `30977c0`; **Phase 7 committed and pushed, 2026-10-13, as `2b52ec2`** — see `git log`). HEAD **`2b52ec2`** = `origin/backend`; the working tree carries the **uncommitted Phase 8 change set** (owner rule: no commits during a phase). **Owner also decided (2026-10-12) to fast-forward `main` to this branch and add `docs/README.md`** — both done, see §16 |
+| History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → `9029047` Phase 6 (+ docs placeholder commit) → **`main` fast-forwarded to match** (2026-10-12, owner-instructed) → `30977c0` Phase 6 second assignment → `2b52ec2` Phase 7 |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
 | PostgreSQL | **Running locally** — server 16.15 in the Docker container `roamlary-postgres-dev` (databases: `roamlary_dev`, `roamlary_test`). No system-wide install | 
@@ -48,7 +48,7 @@ the project owner; the backend lead implements only assigned phases.**
 
 ## 3. Development phases and status
 
-Roadmap assigned by the project owner (Phases 0–6 complete; Phases 7+ are NOT
+Roadmap assigned by the project owner (Phases 0–8 complete; Phase 9+ are NOT
 started — the backend lead waits for each phase assignment):
 
 | Phase | Name | Status |
@@ -60,9 +60,9 @@ started — the backend lead waits for each phase assignment):
 | 4 | Trusted contacts & safety check-ins | ✅ **Complete — implemented & verified** (this report §10); owner's rules forbid commits during the phase, so it stayed uncommitted through the owner-assigned migration-safety fix round (§10.15) — later **committed and pushed together with Phase 5** after owner approval (see `git log`) |
 | 5 | SOS & emergency workflow (simulated) | ✅ **Complete — implemented & verified** (this report §11); uncommitted during the phase per the same rule; **committed and pushed together with Phase 4** after owner approval (see `git log`) |
 | 6 | Community safety reports & location data | ✅ **Complete — implemented & verified** (this report §12); stayed uncommitted during the phase per the owner's rule, then the owner instructed commit & push (2026-10-12) — **committed and pushed to `origin/backend`** (see `git log`) |
-| 6 (second assignment) | Identity verification & social access foundation | ✅ **Complete — implemented & verified** (this report §13); uncommitted working-tree changes awaiting owner review (owner rule: no commits during the phase) |
-| 7 | AI companion & safety signals | ⏳ Not started (needs Laptop 3 contract + review of Phase 6 second assignment) |
-| 8 | Notifications & background-job interfaces | ⏳ Not started |
+| 6 (second assignment) | Identity verification & social access foundation | ✅ **Complete — implemented & verified** (this report §13); committed and pushed after the phase as `30977c0` (owner-authorized, 2026-10-12 23:47 — the report's earlier "awaiting review" note predates that commit) |
+| 7 | Travel buddies & social discovery (owner's brief; the original roadmap proposal was "AI companion & safety signals" — replaced by the owner's actual assignment) | ✅ **Complete — implemented & verified** (this report §14); committed and pushed after the phase as `2b52ec2` (owner-authorized, 2026-10-13 — the report's earlier "awaiting review" note predates that commit) |
+| 8 | Stranger chat, blocking & account security (owner's brief; the original roadmap proposal was "Notifications & background-job interfaces" — replaced by the owner's actual assignment) | ✅ **Complete — implemented & verified** (this report §17); uncommitted working-tree changes awaiting owner review (owner rule: no commits during the phase) |
 | 9 | Flutter integration & API contract alignment | ⏳ Not started (needs frontend report) |
 | 10 | Automated testing, security checks, QA | ⏳ Not started |
 | 11 | Final integration, documentation, demo readiness | ⏳ Not started |
@@ -89,17 +89,24 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-12 | **Phase 4 migration-safety fix** | Owner assigned a targeted fix round (§10.15): the Phase 4 migration's `downgrade()` now detects `cancelled` check-ins **before** any schema change and refuses with an actionable error instead of failing mid-migration; 4 new regression tests (2 SQLite + 2 real-PostgreSQL), live refusal + normal path proven on `roamlary_dev`, docs corrected (the earlier "reversible" wording implied it always succeeds regardless of data) | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phases 4 and 5** (see `git log`) |
 | 2026-10-12 | **Phase 5** | Owner assigned Phase 5 → extended the Phase 2 `sos_events` table (`description`, `location_recorded_at`, `cancelled_at`, `cancelled` status; migration `0dd8995649b4` with the same downgrade data-safety guard), 5 SOS endpoints (activate/list/get/cancel/resolve) with strict schemas, owner-only queries, identical-404s and server-only timestamps; 30 new tests (24 endpoint + 2 SQLite migration + 4 PostgreSQL), live E2E 35/35 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE5_CHANGES.md` | **uncommitted working-tree changes** (no commits/pushes/branch changes) → owner later approved → **committed and pushed together with Phase 4** (see `git log`) |
 | 2026-10-12 | **Phase 6** | Owner assigned Phase 6 → reused the Phase 2 `community_reports` table; added a closed 6-value `ReportCategory` set (+ DB CHECK, migration `ab32047c8481` with an **upgrade-side** data guard), 4 report endpoints (create/list with filters+pagination/nearby haversine search/get-by-id) with `ReportRead` (identity-free, UTC); 35 new tests (28 endpoint + 2 SQLite migration + 3 PostgreSQL + 2 model-contract), live E2E 51/51 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE6_CHANGES.md` | **uncommitted working-tree changes** during the phase → owner instructed commit & push (2026-10-12) → **committed and pushed to `origin/backend`** (see `git log`) |
-| 2026-10-12 | **Phase 6 (second assignment)** | Owner assigned a second Phase 6 brief (identity verification & social access foundation) → `users.verification_status` + `users.role` columns, `identity_verifications` request history, `app_settings` policy row + append-only `setting_changes` audit (fail-closed `get_policy`), `require_owner` / `require_verified_user` server-side gates, 7 new routes (verification status/submit, owner queue approve/reject, owner policy read/patch with 5/hour rate limit, gated social discovery placeholder), server CLI `python -m app.cli make-owner <email>`, migration `3e285edb0896` (downgrade guarded by data), 52 new tests; live E2E 54/54 + live guard-refusal + live downgrade/upgrade roundtrip on `roamlary_dev`, README + this report + `PHASE6_IDENTITY_CHANGES.md` | **uncommitted working-tree changes** (owner rule: no commits during the phase) → awaiting owner review |
+| 2026-10-12 | **Phase 6 (second assignment)** | Owner assigned a second Phase 6 brief (identity verification & social access foundation) → `users.verification_status` + `users.role` columns, `identity_verifications` request history, `app_settings` policy row + append-only `setting_changes` audit (fail-closed `get_policy`), `require_owner` / `require_verified_user` server-side gates, 7 new routes (verification status/submit, owner queue approve/reject, owner policy read/patch with 5/hour rate limit, gated social discovery placeholder), server CLI `python -m app.cli make-owner <email>`, migration `3e285edb0896` (downgrade guarded by data), 52 new tests; live E2E 54/54 + live guard-refusal + live downgrade/upgrade roundtrip on `roamlary_dev`, README + this report + `PHASE6_IDENTITY_CHANGES.md` | *was* uncommitted at the time; owner later authorized → committed as `30977c0`, pushed to `origin/backend` |
+| 2026-10-13 | **Phase 7** | Owner assigned Phase 7 (travel buddies & social discovery) → audit-first (§14.1, recorded before any code); 3 new tables (`travel_profiles`, `travel_plans`, `travel_partner_requests`) + 3 new VARCHAR-backed CHECK enums + migration `426dcef31e27` (downgrade data-guarded); pure-function matching engine (`app/core/matching.py`, documented weights summing to 100, honesty note in every response) + discovery service (`app/services/discovery.py`: indexed SQL prefilter, self/partner/pending exclusion, verification join, grace-widened date window as a documented superset, Python precise overlap classification, dedupe, deterministic ranking, offset/limit pagination, `MAX_CANDIDATE_ROWS=500`); 12 new routes (travel-profile CRUD, travel-plan CRUD, `/travel-buddies/discover`, `/travel-buddies/{user_id}`, request send/list/get/accept/reject/cancel) reusing the Phase 6b `require_verified_user` gate unchanged for outward-facing actions; `/social/discovery` reimplemented over `broad_feed()` keeping the `{profiles, message}` contract; in-process 30/hour send rate limit; 94 new tests (88 offline: 79 in four new files + 6 model-contract + 3 SQLite migration; + 6 real-PostgreSQL integration); live E2E 24/24 on `roamlary_dev` + live `alembic upgrade head`; README + this report + `PHASE7_TRAVEL_BUDDIES.md` | *was* uncommitted at the time; owner later authorized → committed as `2b52ec2`, pushed to `origin/backend` |
+| 2026-10-14 | **Phase 8** | Owner assigned Phase 8 (stranger chat, blocking & account security) → focused audit-first (§17.1, Phase 7 verified present as commit `2b52ec2`); 4 new tables (`user_blocks`, `conversations`, `messages`, `auth_sessions`) + `ConversationStatus` enum + `users.token_version` + travel canonical-pair columns/index (migration `7f3a9c1e5b42`, downgrade data-guarded; closes the Phase 7 cross-direction race at the database); pure `canonical_pair` helper + shared `blocked_user_ids` rule; JWT `sid`/`tv` claims with per-request revocation enforcement; every login mints a session row; 16 chat routes (request lifecycle, conversations, paginated history, text-only send, sender-only soft delete) with NO auto-chat from travel partners; 3 block routes on plain auth (safety tool); 5 session routes (list/logout/revoke/revoke-others/revoke-all); blocks integrated into discovery, public profiles, travel send/accept; in-process 30/hour ask + 60/hour message limiters (shared mechanism, documented caveat); 67 new tests (60 offline + 7 real-PostgreSQL); live E2E 29/29 on `roamlary_dev`; README + this report + `PHASE8_CHAT_BLOCKS_SESSIONS.md` | **uncommitted working-tree changes** (owner rule: no commits during the phase) → awaiting owner review |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
-**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5 + Phase 6 + Phase 6 second assignment):**
+**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5 + Phase 6 + Phase 6 second assignment + Phase 7 + Phase 8):**
 
 | Method + Path | Purpose | Auth | Response |
 |---|---|---|---|
 | `GET /api/v1/health` | Liveness check (process is running). Does NOT check database/AI/notifications | none | see below |
 | `POST /api/v1/auth/register` | Create a local account; returns a bearer token (auto-login) | none | `{access_token, token_type}` (HTTP 201) |
 | `POST /api/v1/auth/login` | Authenticate with email + password; returns a bearer token | none | `{access_token, token_type}` (HTTP 200) |
+| `GET /api/v1/auth/sessions` | List the caller's OWN login sessions (newest first, with `current` flag) | Bearer JWT | `AuthSessionList` |
+| `POST /api/v1/auth/logout` | Revoke the current session (calling token dies on next use) | Bearer JWT | `AuthSessionRead` |
+| `POST /api/v1/auth/sessions/{session_id}/revoke` | Revoke one OWN session (404 for anyone else's) | Bearer JWT | `AuthSessionRead` |
+| `POST /api/v1/auth/sessions/revoke-others` | Keep exactly the current session, revoke the rest | Bearer JWT | `AuthSessionList` |
+| `POST /api/v1/auth/revoke-all` | Revoke ALL OWN sessions + bump the version (current token dies too; kills legacy tokens) | Bearer JWT | `AuthSessionList` |
 | `GET /api/v1/users/me` | Return the authenticated user's public profile | Bearer JWT | `UserProfile` (see §9.6) |
 | `PATCH /api/v1/users/me` | Update the authenticated user's `display_name` | Bearer JWT | `UserProfile` |
 | `GET /api/v1/verification/status` | The caller's OWN verification picture: `verification_status`, `role`, live `social_access_required`, latest request | Bearer JWT | `VerificationStatusResponse` |
@@ -109,7 +116,7 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | `POST /api/v1/admin/verification-requests/{id}/reject` | Reject a `pending` request → applicant becomes `rejected` (optional `review_note` ≤200) | Bearer JWT + **owner role** | `VerificationRequestReview` |
 | `GET /api/v1/admin/policy/social-verification` | Read the effective policy (fail-closed reporting) | Bearer JWT + **owner role** | `PolicyResponse` |
 | `PATCH /api/v1/admin/policy/social-verification` | Change `requires_verification` (validated boolean; rate limited 5/hour/owner; audited who/when/old/new) | Bearer JWT + **owner role** | `PolicyResponse` |
-| `GET /api/v1/social/discovery` | Travel-buddy discovery — **gated placeholder**: empty `profiles` + honest message until Phase 7 | Bearer JWT + verified while policy requires it | `DiscoveryResponse` |
+| `GET /api/v1/social/discovery` | Broad travel-buddy feed — **real since Phase 7**: up to 10 discoverable verified-user profiles + honesty message (same wire contract as the placeholder it replaced) | Bearer JWT + verified while policy requires it | `DiscoveryResponse` |
 | `POST /api/v1/trusted-contacts/` | Save a contact for the token's user | Bearer JWT | `TrustedContactRead` (HTTP 201) |
 | `GET /api/v1/trusted-contacts/` | List the token user's contacts (oldest first) | Bearer JWT | `[TrustedContactRead]` |
 | `GET /api/v1/trusted-contacts/{contact_id}` | Read one contact (404 if missing **or** not yours) | Bearer JWT | `TrustedContactRead` |
@@ -129,6 +136,37 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | `GET /api/v1/reports` | List **visible** reports, newest first (optional `?category=`/`?status=` filters, `?offset=`/`?limit=` pagination) | Bearer JWT | `[ReportRead]` |
 | `GET /api/v1/reports/nearby` | Visible reports within `radius_m` **meters** of a position (haversine; nearest first) | Bearer JWT | `[ReportRead]` |
 | `GET /api/v1/reports/{report_id}` | Read one visible report (404 if missing **or** `rejected`) | Bearer JWT | `ReportRead` |
+| `GET /api/v1/travel-profile/me` | The caller's own travel profile + `completion` hints (404 with actionable guidance when absent) | Bearer JWT | `TravelProfileRead` |
+| `POST /api/v1/travel-profile/me` | Create it (one per account; `discoverable` defaults to `false`) | Bearer JWT | `TravelProfileRead` (HTTP 201) |
+| `PATCH /api/v1/travel-profile/me` | Partial update (explicit `null` clears; `[]` empties a list) | Bearer JWT | `TravelProfileRead` |
+| `DELETE /api/v1/travel-profile/me` | Remove the profile (plans are NOT touched) | Bearer JWT | HTTP 204, no body |
+| `POST /api/v1/travel-plans/` | Publish a plan (`private` by default; dates re-validated together) | Bearer JWT | `TravelPlanRead` (HTTP 201) |
+| `GET /api/v1/travel-plans/` | The token user's plans (active first, newest first) | Bearer JWT | `[TravelPlanRead]` |
+| `GET /api/v1/travel-plans/{plan_id}` | Read one plan (404 if missing **or** not yours) | Bearer JWT | `TravelPlanRead` |
+| `PATCH /api/v1/travel-plans/{plan_id}` | Edit a plan (full re-validation against stored values) | Bearer JWT | `TravelPlanRead` |
+| `DELETE /api/v1/travel-plans/{plan_id}` | Delete a plan (409 if a partner request still references it) | Bearer JWT | HTTP 204, no body |
+| `GET /api/v1/travel-buddies/discover` | Eligible, scored, paginated candidates (`?destination=`/`?region=`/`?start_date=`/`?end_date=`/`?interests=`/`?travel_style=`/`?language=`/`?min_score=`/`?offset=`/`?limit=`) | Bearer JWT + verified while policy requires it | `DiscoveryPage` (results + total + honesty `note`) |
+| `GET /api/v1/travel-buddies/{user_id}` | Limited public travel profile of one discoverable user (404 if missing **or** not discoverable) | Bearer JWT + verified while policy requires it | `PublicTravelProfileRead` |
+| `POST /api/v1/travel-buddies/requests` | Ask a discovered user to travel together (`recipient_id` required; `plan_id` optional = the RECIPIENT's public plan as context) | Bearer JWT + verified while policy requires it | `BuddyRequestRead` (HTTP 201) |
+| `GET /api/v1/travel-buddies/requests` | Own request history (`?direction=incoming\|outgoing`, `?status=`, `?offset=`/`?limit=`) | Bearer JWT | `BuddyRequestList` |
+| `GET /api/v1/travel-buddies/requests/{request_id}` | Read one request (404 unless the caller is a party) | Bearer JWT | `BuddyRequestRead` |
+| `POST /api/v1/travel-buddies/requests/{request_id}/accept` | Recipient accepts (`pending → accepted`) | Bearer JWT + verified while policy requires it | `BuddyRequestRead` |
+| `POST /api/v1/travel-buddies/requests/{request_id}/reject` | Recipient declines (`pending → rejected`) | Bearer JWT + verified while policy requires it | `BuddyRequestRead` |
+| `POST /api/v1/travel-buddies/requests/{request_id}/cancel` | Requester withdraws (`pending → cancelled`) | Bearer JWT | `BuddyRequestRead` |
+| `POST /api/v1/blocks` | Block another user (stops both directions) | Bearer JWT | `BlockRead` (HTTP 201) |
+| `GET /api/v1/blocks` | The caller's OWN block list (newest first) | Bearer JWT | `BlockList` |
+| `DELETE /api/v1/blocks/{blocked_id}` | Remove MY block (only the blocker) | Bearer JWT | HTTP 204, no body |
+| `POST /api/v1/chat/requests` | Send a message request (`recipient_id`) | Bearer JWT + verified while policy requires it | `ConversationRead` (HTTP 201) |
+| `GET /api/v1/chat/requests` | My asks (`?direction=incoming\|outgoing`, `?status=`, `?offset=`/`?limit=`) | Bearer JWT | `ConversationList` |
+| `GET /api/v1/chat/requests/{request_id}` | One ask I am part of (404 otherwise) | Bearer JWT | `ConversationRead` |
+| `POST /api/v1/chat/requests/{request_id}/accept` | Recipient accepts (asker eligibility rechecked live) | Bearer JWT + verified while policy requires it | `ConversationRead` |
+| `POST /api/v1/chat/requests/{request_id}/reject` | Recipient declines | Bearer JWT + verified while policy requires it | `ConversationRead` |
+| `POST /api/v1/chat/requests/{request_id}/cancel` | Asker withdraws | Bearer JWT | `ConversationRead` |
+| `GET /api/v1/chat/conversations` | My conversations, recent first (`?offset=`/`?limit=`) | Bearer JWT | `ConversationList` |
+| `GET /api/v1/chat/conversations/{conversation_id}` | One conversation I am in | Bearer JWT | `ConversationRead` |
+| `GET /api/v1/chat/conversations/{conversation_id}/messages` | History, stable `(created_at, id)` order (`?offset=`/`?limit=` 1–100) | Bearer JWT + verified while policy requires it | `MessageList` |
+| `POST /api/v1/chat/conversations/{conversation_id}/messages` | Send one text message (1–2000 chars; sender always = caller) | Bearer JWT + verified while policy requires it | `MessageRead` (HTTP 201) |
+| `DELETE /api/v1/chat/messages/{message_id}` | Delete MY message (soft delete; row kept, body hidden) | Bearer JWT | `MessageRead` |
 
 Phase 4 request/response examples, field rules, status transitions, and
 timestamp policy: **§10.6** (details) and `README.md` (client-facing).
@@ -136,9 +174,14 @@ Phase 5 (SOS) equivalents: **§11.6** and the README's "SOS incidents"
 section. Phase 6 (reports): **§12.6** and the README's "Community safety
 reports" section. Phase 6 second assignment (verification/social):
 **§13.6** and the README's "Identity verification & social gate" section.
+Phase 7 (travel buddies): **§14.6** and the README's "Travel buddies &
+discovery" section. Phase 8 (chat/blocks/sessions): **§17.6** and the
+README's "Stranger chat", "Blocking", and "Session security" sections.
 Note the SOS and report paths have no trailing slash
 (`/sos`, `/reports`, per their specs) while the Phase 4 collections use
-one (`/check-ins/`).
+one (`/check-ins/`); Phase 7 collections follow the Phase 4 style
+(`/travel-plans/`, trailing slash) except `/travel-buddies/*`, which was
+specified without one.
 
 ```json
 GET /api/v1/health  →  HTTP 200
@@ -199,6 +242,37 @@ note, a bad queue `?status=` filter, `limit` outside 1–100, `offset` < 0)
 while the policy requires verification → **403** with a status-specific
 message; a 6th policy change within an hour → **429**.
 
+Phase 7 (travel buddies) error behaviour: every travel route without a
+valid bearer token → **401**; discovery/public-profile/send/accept/reject
+without passing the same social gate → **403**; a nonexistent plan, a plan
+that is not yours, a recipient that is hidden/has no profile/failed the
+live policy, or a request you are not a party to → privacy-preserving
+**404** (identical to "does not exist"); creating a second profile,
+sending a duplicate `pending`/`accepted` request in either direction,
+moving a non-`pending` request, patching a plan's dates into an inverted
+range, or deleting a plan a request references → **409**; a self-request,
+an injected server-controlled field (`user_id`, `status`, `score`,
+timestamps), an unknown closed-set value, malformed dates, `min_score`
+outside 0–100, `limit` outside 1–100, or `offset` < 0 → **422**; more
+than 30 request sends per user per hour → **429** (in-process limiter,
+same caveat as the owner policy limiter).
+
+Phase 8 (chat/blocks/sessions) error behaviour: every route without a
+valid bearer token → **401** (including revoked sessions: "Session has
+been revoked. Please log in again."); chat send/accept/reject/history
+without passing the social gate → **403**; sending while blocked in
+either direction or to a lapsed counterparty → neutral **403**
+("Messaging is not available with this user right now" — one message
+for both causes, so neither fact leaks); a recipient that is unknown,
+ineligible, or blocked → privacy-preserving **404**; a conversation,
+message, session, or block the caller is not part of / does not own →
+the identical **404**; duplicate pending asks (any direction), asks to
+an accepted pair, or moves on non-`pending` rows → **409**; self asks,
+self-blocks, blank/overlong message bodies, injected server-controlled
+fields, `limit` outside 1–100, or `offset` < 0 → **422**; more than 30
+chat asks or 60 messages per user per hour → **429** (in-process
+limiters, same caveat); logging out an already-revoked session → **410**.
+
 **Proposed for future phases — NOT IMPLEMENTED, do not call these:**
 `POST /ai/companion/messages`.
 *(A report workflow now exists at `/api/v1/reports` — §12 — but it only
@@ -213,8 +287,8 @@ alignment.)
 ## 6. Database design — IMPLEMENTED (Phase 2)
 
 Schema is real and now spans Phase 2 + Phase 3 + Phase 4 + Phase 5 +
-Phase 6 + Phase 6 second assignment migrations, all applied to
-`roamlary_dev`:
+Phase 6 + Phase 6 second assignment + Phase 7 + Phase 8 migrations, all
+applied to `roamlary_dev`:
 
 - `cc78d54068bb` — "initial schema" (Phase 2): the five tables below.
 - `d9841015aec7` — "add password_hash to users" (Phase 3): adds a nullable
@@ -246,10 +320,34 @@ Phase 6 + Phase 6 second assignment migrations, all applied to
   value can violate the new CHECKs); the **downgrade** is guarded and
   refuses while any verification/setting/audit row or any non-default
   user state/role exists. Full rationale in §13.4.
+- `426dcef31e27` — "add travel profiles, travel plans and travel-partner
+  requests" (Phase 7): adds the three tables below. `travel_plans` and
+  `travel_partner_requests` carry named CHECK constraints mirroring their
+  Python enums, RESTRICT foreign keys (requests reference `users` twice
+  plus the optional context `travel_plans` row), and two **partial UNIQUE
+  indexes** that keep at most one PENDING request per direction of a user
+  pair (racing identical sends lose at the database). The **upgrade**
+  needs no data guard (new tables; nothing existing can violate them); the
+  **downgrade** is data-guarded like Phases 4–6 and refuses while any
+  travel profile, plan, or partner request exists. Full rationale in
+  §14.4.
+- `7f3a9c1e5b42` — "add chat, blocking and session revocation" (Phase 8):
+  adds four tables (`user_blocks` with UNIQUE blocker/blocked pair +
+  no-self CHECK, `conversations` with one row per canonical unordered
+  pair (UNIQUE) + status CHECK, text-only `messages` with soft-delete
+  flags, `auth_sessions` one row per login), the NOT NULL
+  `users.token_version` column (server default 0), and the travel
+  canonical-pair columns (`pair_low_id`/`pair_high_id`, backfilled with
+  a dialect-aware UPDATE: PostgreSQL LEAST/GREATEST, SQLite min/max)
+  with a pending-only UNIQUE index that closes the Phase 7
+  cross-direction race at the database. The **upgrade** needs no data
+  guard for the new tables; the **downgrade** is data-guarded like
+  Phases 4–7 and refuses while any block, conversation, message, or
+  session row exists. Full rationale in §17.4.
 
 | Table | Purpose | Owner / deletion rule |
 |---|---|---|
-| `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, `password_hash` nullable, `verification_status` ∈ unverified/pending/verified/rejected, `role` ∈ user/owner, timestamps) | — |
+| `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, `password_hash` nullable, `verification_status` ∈ unverified/pending/verified/rejected, `role` ∈ user/owner, `token_version` ∈ integer ≥ 0 for session revocation (Phase 8), timestamps) | — |
 | `trusted_contacts` | Nominated safety contact (`name`, `phone`, `relationship` nullable, `email` nullable) | `users` · `ON DELETE RESTRICT` |
 | `check_ins` | "Ping me by time T" (`status` ∈ pending/safe/needs_help/expired/**cancelled**, `due_at`, `note` nullable, `completed_at`) | `users` · `ON DELETE RESTRICT` |
 | `sos_events` | **Simulated** incident (`status` ∈ active/acknowledged/resolved/false_alarm/**cancelled**, lat/lon, `description` nullable, `location_recorded_at`, `resolved_at`, `cancelled_at`) | `users` · `ON DELETE RESTRICT` |
@@ -257,6 +355,13 @@ Phase 6 + Phase 6 second assignment migrations, all applied to
 | `identity_verifications` | One row per verification **request** (`status` ∈ pending/approved/rejected, `applicant_note` nullable, `review_note` nullable, `reviewed_at`/`reviewed_by` nullable) — history, never edited by clients | `users` (applicant + reviewer) · `ON DELETE RESTRICT` |
 | `app_settings` | Runtime configuration (currently the single key `social_requires_verification`; unique index on `key`) | `users` (`updated_by` nullable) · `ON DELETE RESTRICT` |
 | `setting_changes` | Append-only audit of policy changes (`setting_key`, `old_value` nullable, `new_value`, `changed_by`) | `users` · `ON DELETE RESTRICT` |
+| `travel_profiles` | One travel identity per account (Phase 7): optional `travel_nickname`/`bio`/`home_region`, JSON preference lists (`languages`, `travel_styles`, `interests`), `group_size_pref` (CHECK 2–12), `discoverable` (default hidden) | `users` · `ON DELETE RESTRICT` · **UNIQUE `user_id`** |
+| `travel_plans` | One trip intention per row (Phase 7): `destination` + `destination_normalized`, optional `region` + `region_normalized`, `start_date`/`end_date` (CHECK end ≥ start), `flexible_dates`, `status` ∈ active/paused/completed, `visibility` ∈ private/discoverable | `users` · `ON DELETE RESTRICT` |
+| `travel_partner_requests` | "A wants to travel with B" (Phase 7): `status` ∈ pending/accepted/rejected/cancelled, optional `plan_id` context (the RECIPIENT's plan), `responded_at` nullable; CHECK no self-request + status set; 2 partial UNIQUE pending-pair indexes per direction + Phase 8 canonical-pair pending UNIQUE index (cross-direction race fix) | `users` (requester + recipient) + `travel_plans` (optional context) · `ON DELETE RESTRICT` |
+| `user_blocks` | One directed block (Phase 8): blocker refuses contact with blocked; CHECK no self-block; UNIQUE (blocker, blocked) | `users` (blocker + blocked) · `ON DELETE RESTRICT` |
+| `conversations` | One messaging relationship per unordered pair (Phase 8): `status` ∈ pending/accepted/rejected/cancelled, `requested_by` (current asker), `responded_at` nullable; CHECK no self-conversation + status set; UNIQUE (low, high) canonical pair | `users` (low + high + requester) · `ON DELETE RESTRICT` |
+| `messages` | One text message (Phase 8): `body` text, `is_deleted` + `deleted_at` (soft delete; rows never removed) | `conversations` + `users` (sender) · `ON DELETE RESTRICT` |
+| `auth_sessions` | One login session per login (Phase 8): optional `label`, `revoked_at` NULL = active | `users` · `ON DELETE RESTRICT` |
 
 All Phase 4 and Phase 5 schema changes were additive and nullable — no
 existing row was altered or dropped (verified by downgrade→re-upgrade on
@@ -267,7 +372,10 @@ alter data. Phase 6's change is one **added CHECK constraint** whose
 *upgrade* carries the same discipline: it refuses (before any schema
 change) while any pre-existing out-of-set category exists rather than
 convert or delete those rows (§12.4); its downgrade only drops the
-constraint and therefore cannot lose data.
+constraint and therefore cannot lose data. Phase 7 adds **three new
+tables** (nothing existing is altered or dropped); its downgrade follows
+the same discipline — it refuses (before any schema change) while any
+travel profile, plan, or partner request exists (§14.4).
 
 Status values are enforced by CHECK constraints; lat/lon are range-guarded;
 `community_reports.category` is a closed set enforced by a CHECK
@@ -1073,7 +1181,7 @@ listed with the fix actually applied.
 | 3 | Register created the database row **before** the fail-closed secret check ran, so a missing `JWT_SECRET_KEY` could leave a half-created, unusable account. | Low | New public `ensure_auth_configured()` in `security.py`; register now calls it **before any database write**, so 503 happens with no row created. |
 | 4 | `PATCH /users/me` with an empty body (`{}`) still bumped `updated_at`, so the timestamp did not mean "last real change". | Low | `updated_at` is now bumped only when `display_name` actually changed; `{}` is a valid no-op returning the profile unchanged. |
 | 5 | Tests used the **real dev secret** from `.env` — not hermetic, and it exercised the actual signing key. | Low | New autouse fixture in `conftest.py` pins a fixed TEST-ONLY secret for every test (`TEST_JWT_SECRET`); the real `.env` secret is never used by tests. |
-| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. *(Note: "§10, §11" here means Known limitations / Pending tasks **as numbered at that time**; inserting the Phase 4 record as §10 shifted them to §11/§12 in the Phase 4 round, and inserting the Phase 5 record as §11 shifted them again — §10 is the Phase 4 record, §11 the Phase 5 record. Inserting the Phase 6 record as §12 shifted them once more: **Known limitations is now §13, Pending tasks §14**. Inserting the **Phase 6 (second assignment)** record as §13 (2026-10-12) shifted them a final time: **Known limitations is §14, Pending tasks §15**.)* |
+| 6 | `report.md` contradictions: Phase 3 still labeled "in progress"/"uncommitted" although committed as `3d728ac` and pushed; Phase 1/2 records lacked post-approval commit annotations; stale "Phase 1 scope" docstring in `config.py`. | Doc | Corrected in this round (§2, §3, §4, §7.8, §8.13, §9.13, §9.14, §10, §11 + `config.py` docstring). Historical commits were **annotated, never rewritten**. *(Note: "§10, §11" here means Known limitations / Pending tasks **as numbered at that time**; inserting the Phase 4 record as §10 shifted them to §11/§12 in the Phase 4 round, and inserting the Phase 5 record as §11 shifted them again — §10 is the Phase 4 record, §11 the Phase 5 record. Inserting the Phase 6 record as §12 shifted them once more: **Known limitations is now §13, Pending tasks §14**. Inserting the **Phase 6 (second assignment)** record as §13 (2026-10-12) shifted them a final time: **Known limitations is §14, Pending tasks §15**. Inserting the **Phase 7** record as §14 (2026-10-13) shifted them once more: **Known limitations is §15, Pending tasks §16**.)* |
 
 #### 9.14.3 New tests added (12)
 
@@ -2383,7 +2491,8 @@ which serves the same code and the same `roamlary_dev` database.
   verification notifications (none claimed).
 - Social surface is a gated placeholder until Phase 7; report moderation
   still untouched (reports stay `pending`-only).
-- (Also listed in §14.)
+- (Also listed in §15 - Known limitations, renumbered by the Phase 7
+  record.)
 
 ### 13.12 Scope confirmation — no identity documents, no external services
 
@@ -2417,16 +2526,529 @@ Working tree: **11 modified + 15 new = 26 files** (all this phase), no
 secrets, `frontend/` untouched. `git status` output recorded at review
 time in §13.13's companion doc.
 
-## 14. Known limitations (current)
+## 14. Phase 7 record — Travel buddies, travel plans & social discovery
+
+### 14.1 Audit findings (recorded BEFORE any code, 2026-10-13)
+
+**Starting state (verified by command):** branch `backend`, HEAD
+**`30977c0`** = `origin/backend`, clean tree, no stash. `roamlary_dev` is
+at migration head **`3e285edb0896`** (single linear chain of 6
+migrations). The UI-integration `test` branch exists (frontend only) and
+is **not** part of this phase; `frontend/` remains untouched.
+
+**Confirmed repository facts:**
+
+1. **8 tables exist:** `users`, `trusted_contacts`, `check_ins`,
+   `sos_events`, `community_reports`, `identity_verifications`,
+   `app_settings`, `setting_changes`. All use `UUIDPrimaryKeyMixin` +
+   `TimestampMixin`, named CHECK constraints mirroring Python `StrEnum`s
+   (no native PostgreSQL enums), and `ON DELETE RESTRICT` foreign keys.
+2. **The dependency rule is satisfied: identity verification EXISTS**
+   (Phase 6 second assignment, §13) — the brief's caution that it might
+   be absent does not apply to this repository. Confirmed reusable:
+   `users.verification_status` + `users.role` (NOT NULL, server
+   defaults, CHECKs), the social gate **`require_verified_user`**
+   (`deps.py`, live fail-closed policy read via `get_policy`), owner
+   review routes, and CLI-only owner provisioning. Phase 7 **reuses this
+   gate unchanged** and additionally filters candidate accounts by
+   verification status while the policy is on.
+3. **No travel/profile/preference/plan/discovery/relationship
+   structures exist.** `/social/discovery` is the documented empty
+   placeholder whose own docstring promises "Phase 7 replaces this …
+   keeping the same gate"; its wire contract (`profiles: []` +
+   `message`) must stay compatible for the existing UI.
+4. **No blocking/restriction system exists anywhere** → "exclude blocked
+   users" reduces to verification + discoverability exclusions
+   (documented as a limitation, §14.11).
+5. **No destination reference table** → destinations are normalized
+   free text; no external verification is claimed.
+6. **No background jobs** → expired plans are excluded at READ time
+   (`end_date < today`), never by a sweeper.
+7. **API conventions confirmed:** `Annotated` query params with
+   descriptions; `offset ge=0` / `limit ge=1 le=100` default 20; UUID
+   path params return privacy-preserving 404; `IntegrityError → 409`;
+   `extra="forbid"` bodies; server-set statuses; identity only from the
+   token's `sub`; public responses never include `user_id` of content
+   owners.
+8. **Testing conventions confirmed:** `api_client` fixture + `register_user`
+   helper (offline SQLite), module-level `skipif` PostgreSQL suite with a
+   disposable per-test engine, subprocess Alembic tests with
+   `EXPECTED_TABLES` + data-guarded downgrade assertions ("Refusing to
+   downgrade" / "data-handling decision"), and per-phase raw-insert
+   helpers in `conftest.py`.
+9. **SQLite compatibility constraint:** the offline suite runs
+   `create_all` on SQLite, so list-valued fields must use generic `JSON`
+   (JSONB would break it); list-based preference filtering therefore
+   runs in the documented secondary-filter stage, not in SQL.
+10. **Only abuse control available** is the in-process
+    `check_rate_limit` (§13/§14 limitation) — reused for travel-partner
+    request creation, with the same documented single-process caveat.
+
+**Gaps and minimum prerequisites (no blockers):** real ID provider
+(pre-existing §14 — reused as manual review, unchanged); no shared
+rate-limit store (in-process reuse + documented); no blocking system
+(out of scope, §12); no destination gazetteer (normalized text +
+documented); no scheduler (read-time expiry). **Blockers: none** —
+verified-user discovery is implementable now on the existing gate.
+
+### 14.2 Summary of the implementation & design decisions
+
+The owner's brief items map to the shipped surface as follows: travel
+profiles → `/travel-profile/me` (one row per account, preference lists,
+`discoverable` default **hidden**); travel plans → `/travel-plans` CRUD
+with normalized destinations, date CHECKs, `active/paused/completed` and
+`private/discoverable`; discovery/matching →
+`GET /travel-buddies/discover` (eligibility-aware, scored, paginated)
+plus `GET /travel-buddies/{user_id}` (limited public profile); travel
+partner requests → send/list/get/accept/reject/cancel with a full state
+machine; and `/social/discovery` reimplemented over the same data as a
+broad verified-user feed, keeping its `{profiles, message}` contract.
+
+Design decisions (agreed against the brief's "suggested" options):
+
+1. **Reuse, don't rebuild, the verification gate.** Every outward-facing
+   action (discovery, public profiles, send, accept, reject) sits behind
+   the existing `require_verified_user` dependency with the live
+   fail-closed policy read — unchanged since Phase 6 second assignment
+   (§13). Managing your own data (profile, plans, reading/cancelling your
+   own requests) stays on plain authentication: the social policy can
+   never lock a user out of editing or retracting their own records.
+2. **Three tables, no new account columns.** `travel_profiles` (1:1 with
+   `users`, UNIQUE index), `travel_plans`, `travel_partner_requests`.
+   Preference lists are generic `JSON` (not JSONB) so the offline SQLite
+   suite's `create_all` keeps working (§14.1.9); list-based preference
+   filtering therefore runs as the documented Python secondary-filter
+   stage, never in SQL.
+3. **Deterministic, explainable scoring — no AI.** `app/core/matching.py`
+   is pure functions over stored data; weights are module constants that
+   sum to exactly 100 and every response repeats the honesty note (score
+   is a logistics ranking, never a safety guarantee).
+4. **Read-time expiry.** Plans with `end_date` in the past (UTC) are
+   excluded when read; there is no background job (§14.1.6).
+5. **Two-layer duplicate protection.** Same-direction racing sends lose at
+   the database (partial UNIQUE pending-pair indexes per direction);
+   cross-direction duplicates are refused by the endpoint's
+   either-direction pre-check (exact boundary documented in §14.4/§14.11).
+6. **Privacy-preserving errors.** A recipient that is hidden, has no
+   profile, or fails the live policy collapses into the **same 404** as a
+   nonexistent account — eligibility can never be probed. Request
+   transitions by a non-party also return the identical 404.
+7. **One documented deviation from the §14.1.7 convention:** discovery and
+   public-profile responses DO include the candidate's `user_id` — the
+   brief requires addressing a request to a discovered user, so the id is
+   functional data. Everything else stays hidden (email, role,
+   verification status, account timestamps, private plans); `user_id` is
+   only ever disclosed to callers who already passed the social gate and
+   only for users who chose to be discoverable.
+8. **Rate limiting where abuse is possible:** sending a request is
+   limited to 30/hour/user via the same in-process limiter the owner
+   policy uses (same documented single-process caveat).
+9. **`/social/discovery` reimplemented, not duplicated:** it now serves
+   `broad_feed()` (limit 10, no filters) through the identical gate and
+   wire contract, so the Phase 6 UI integration keeps working while
+   `/travel-buddies/discover` serves the full feature.
+
+### 14.3 File-by-file change log (files created and modified)
+
+**Created:**
+
+- `app/models/travel_profile.py` — `TravelProfile` (1:1 `users`, JSON
+  lists, `group_size_pref` CHECK 2–12, `discoverable` default false).
+- `app/models/travel_plan.py` — `TravelPlan` (destination + normalized,
+  region + normalized, dates with `end >= start` CHECK, status/visibility
+  CHECKs, `ix_travel_plans_discovery` composite + `ix_travel_plans_dates`).
+- `app/models/travel_partner_request.py` — `TravelPartnerRequest`
+  (no-self-request + status CHECKs, RESTRICT FKs to `users` ×2 and the
+  optional context `travel_plans` row, two partial UNIQUE pending-pair
+  indexes, `ix_..._recipient_status`/`ix_..._requester_status`).
+- `alembic/versions/426dcef31e27_add_travel_profiles_plans_buddy_requests.py`
+  — creates the three tables; data-guarded `downgrade()` (§14.4).
+- `app/core/matching.py` — pure matching rules: weight constants
+  (sum = 100), `FLEXIBLE_DATE_GRACE_DAYS = 7`, closed sets
+  (`ALLOWED_TRAVEL_STYLES`, `ALLOWED_INTERESTS`), `normalize_place()`,
+  `plan_matches_window()` (strict/flexible/None), `ScoreBreakdown`,
+  `score_candidate()`. No clock, no I/O — unit-testable directly.
+- `app/services/discovery.py` — `discover()` (indexed SQL prefilter →
+  secondary preference filters → precise date classification → scoring →
+  per-user dedupe (best plan; ties → earliest start, then id) →
+  deterministic sort `(-score, start-ordinal, user_id)` → offset/limit
+  page; `MAX_CANDIDATE_ROWS = 500` hard ceiling), `public_profile_for()`,
+  `broad_feed()`, and `_request_states()` (per-candidate
+  none/pending_sent/pending_received/accepted).
+- `app/api/v1/schemas/travel.py` — strict schemas (`extra="forbid"`
+  everywhere): profile create/patch/read (with `completion` hints), plan
+  create/patch/read (`TravelPlanRead` timestamps optional so discovery
+  projections omit them), `DiscoveryCandidateRead`/`DiscoveryPage`
+  (honesty `note`), `PublicTravelProfileRead`, request
+  create/read/list (`BuddyRequestRead` carries both display names).
+- `app/api/v1/endpoints/travel_profile.py` — GET (404 with actionable
+  guidance when absent)/POST (409 duplicate)/PATCH/DELETE on
+  `/travel-profile/me`.
+- `app/api/v1/endpoints/travel_plans.py` — POST/GET list/GET one/PATCH
+  (full re-validation of dates against stored values)/DELETE
+  (409 via RESTRICT when referenced) on `/travel-plans`.
+- `app/api/v1/endpoints/travel_buddies.py` — discover, public profile,
+  request send (eligibility + duplicate pre-checks + rate limit),
+  list (direction/status filters), get, accept/reject (recipient only,
+  verification rechecked at accept), cancel (requester only). Routes are
+  declared `/requests` before `/{user_id}` so the literal segment wins.
+- `tests/test_matching.py` (14 pure unit tests), `tests/test_travel_plans.py`
+  (21), `tests/test_discovery.py` (23), `tests/test_buddy_requests.py`
+  (21).
+
+**Modified:**
+
+- `app/models/enums.py` — `TravelPlanStatus`, `PlanVisibility`,
+  `BuddyRequestStatus` (VARCHAR-backed + CHECK, project convention).
+- `app/models/user.py` — backrefs for the three relationships.
+- `app/models/__init__.py` — exports for the three models.
+- `app/api/v1/schemas/social.py` — rewritten over the real feed while
+  keeping the `{profiles, message}` response contract.
+- `app/api/v1/endpoints/social.py` — reimplemented over
+  `broad_feed()`; `SocialUser` gate untouched.
+- `app/api/v1/router.py` — three new routers registered (33 OpenAPI paths
+  total, verified live).
+- `tests/conftest.py` — `insert_raw_user_and_travel()` raw-SQL helper
+  (dialect-aware boolean literal) for the downgrade-guard tests.
+- `tests/test_models.py` — EXPECTED_TABLES +3 and six travel
+  metadata/constraint/enum tests (20 total).
+- `tests/test_migrations.py` — EXPECTED_TABLES +3 and three Phase 7
+  tests (upgrade creates tables + partial indexes; downgrade refuses
+  with data present; clean downgrade/upgrade roundtrip) (16 total).
+- `tests/test_postgres_integration.py` — six Phase 7 tests (native uuid
+  columns + RESTRICT FK census; partial pending-pair index enforced both
+  directions with `IntegrityError`; no-self-request and inverted-date
+  CHECKs; JSON list roundtrip; PG downgrade guard; PG roundtrip) (30
+  total).
+- `tests/test_verification.py` — one Phase 6b assertion updated: the
+  test that pinned the placeholder message ("Phase 7 will replace…") now
+  asserts the shipped honesty message; the gate assertions (403 → 200,
+  `{profiles, message}` shape, no fabricated users) are unchanged.
+- `README.md`, `report.md` — Phase 7 sections (this record, §2/§3/§4/§5/§6
+  rows); new `PHASE7_TRAVEL_BUDDIES.md` review document.
+
+`app/api/v1/deps.py`, auth, config, and the health contract were **not**
+touched.
+
+### 14.4 Database & migration details (migration `426dcef31e27`)
+
+Applied to `roamlary_dev` (head = `426dcef31e27`, chain still single and
+linear). Additive-only: three new tables, no existing table altered.
+
+- `travel_profiles` — UUID PK, `user_id` FK→users RESTRICT + **UNIQUE
+  index** (one profile per account at the database level), optional
+  `travel_nickname` (40), `bio` (200), `home_region` (80), JSON
+  `languages`/`travel_styles`/`interests`, `group_size_pref` with
+  CHECK 2–12, `discoverable` BOOLEAN NOT NULL default false.
+- `travel_plans` — UUID PK, `user_id` FK RESTRICT, `destination` (120)
+  + `destination_normalized` (NOT NULL, indexed), `region` (80) nullable
+  + `region_normalized`, `start_date`/`end_date` with CHECK
+  `end_date >= start_date`, `flexible_dates` default false, `status`
+  CHECK ∈ active/paused/completed (default active), `visibility` CHECK
+  ∈ private/discoverable (default private), composite index
+  `(destination_normalized, status, visibility)` matching the discovery
+  query shape, plus `(start_date, end_date)`.
+- `travel_partner_requests` — UUID PK, `requester_id`/`recipient_id`
+  FK→users RESTRICT, CHECK `requester_id <> recipient_id`, `plan_id`
+  nullable FK→travel_plans **RESTRICT** (history keeps pointing at a
+  real plan; deleting a referenced plan → 409), `status` CHECK ∈
+  pending/accepted/rejected/cancelled (default pending), `responded_at`
+  nullable, per-direction status indexes, and the two partial UNIQUE
+  indexes `(requester_id, recipient_id)` / `(recipient_id, requester_id)`
+  WHERE `status='pending'`.
+
+**Exact guarantee of the pending-pair indexes (§14.1 corrected):** each
+index locks its own *ordered* pair, so two racing identical sends (A→B
+twice, or B→A twice) lose at the database with `IntegrityError` — the
+application's read-then-write pre-check is a convenience, not the
+source of truth, for that case. The *cross-direction* duplicate (A→B and
+B→A both pending) presents different keys to both indexes and is
+therefore blocked one layer up by the endpoint's either-direction
+pre-check; its residual window (two users clicking send within the same
+instant) is documented in §14.11. The model docstring, migration
+comment, and tests each state exactly this boundary — no overclaim.
+
+`downgrade()` inspects all three tables first and, while any travel row
+exists, raises "Refusing to downgrade … Export or delete this data first
+— … a deliberate data-handling decision" **before** touching the schema.
+Proven on SQLite (subprocess alembic) and real PostgreSQL, offline and
+live.
+
+### 14.5 How matching works (plain language) — and its honesty boundary
+
+`app/core/matching.py` answers "how compatible is this plan with what the
+searcher asked for?" using only arithmetic over stored data:
+
+| Signal | Points |
+|---|---|
+| Destination matches the searcher's `?destination=` filter (normalized) | +40 |
+| Region matches the searcher's `?region=` filter instead | +20 |
+| Plan overlaps the searcher's date window | +30 strict / +15 via the ±7-day flexible grace |
+| Shared declared interests | +5 each, cap 15 |
+| Shared travel styles | +5 each, cap 10 |
+| Shared language | +5 |
+
+Weights sum to exactly `SCORE_MAX = 100`; `ScoreBreakdown.total` applies
+`min(score, 100)` so any future weight change cannot overflow the scale.
+The destination/region/date components score **the searcher's stated
+intent (filters)** — an unfiltered browse therefore ranks by shared
+preferences only (live-verified: unfiltered = 20/100 for a two-interest
+fixture; the same fixture filtered by destination+window = 90/100).
+Normalization = casefold + whitespace collapse; punctuation is **not**
+stripped, so "Goa, India" ≠ "Goa India" as normalized keys (documented
+limitation, §14.11). Flexible-date overlap is classified in Python after
+a grace-widened SQL window (the SQL is a documented superset; genuine
+non-overlaps are dropped precisely before scoring).
+
+**Honesty boundary (unchanged from §14.1, repeated in every response
+`note`):** the score is a deterministic convenience ranking of logistics
+and stated preferences — it is **not**, and is never presented as, proof
+that anyone is safe or that two people will get along. No AI, no external
+API, no vector database, no provider is involved anywhere in this phase.
+
+### 14.6 API endpoints and request/response examples
+
+Full route table with gates and error codes: **§5**. Client-facing
+version with examples: README "Travel buddies & discovery (Phase 7)".
+Representative flow (as run live, §14.10):
+
+```text
+POST /api/v1/travel-profile/me   {"travel_nickname": "WandererB", "interests":
+ ["hiking","food"], "travel_styles": ["slow_travel"], "languages": ["english"],
+ "group_size_pref": 2, "discoverable": true}
+→ 201 { "user_id": "…", …, "discoverable": true, "completion": [] }
+
+POST /api/v1/travel-plans/       {"destination": "goa  india", "region": "North
+ Goa", "start_date": "2027-01-08", "end_date": "2027-01-12", "visibility":
+ "discoverable"}
+→ 201 { "id": "…", "destination": "goa india", "status": "active", … }
+
+GET  /api/v1/travel-buddies/discover?destination=goa%20india&start_date=2027-01-05
+                                     &end_date=2027-01-15
+→ 200 { "total": 1, "offset": 0, "limit": 20,
+        "results": [ { "user_id": "…", "display_name": "WandererB",
+          "plan": { …, "created_at": null, "updated_at": null },
+          "compatibility_score": 90,
+          "match_breakdown": { "destination": 40, "dates": 30,
+            "interests": 10, "travel_style": 5, "language": 5 },
+          "existing_request": "none" } ],
+        "note": "Compatibility scores are a deterministic ranking of travel
+        logistics and stated preferences - not a guarantee that anyone is
+        safe or that two people will get along. Always meet in public and
+        tell a trusted contact your plans." }
+
+POST /api/v1/travel-buddies/requests  {"recipient_id": "…", "plan_id": "<B's
+ plan id>"}                 → 201 { …, "status": "pending", … }
+POST /api/v1/travel-buddies/requests  {"recipient_id": "…"}   → 409 duplicate
+POST /api/v1/travel-buddies/requests  {"recipient_id": "<self>"}  → 422
+POST /api/v1/travel-buddies/requests/{id}/accept   (recipient) → 200 "accepted"
+GET  /api/v1/travel-buddies/discover                (requester) → B gone
+GET  /api/v1/social/discovery                       → { "profiles": [ …≤10 ],
+                                                       "message": "…" }
+```
+
+### 14.7 Eligibility, privacy, authorization & abuse-control behavior
+
+- **Gate matrix:** plain-login = profile CRUD, plan CRUD, list/get/cancel
+  own requests; social gate = discover, public profile, send, accept,
+  reject. While the policy requires verification, the gated routes return
+  403 with the status-specific message (fail-closed, live read — §13).
+- **Who can appear in discovery:** discoverable profile + `active`
+  `discoverable` plan not yet ended + not you + not an accepted partner +
+  not a pending counterparty in either direction + verified while the
+  policy requires it. Every condition is enforced in the SQL prefilter
+  (indexed columns) or the documented Python stage.
+- **Eligibility recheck at accept:** the recipient's verification is
+  re-read live when accepting; if it lapsed, the accept returns 409
+  ("no longer eligible") and the request stays `pending` — policy can
+  never be bypassed by an old request. Discoverability is deliberately
+  NOT rechecked at accept (a user who hid after being asked still gets to
+  decide on the existing ask; documented).
+- **Privacy of projections:** discovery/public profiles omit email, role,
+  verification status, account timestamps, and private/inactive plans;
+  plan timestamps are omitted there too (`created_at`/`updated_at` are
+  optional in `TravelPlanRead` and populated only on owner endpoints).
+  No sensitive identity data exists in any Phase 7 table — the brief's
+  exclusion is structural, not policy-based.
+- **State machine:** pending → accepted|rejected (recipient) or
+  pending → cancelled (requester); accepted/rejected/cancelled are
+  terminal (further moves → 409). Wrong party → 404 (existence privacy).
+  Resending after rejection/cancellation is allowed; a duplicate
+  pending/accepted request either direction → 409.
+- **Race guarantees:** same-direction duplicates lose at the database
+  (partial UNIQUE indexes; proven with raw inserts past the endpoint on
+  SQLite **and** real PostgreSQL); self-requests cannot exist (schema 422
+  + DB CHECK, both proven); the cross-direction instant-simultaneity
+  window is endpoint-guarded and documented (§14.11).
+- **Abuse control:** 30 request-sends/hour/user in-process limiter
+  (429), the only lever available (§14.1.10). No blocking system exists
+  in the product yet (§12) — exclusions are verification +
+  discoverability + partner/pending state.
+
+### 14.8 Commands executed (Windows PowerShell, from `backend/`)
+
+```powershell
+# Preflight (audit, before any code): branch/HEAD/tree, alembic head,
+# table census, route census — recorded in §14.1.
+
+# Lint + format (run after every change)
+.venv\Scripts\python -m ruff format app tests
+.venv\Scripts\python -m ruff check app tests
+
+# New suites first, then models/migrations, then the FULL offline suite
+.venv\Scripts\python -m pytest tests\test_matching.py tests\test_travel_plans.py `
+  tests\test_discovery.py tests\test_buddy_requests.py -q
+.venv\Scripts\python -m pytest tests -q --ignore=tests\test_postgres_integration.py
+
+# PostgreSQL suite (ROAMLARY_TEST_DATABASE_URL derived from .env — never printed)
+.venv\Scripts\python -m pytest tests\test_postgres_integration.py -q
+
+# Migration applied to roamlary_dev + verified
+.venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m alembic current
+
+# Live E2E against the restarted dev server (temp script in the system temp
+# dir): 24 checks, then removed its own rows and verified the cleanup
+.venv\Scripts\python C:\Users\91812\AppData\Local\Temp\opencode\phase7_live_smoke.py
+```
+
+### 14.9 Tests & actual results (real output, nothing fabricated)
+
+**94 new tests** (88 offline + 6 real-PostgreSQL), totals now **339**:
+
+| Suite | Before | After | What Phase 7 added |
+|---|---|---|---|
+| `tests/test_matching.py` (new) | — | 14 | pure-function rules: normalization, window classification (strict/flexible/none), each weight, caps, total cap, closed sets |
+| `tests/test_travel_plans.py` (new) | — | 21 | profile lifecycle + 404-guidance + duplicates, plan CRUD, ownership identical-404s, date revalidation, RESTRICT delete 409, auth/gate matrix, strict-schema 422s |
+| `tests/test_discovery.py` (new) | — | 23 | gates, eligibility exclusions (hidden/unverified/partner/pending/self/expired/private), scoring + ranking, all filters, dedupe-per-user, pagination + bounds, privacy of projections, public profile, `/social/discovery` contract |
+| `tests/test_buddy_requests.py` (new) | — | 21 | full lifecycle, identical-404 privacy, terminal-state 409s, DB-level race/self-request proofs (SQLite + PG), eligibility recheck at accept, rate limit 429, resend-after-reject |
+| `tests/test_models.py` | 14 | 20 | EXPECTED_TABLES +3; travel FK/CHECK/UNIQUE/partial-index metadata; enum contracts |
+| `tests/test_migrations.py` | 13 | 16 | EXPECTED_TABLES +3; Phase 7 upgrade creates tables + partial indexes; downgrade refuses with data; clean roundtrip |
+| `tests/test_postgres_integration.py` | 24 | 30 | native uuid + RESTRICT FK census; partial pending-pair index both directions (`IntegrityError`); no-self-request + inverted-date CHECKs; JSON list roundtrip; PG downgrade guard; PG roundtrip |
+
+Actual results (2026-10-13, real output):
+
+```text
+ruff format: 72 files left unchanged          ruff check: All checks passed!
+pytest tests -q --ignore=tests\test_postgres_integration.py
+→ 309 passed, 3 warnings in 110.64s           (baseline 221 → +88)
+pytest tests\test_postgres_integration.py -q
+→ 30 passed in 63.07s                         (baseline 24 → +6)
+```
+
+The three warnings are the pre-existing StarletteDeprecationWarning for
+HTTP 422 (seen since Phase 3-era tests; unrelated to this phase).
+
+One Phase 6b test changed: `test_verified_user_passes_gate_after_owner_approval`
+pinned the placeholder message text ("Phase 7 will replace…"). Phase 7
+shipped, so the assertion now pins the shipped honesty message ("not a
+guarantee"); the gate behavior it actually protects (403 before
+approval → 200 after, `{profiles, message}` shape, empty/non-fabricated
+profiles) is unchanged and still asserted.
+
+### 14.10 Live verification on `roamlary_dev` (real output, 2026-10-13)
+
+`alembic upgrade head` → `Running upgrade 3e285edb0896 -> 426dcef31e27`;
+`alembic current` → `426dcef31e27 (head)`. The dev server was restarted
+(old PID killed, new uvicorn serving the Phase 7 code); `/api/v1/health`
+returned the **byte-identical pre-Phase-7 contract**
+(`{"status":"ok","service":"roamlary-backend","version":"1.0.0"}`) and
+the OpenAPI census showed **33 paths** including all twelve Phase 7
+routes.
+
+A 24-check live script (two throwaway accounts, owner CLI, policy
+toggle) then passed **24/24**:
+
+1. health contract unchanged · 2. make-owner CLI ok · 3. policy normalized
+   ON · 4. discover 403 while unverified · 5. absent profile → 404 with
+   guidance · 6. owner flips policy OFF · 7–8. both profiles created ·
+9–10. both plans created (normalization visible: "goa  india" stored
+   lowercase+collapsed) · 11. unfiltered discovery 200 with honesty note ·
+   12. preferences-only score 20 with the exact documented breakdown ·
+   13. discovery omits timestamps/email · 14. filtered discovery scores
+   the full **90** (40 destination + 30 strict + 20 preferences) ·
+   15. request sent 201 pending · 16. duplicate → 409 · 17. self-request →
+   422 · 18. recipient sees incoming · 19. accept → 200 accepted ·
+   20. accepted partner leaves discovery · 21. `/social/discovery`
+   contract kept · 22. public profile without email · 23. policy restored
+   ON · 24. discover 403 again.
+
+Cleanup removed every `live-*` row it created (profiles, plans,
+requests, audit rows, users — verified: 0 `live-*` users remain,
+`user@example.com` untouched as the only dev user, 0 travel rows,
+policy ended `requires_verification=true`). The static UI at :3000
+still serves the SPA (200, HTML) — `frontend/` untouched throughout.
+
+### 14.11 Known limitations & follow-up work
+
+- **No blocking/restriction system** (pre-existing §12 gap): "exclude
+  blocked users" reduces to verification + discoverability + partner/
+  pending exclusions. Blocking must land before real social deployment.
+- **Cross-direction request race:** the DB indexes lock each *direction*;
+  two users sending to each other within the same instant can both pass
+  the endpoint pre-check and create one pending request per direction.
+  The state machine stays consistent (each is accepted/rejected/cancelled
+  independently), but a canonical-pair expression index
+  (LEAST/GREATEST — not portable to SQLite's min/max without a
+  dialect-aware migration) is the recommended fix if this ever matters.
+  *(Amended by Phase 8 (§17): FIXED — migration `7f3a9c1e5b42` adds the
+  canonical-pair columns with a dialect-aware backfill plus a
+  pending-only UNIQUE index on the pair, proven by raw-insert race tests
+  on SQLite and PostgreSQL. The note above is preserved as the Phase 7
+  record.)*
+- **Destination matching is exact after casefold/whitespace-collapse:**
+  punctuation and spelling variants ("Goa, India" vs "Goa India" vs
+  "Goa") are different keys. A gazetteer/alias table is future work; the
+  limitation is visible in the README and the module docstring.
+- **The in-process rate limiter** (30 sends/hour/user) resets on restart
+  and is per-process — same caveat as the Phase 6b owner-policy limiter.
+- **No messaging/chat/notifications:** an accepted request is a row; the
+  two users are never connected by any channel, and nothing notifies
+  anyone (out of scope by the brief; chat is a later phase).
+- **Score is a heuristic, not a safety signal** — repeated in every
+  response; the UI (Phase 9) must display the note verbatim.
+- **`MAX_CANDIDATE_ROWS = 500`** caps the SQL prefilter; beyond 500
+  matching rows the ranking operates on the first 500 by (start_date,
+  id). Fine at prototype scale; revisit with real traffic (or add
+  keyset pagination) later.
+- **Preference filtering is a Python secondary stage** (SQLite-portable
+  JSON columns): with huge candidate sets it is O(rows) in Python.
+- **No client UI** for any Phase 7 route yet (Phase 9).
+
+### 14.12 Scope confirmation & git state
+
+**Built exactly the brief:** travel profiles, preferences, plans,
+eligibility-aware discovery/matching, travel-partner requests — on the
+existing verification mechanism, with tests, regression, docs.
+**Deliberately absent:** chat/blocking/AI-matching/verification-provider
+items, sensitive identity data (none stored, none displayed), and any
+change to `frontend/` (zero files touched). Health contract unchanged
+(live-verified). `DATABASE_URL`/`JWT_SECRET_KEY` were read only from the
+gitignored `backend/.env`; the test PostgreSQL URL was derived without
+ever being printed.
+
+**Git state:** branch `backend`, HEAD `30977c0` = `origin/backend` (the
+Phase 6 second assignment commit). Per the owner's standing rule there
+are **no commits and no pushes** from this phase — the working tree
+carries the Phase 7 change set as 13 modified + 14 untracked files
+(§16 lists them exactly). Awaiting owner review; `main` untouched.
+
+## 15. Known limitations (current)
 
 - Served endpoints: health, register/login, `GET/PATCH /users/me`, the five
   **trusted-contact** routes, the five **check-in** routes (Phase 4, §10),
   the five **SOS** routes (Phase 5, §11), the four **community-report**
-  routes (Phase 6, §12: create, list, nearby, get-by-id), and the seven
+  routes (Phase 6, §12: create, list, nearby, get-by-id), the seven
   **identity-verification/social** routes (Phase 6 second assignment, §13:
   status, submit, owner queue list/approve/reject, owner policy read/patch,
-  gated social discovery placeholder). Nothing else exposes the database
-  over HTTP.
+  social discovery), and the seventeen **travel-buddy** routes (Phase 7,
+  §14: travel-profile CRUD, travel-plan CRUD, discover, public profile,
+  request send/list/get/accept/reject/cancel — `/social/discovery` is now
+  the real broad feed), and the twenty-four **chat/block/session**
+  routes (Phase 8, §17: message-request send/list/get/accept/reject/
+  cancel, conversation list/get, message history/send/soft-delete,
+  block/unblock/list, session list/logout/revoke/revoke-others/
+  revoke-all). Nothing else exposes the database over HTTP.
 - Authentication is a **local prototype**: Argon2id password hashing + HS256
   JWTs. No refresh tokens, password reset, email verification, rate limiting,
   or account recovery yet — all belong to later phases.
@@ -2458,39 +3080,59 @@ time in §13.13's companion doc.
   email/registration-order privilege); a reviewer cannot decide their own
   request (409); the owner-only policy rate limiter is **in-process**
   (resets on restart, per-process — fine on one dev machine, revisit
-  before multi-process deployment); the social surface is a **gated
-  placeholder** (empty list) until Phase 7; account/safety workflows
+  before multi-process deployment); the social surface it gated is **real
+  since Phase 7** (§14 — travel buddies + the `/social/discovery` broad
+  feed, on the same unchanged dependency); account/safety workflows
   (trusted contacts, check-ins, SOS, profile) stay reachable while
   unverified, by design.
 - The identity-verification feature has **no client UI** yet (Phase 9) and
   no email/verification notifications (none are claimed to work).
-- Pagination exists **only** on the report endpoints (offset/limit,
-  1–100); contact/check-in/SOS lists remain unbounded arrays (fine at
-  prototype scale, revisit before real traffic).
+- Pagination exists on the report endpoints, on the Phase 7 discovery/
+  request-list endpoints, and on the Phase 8 conversation/history lists
+  (offset/limit, 1–100); contact/check-in/SOS lists and the travel-plan
+  list remain unbounded arrays (fine at prototype scale, revisit before
+  real traffic). Discovery additionally caps its SQL prefilter at 500
+  candidate rows (§14.11).
+- Phase 7 ships matching and requests **only**: no chat/messaging, no
+  notifications, no trip events, no blocking system (§14.11); the
+  compatibility score is a documented heuristic and is presented with an
+  explicit "not a safety guarantee" note in every response; destination
+  matching is exact after casefold/whitespace normalization (punctuation
+  variants do not match — §14.11); the send-rate limiter (30/hour/user)
+  is in-process like the owner-policy limiter; the cross-direction
+  request race window is endpoint-guarded, not index-guarded (§14.11).
+- Phase 8 ships one-to-one text chat, blocking, and session revocation
+  **only**: no group chat, no trip events, no notifications, no message
+  search/attachments; JWTs stay stateless bearer tokens (revocation is
+  enforced at the API boundary on every request); the ask/message
+  limiters are in-process like all prior limiters; the cross-direction
+  travel race is fixed at the database (§17.8); chat carries no safety
+  fields and makes no safety claims.
 - AI and notifications remain unimplemented entirely.
 - Dev-grade CORS and configuration only; no HTTPS.
 - Runs only on this laptop, local machine, port 8000.
 - The `backend` branch is pushed to GitHub (`origin/backend`) through
-  **Phases 1–6**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
-  `f26536e`, Phases 4 + 5 as `f602505`, and **Phase 6 committed and pushed
-  after the owner's instruction, 2026-10-12** (see `git log`, HEAD
-  `9029047`…later `9939515` as annotated in §12.13). The working tree now
-  carries the **uncommitted Phase 6 (second assignment) change set**
-  awaiting owner review (owner rule: no commits during a phase); every
+  **Phase 7**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
+  `f26536e`, Phases 4 + 5 as `f602505`, Phase 6 as `9029047`, Phase 6
+  second assignment as `30977c0`, and **Phase 7 committed and pushed
+  (owner-authorized) as `2b52ec2`** (see `git log`, HEAD =
+  `origin/backend`). The working tree now carries the **uncommitted
+  Phase 8 change set** (owner rule: no commits during a phase); every
   push of this branch contains the full tree (`backend/`, `frontend/`,
   `.gitignore`, and — since the owner's decision of 2026-10-12 —
   `docs/README.md`, so the `docs/` folder now exists on GitHub). GitHub's
   **`main` branch was fast-forwarded to this branch** the same day (owner
-  decision, §15), so the GitHub homepage shows all of Phases 1–6 as
+  decision, §16), so the GitHub homepage shows Phases 1–7 as
   committed so far.
 - Database lives in a Docker container; if that container's volume is removed,
   recreate the schema with `alembic upgrade head`.
 - Frontend cannot integrate beyond the health + auth + Phase 4 + Phase 5
-  contract until Phase 9 (the Phase 6 report contract is committed; the
-  Phase 6 second assignment verification/social contract is new and
-  uncommitted).
+  contract until Phase 9 (the Phase 6 report contract, the Phase 6
+  second assignment verification/social contract, and the Phase 7
+  travel-buddy contract are committed; the Phase 8 chat/block/session
+  contract is implemented and verified but still uncommitted, §16).
 
-## 15. Pending tasks and next steps
+## 16. Pending tasks and next steps
 
 1. ✅ **Settled (2026-10-12):** owner reviewed Phases 4 + 5 (§10/§11 +
    `PHASE4_CHANGES.md`/`PHASE5_CHANGES.md`) and approved commit & push.
@@ -2511,17 +3153,447 @@ time in §13.13's companion doc.
    **`docs/`** folder → `docs/README.md` explains the folder's purpose
    and lists the planned future contents (e.g. `docs/merge-report.md`
    from Phase 9); the folder now exists on GitHub.
-6. ⏳ **Awaiting owner review (2026-10-12):** Phase 6 (second assignment)
-   §13 + `PHASE6_IDENTITY_CHANGES.md` + test results (245 passed,
-   0 skipped) are ready for the owner's review; the change set stays
-   **uncommitted** until that approval (owner rule: no commits during a
-   phase). Phase 7 must not start before this review.
-7. Owner assigns the next phase (per the roadmap: Phase 7, AI companion —
-   blocked until Laptop 3 publishes the AI contract).
-8. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
-   planning and the `docs/merge-report.md` integration document.
-9. Laptop 3 to publish the AI contract before Phase 7 can be real (stub until
-   then).
+6. ✅ **Settled (2026-10-12, after this report's earlier draft):** Phase 6
+   (second assignment) §13 + `PHASE6_IDENTITY_CHANGES.md` was reviewed by
+   the owner and **committed and pushed to `origin/backend` as `30977c0`**
+   (26 files, `git log` verifies) — the phase-6-era note that called it
+   "uncommitted" predates that commit.
+7. ✅ **Settled (2026-10-13, after this report's earlier draft):** Phase 7
+   (§14 + `PHASE7_TRAVEL_BUDDIES.md`, **339 passed** — 309 offline + 30
+   real-PostgreSQL; live E2E 24/24) was reviewed by the owner and
+   **committed and pushed to `origin/backend` as `2b52ec2`** (29 files,
+   `git log` verifies) — the phase-7-era note that called it
+   "uncommitted" (with the `git status` listing below) predates that
+   commit and is preserved as the phase record.
+
+   ```text
+    M backend/README.md
+    M backend/app/api/v1/endpoints/social.py
+    M backend/app/api/v1/router.py
+    M backend/app/api/v1/schemas/social.py
+    M backend/app/models/__init__.py
+    M backend/app/models/enums.py
+    M backend/app/models/user.py
+    M backend/report.md
+    M backend/tests/conftest.py
+    M backend/tests/test_migrations.py
+    M backend/tests/test_models.py
+    M backend/tests/test_postgres_integration.py
+    M backend/tests/test_verification.py
+   ?? backend/PHASE7_TRAVEL_BUDDIES.md
+   ?? backend/alembic/versions/426dcef31e27_add_travel_profiles_plans_buddy_requests.py
+   ?? backend/app/api/v1/endpoints/travel_buddies.py
+   ?? backend/app/api/v1/endpoints/travel_plans.py
+   ?? backend/app/api/v1/endpoints/travel_profile.py
+   ?? backend/app/api/v1/schemas/travel.py
+   ?? backend/app/core/matching.py
+   ?? backend/app/models/travel_partner_request.py
+   ?? backend/app/models/travel_plan.py
+   ?? backend/app/models/travel_profile.py
+   ?? backend/app/services/
+   ?? backend/tests/test_buddy_requests.py
+   ?? backend/tests/test_discovery.py
+   ?? backend/tests/test_matching.py
+   ?? backend/tests/test_travel_plans.py
+   ```
+
+   (`backend/app/services/` is the untracked directory containing
+   `__init__.py` and `discovery.py`. `frontend/` has **zero** changes.)
+8. ⏳ **Awaiting owner review (2026-10-14):** Phase 8 (§17 +
+   `PHASE8_CHAT_BLOCKS_SESSIONS.md` + test results: **406 passed, 0
+   skipped** — 369 offline + 37 real-PostgreSQL; live E2E 29/29 on
+   `roamlary_dev`) is ready for review; the change set stays
+   **uncommitted** until the owner approves (owner rule: no commits
+   during a phase). Exact `git status --short` output (branch
+   `backend`, HEAD `2b52ec2` = `origin/backend`):
+
+   ```text
+   M backend/README.md
+   M backend/app/api/v1/deps.py
+   M backend/app/api/v1/endpoints/auth.py
+   M backend/app/api/v1/endpoints/travel_buddies.py
+   M backend/app/api/v1/router.py
+   M backend/app/api/v1/schemas/auth.py
+   M backend/app/core/security.py
+   M backend/app/models/__init__.py
+   M backend/app/models/enums.py
+   M backend/app/models/travel_partner_request.py
+   M backend/app/models/user.py
+   M backend/app/services/discovery.py
+   M backend/report.md
+   M backend/tests/conftest.py
+   M backend/tests/test_auth.py
+   M backend/tests/test_buddy_requests.py
+   M backend/tests/test_migrations.py
+   M backend/tests/test_models.py
+   M backend/tests/test_postgres_integration.py
+   ?? backend/PHASE7_TRAVEL_BUDDIES.md
+   ?? backend/PHASE8_CHAT_BLOCKS_SESSIONS.md
+   ?? backend/alembic/versions/7f3a9c1e5b42_add_chat_blocking_and_session_revocation.py
+   ?? backend/app/api/v1/endpoints/blocks.py
+   ?? backend/app/api/v1/endpoints/chat.py
+   ?? backend/app/api/v1/schemas/blocks.py
+   ?? backend/app/api/v1/schemas/chat.py
+   ?? backend/app/core/blocks.py
+   ?? backend/app/core/pairing.py
+   ?? backend/app/models/auth_session.py
+   ?? backend/app/models/conversation.py
+   ?? backend/app/models/message.py
+   ?? backend/app/models/user_block.py
+   ?? backend/tests/test_blocks.py
+   ?? backend/tests/test_chat.py
+   ?? backend/tests/test_sessions.py
+   ```
+
+   (19 modified + 15 untracked files, all under `backend/`.
+   `frontend/` has **zero** changes.)
+9. After the Phase 8 review: owner decides whether Phase 8 is committed/
+   pushed (and whether `main` is fast-forwarded again). No commit or push
+   happens without that explicit instruction.
+10. Owner assigns the next phase (per the roadmap: Phase 9,
+    Flutter integration & API contract alignment — needs the frontend
+    report from Laptop 2).
+11. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
+    planning and the `docs/merge-report.md` integration document.
+12. Laptop 3 to publish the AI contract before any AI-companion work can be
+    real (stub until then).
+
+## 17. Phase 8 record — Stranger chat, blocking & account security
+
+### 17.1 Focused audit (recorded BEFORE any code, 2026-10-14)
+
+**Starting state (verified by command):** branch `backend`, HEAD
+**`2b52ec2`** = `origin/backend`, clean tree, no stash — the brief's
+"Phase 7 uncommitted" note is stale: Phase 7 was committed and pushed as
+`2b52ec2` after owner authorization. All Phase 7 files present in the
+working tree (`travel_partner_request.py`, `matching.py`,
+`services/discovery.py`, `travel_buddies.py`, `test_buddy_requests.py`);
+migration head **`426dcef31e27`** on `roamlary_dev` (single linear chain
+of 7 migrations); 339 tests passing per the Phase 7 report. Nothing to
+recover; no reset/revert performed — only additive Phase 8 work follows.
+
+**Confirmed repository facts:**
+
+1. **No messaging/conversation/block/session/refresh-token structures
+   exist.** The grep audit finds only unrelated word matches
+   ("conversation" in a docstring, SQLAlchemy `Session`, `setting_changes`
+   audit). Chat, blocks, and sessions are greenfield on existing
+   conventions.
+2. **Auth is stateless HS256 JWT** (`sub` + `iat` + `exp`, 60-minute
+   lifetime, `create/decode_access_token` in `core/security.py`,
+   enforced in `deps.get_current_user`). **No refresh tokens, no
+   server-side sessions, no token identifiers** — revocation needs a new
+   minimal mechanism (brief item 7 explicitly allows only the minimum
+   necessary session representation).
+3. **Reusable components confirmed:** `require_verified_user` (live
+   fail-closed policy read — reused unchanged for all outward-facing
+   chat actions); the travel-request endpoint's either-direction
+   pre-check + partial UNIQUE index pattern (reused for blocks and
+   conversations); the in-process `check_rate_limit` (reused for chat
+   asks/sends — no shared store exists, so no new infrastructure per
+   the brief); RESTRICT FKs + named CHECKs + `extra="forbid"` schemas +
+   privacy-preserving 404s + UTC `_iso` timestamps (all reused).
+4. **Phase 7 race gap confirmed present:** `travel_partner_requests`
+   carries only the two per-direction partial UNIQUE indexes; a truly
+   simultaneous opposite-direction pair can land twice. The fix needs a
+   canonical unordered pair + a pending-only UNIQUE index on it, with a
+   dialect-aware backfill (PostgreSQL LEAST/GREATEST vs SQLite min/max —
+   both order identically to integer comparison, verified by command
+   before implementing).
+5. **Conventions confirmed:** `api_client` + `register_user` test
+   helpers, real-`set_policy` flips, direct-DB verification shortcuts,
+   subprocess Alembic tests with `EXPECTED_TABLES` + data-guard
+   assertions, per-phase raw-insert helpers in `conftest.py`, route
+   prefixes (`/travel-buddies`, `/travel-plans`, `/social`), offset
+   ge=0 / limit 1–100 default 20, `IntegrityError → 409`.
+
+**Implementation checklist (written from the audit, then executed):**
+models + `ConversationStatus` enum + `canonical_pair`/`blocked_user_ids`
+helpers → migration `7f3a9c1e5b42` → JWT `sid`/`tv` claims + per-request
+revocation enforcement (legacy tokens governed by version check) →
+session issuance at login/register + 5 session routes → blocks (3
+routes, plain auth) + discovery/travel integration → chat (request
+lifecycle, conversations, history, send, soft delete; NO auto-chat from
+travel partners) + canonical pair on travel send → tests alongside →
+consolidated suite + PG suite + live smoke → docs. No separate social
+identity system was created (brief item 3): chat/blocks key on the
+existing `users` rows only.
+
+### 17.2 Summary of the implementation & design decisions
+
+1. **One row per unordered pair for conversations** (canonical low/high
+   UUIDs, UNIQUE): duplicate pending asks are structurally impossible —
+   not even racing, not even opposite-direction. Re-asking after
+   rejection/cancellation reuses the same row (explicit call only; never
+   silent).
+2. **Travel partners do NOT auto-chat.** The brief (§4.3) permits
+   auto-chat only if existing rules establish it; Phase 7 established no
+   such rule, so chat needs its own request + accept. Enforced by never
+   reading travel tables in the chat code (proven by test).
+3. **Blocking is a safety tool, not a social perk:** block/unblock/list
+   stay on plain authentication (reachable while unverified), while
+   everything the block affects (discovery, sends, accepts, public
+   profiles) is gated normally. One shared `blocked_user_ids` rule
+   object serves discovery, travel requests, and chat — they cannot
+   drift apart. History stays readable after blocking; sending stops.
+4. **Smallest compatible revocation:** per-login `auth_sessions` rows +
+   `sid` claim (immediate per-session kill) + `users.token_version`/`tv`
+   claim (account-wide kill that also catches legacy tokens). No
+   fingerprinting, no IP/UA collection; the optional `device_label` is
+   user-supplied display text only. Raw tokens are never stored/logged.
+5. **Same gate asymmetry as Phase 7:** own-data management (request/
+   conversation lists, reads, own cancels, blocks, sessions) on plain
+   login; outward actions (sends, accepts, rejects, history, messages)
+   behind unchanged `require_verified_user`. No verification-policy
+   change of any kind.
+6. **Neutral errors where facts must not leak:** one 404 for
+   unknown/ineligible/blocked recipients; one neutral 403 for
+   blocked-vs-lapsed sends; identical 404s for non-party/non-owner
+   lookups across conversations, messages, sessions, and blocks.
+
+### 17.3 File-by-file change log (files created and modified)
+
+**Created:**
+
+- `app/models/user_block.py` — `UserBlock` (blocker/blocked FKs
+  RESTRICT, no-self CHECK, UNIQUE pair).
+- `app/models/conversation.py` — `Conversation` (canonical low/high,
+  no-self + status CHECKs, UNIQUE pair, `requested_by`, `responded_at`).
+- `app/models/message.py` — `ChatMessage` (text body, sender FK,
+  `is_deleted`/`deleted_at` soft delete, history index).
+- `app/models/auth_session.py` — `AuthSession` (user FK, optional
+  label, `revoked_at` NULL = active).
+- `app/core/pairing.py` — `canonical_pair()` (int-ordered, rejects
+  self-pairs; ordering matches both backfill dialects).
+- `app/core/blocks.py` — `blocked_user_ids()` (both directions, one
+  query — the single shared rule).
+- `alembic/versions/7f3a9c1e5b42_add_chat_blocking_and_session_revocation.py`
+  — 4 tables + `users.token_version` + travel pair columns/backfill/
+  index; data-guarded `downgrade()` (§17.4).
+- `app/api/v1/schemas/chat.py` — request/conversation/message/history
+  schemas (strict; sender never accepted from bodies).
+- `app/api/v1/schemas/blocks.py` — block create/read/list (blocker's
+  view only).
+- `app/api/v1/endpoints/chat.py` — 11 routes: request send/list/get/
+  accept/reject/cancel, conversation list/get, history, send, message
+  soft delete.
+- `app/api/v1/endpoints/blocks.py` — 3 routes: block/unblock/list.
+- `tests/test_chat.py` (24), `tests/test_blocks.py` (12),
+  `tests/test_sessions.py` (12).
+
+**Modified:**
+
+- `app/models/enums.py` — `ConversationStatus`
+  (pending/accepted/rejected/cancelled).
+- `app/models/user.py` — `token_version` (NOT NULL default 0) +
+  `auth_sessions` backref (blocks/conversations/messages keep the
+  no-backref convention: ambiguous FK pairs, direct queries).
+- `app/models/travel_partner_request.py` — canonical pair columns +
+  pending-only UNIQUE index + corrected guarantee docstring (the Phase 7
+  overclaim is fixed where the live code states it; the committed
+  migration file and §14 history are preserved untouched).
+- `app/models/__init__.py` — exports for the 4 models + enum.
+- `app/core/security.py` — `create_access_token(user_id, session_id,
+  token_version)` (backward-compatible defaults) + `decode_token_claims`
+  (`decode_access_token` signature/behavior unchanged).
+- `app/api/v1/deps.py` — revocation enforcement in `get_current_user`
+  (version + session-row checks; non-UUID `sub` still 401) +
+  `get_current_session`/`CurrentSession` for "this session" endpoints.
+- `app/api/v1/endpoints/auth.py` — session minting at register/login
+  (optional `device_label` on both strict schemas) + 5 session routes.
+- `app/api/v1/schemas/auth.py` — `device_label` fields + session
+  read/list schemas.
+- `app/api/v1/endpoints/travel_buddies.py` — canonical pair written on
+  send; block collapse (404) on send; block recheck (409) on accept.
+- `app/services/discovery.py` — block exclusion in `discover()` (covers
+  `broad_feed()` too) and in `public_profile_for()`.
+- `app/api/v1/router.py` — `blocks` + `chat` routers (49 OpenAPI paths
+  total, verified live).
+- `tests/conftest.py` — `insert_raw_phase8_rows()` raw-SQL helper.
+- `tests/test_models.py` — EXPECTED_TABLES +4 and 8 Phase 8
+  metadata/enum/pairing tests (28 total).
+- `tests/test_migrations.py` — EXPECTED_TABLES +4, Phase 7 tests
+  repointed at the new head/guard chain, 4 new Phase 8 tests incl. the
+  backfill-order proof (20 total).
+- `tests/test_postgres_integration.py` — Phase 7 PG tests repointed,
+  7 new Phase 8 PG tests incl. the LEAST/GREATEST backfill proof (37
+  total).
+- `tests/test_auth.py` — deleted-user test clears RESTRICT-bound
+  session rows first (same assertion); non-UUID-`sub` 401 preserved via
+  the deps fix.
+- `tests/test_buddy_requests.py` — race test now proves the
+  cross-direction DB rejection (the fix), not the old boundary.
+- `README.md`, `report.md` — Phase 8 sections; new
+  `PHASE8_CHAT_BLOCKS_SESSIONS.md` review document.
+
+`app/api/v1/deps.py`'s `get_current_user` contract, the verification
+policy, the health contract, and `frontend/` were **not** changed in
+behavior (deps gained checks; all prior guarantees hold).
+
+### 17.4 Database & migration details (migration `7f3a9c1e5b42`)
+
+Applied to `roamlary_dev` (head = `7f3a9c1e5b42`, chain still single and
+linear). Additive-only plus two derived columns; no existing row is
+altered or dropped.
+
+- `user_blocks`, `conversations`, `messages`, `auth_sessions` — as §17.3
+  (all FKs RESTRICT, named CHECKs/UNIQUEs/indexes mirroring the models
+  exactly; metadata-vs-migration index names verified equal by command).
+- `users.token_version` — Integer NOT NULL server_default 0 (existing
+  accounts backfill to 0 in the same statement, matching legacy tokens'
+  implicit version — the secure starting point).
+- `travel_partner_requests.pair_low_id/pair_high_id` — nullable UUIDs
+  (SQLite cannot add NOT NULL to a populated table without a rebuild;
+  the application always writes both), backfilled by a dialect-aware
+  UPDATE, locked by partial UNIQUE `(low, high)` WHERE pending. Ordering
+  verified identical across Python `canonical_pair`, PostgreSQL
+  LEAST/GREATEST, and SQLite min/max (fixed-width hex sorts like the
+  integer) — old rows and new rows share one key space.
+
+`downgrade()` counts the four new tables first and refuses with
+"Refusing to downgrade … a deliberate data-handling decision" while any
+Phase 8 row exists, before touching the schema. Proven on SQLite
+(subprocess alembic), real PostgreSQL, and live on `roamlary_dev`.
+
+### 17.5 Message-request and conversation lifecycle
+
+`No conversation → pending → accepted → messages exchanged`
+(`requested_by` marks the current asker). Reject/cancel are terminal for
+that ask; an explicit NEW ask flips the same row back to pending with
+the new asker recorded — the documented post-rejection policy (brief
+4.11). Accepting a travel-partner request never creates, authorizes, or
+short-circuits a conversation. Blocking either direction freezes
+transitions (409) and sends (403/404); unblocking restores them; nothing
+is ever deleted by blocking. Full route table with gates and error
+codes: **§5**. Client-facing version: README "Stranger chat".
+
+### 17.6 Blocking behavior and existing conversations (see §17.2.3)
+
+Block → both directions of messaging, message requests, discovery
+results, public profiles, and new travel-partner requests stop;
+in-flight accepts fail closed (409, rows stay pending); conversation
+and message history stay readable to both participants (reading never
+sends); unblock restores sending; no rows are ever removed by
+blocking or unblocking.
+
+### 17.7 Session/token revocation guarantees (and limits)
+
+- **Guaranteed:** logout/revoke kills the token on its NEXT use (every
+  request re-checks the session row + version — not at expiry);
+  revoke-others preserves exactly the caller; revoke-all kills every
+  token including legacy pre-Phase-8 ones (version bump); deleted
+  session rows fail closed; users can only ever touch their own rows
+  (user-scoped WHERE clauses; cross-user ids 404); re-login after
+  revoke-all works (revocation kills tokens, not passwords — there are
+  no refresh tokens to reject, none ever existed).
+- **Limits (documented, not hidden):** JWTs remain stateless bearer
+  tokens (a stolen token works until the next revocation-aware check —
+  which is every request, so in practice immediate); the 30/hour ask and
+  60/hour message limiters are in-process (reset on restart,
+  per-process), same caveat as all prior limiters; no shared store was
+  added per the brief.
+
+### 17.8 Phase 7 race-condition fix and rate-limiter status
+
+The §14.11 race is **fixed**: canonical-pair columns + pending-only
+UNIQUE index (migration `7f3a9c1e5b42`), pair written on every send,
+proven by raw-insert cross-direction race tests on SQLite (endpoint
+suite) and PostgreSQL (integration suite) plus a backfill-order proof
+on both backends. The endpoint either-direction pre-check remains as
+the friendly first layer. Rate limiters: the travel 30/hour limiter is
+untouched; chat reuses the same in-process mechanism (30/hour asks,
+60/hour sends) with the same documented restart/multi-process limits —
+no new infrastructure, per the brief.
+
+### 17.9 Tests & actual results (real output, nothing fabricated)
+
+**67 new tests** (60 offline + 7 real-PostgreSQL), totals now **406**:
+
+| Suite | Before | After | What Phase 8 added |
+|---|---|---|---|
+| `tests/test_chat.py` (new) | — | 24 | request lifecycle, gates, duplicate/reverse 409s, terminal 409s, non-party 404s, pending-send 409, body validation, stable pagination, soft delete + other's-404, recent-first ordering, no-auto-chat-from-travel, block-freezes-send + history-readable, blocked-ask 404s, accept-while-blocked 409, lapsed-counterparty 403, accept recheck, send 429 |
+| `tests/test_blocks.py` (new) | — | 12 | lifecycle, auth, self 422, unknown 404, duplicate 409 + DB race proof, self CHECK proof, blocker-only unblock, unverified blocking, discovery + public-profile exclusion, travel-request exclusion both directions, travel-accept-while-blocked 409 |
+| `tests/test_sessions.py` (new) | — | 12 | session minted + listed current, blank label → NULL, auth gates, logout kills-one, revoke-one, revoke-others, revoke-all, legacy-token kill via version, direct version-bump kill, deleted-row kill, cross-user 404s, unrelated-account survival |
+| `tests/test_buddy_requests.py` | 21 | 21 | race test rewritten: cross-direction raw insert now 409-class IntegrityError (the fix) |
+| `tests/test_auth.py` | 33 | 33 | deleted-user teardown respects RESTRICT sessions (same assertion); non-UUID-sub 401 preserved |
+| `tests/test_models.py` | 20 | 28 | EXPECTED_TABLES +4; Phase 8 FK/CHECK/UNIQUE/token-version/canonical-index metadata; enum + pairing proofs |
+| `tests/test_migrations.py` | 16 | 20 | EXPECTED_TABLES +4; Phase 7 tests repointed; 4 Phase 8 tests incl. backfill-order proof |
+| `tests/test_postgres_integration.py` | 30 | 37 | Phase 7 PG tests repointed; 7 Phase 8 PG tests incl. LEAST/GREATEST backfill proof |
+
+Actual results (2026-10-14, real output):
+
+```text
+ruff format: 84 files left unchanged          ruff check: All checks passed!
+pytest tests -q --ignore=tests\test_postgres_integration.py
+→ 369 passed in 155.47s                       (Phase 7 baseline 309 → +60)
+pytest tests\test_postgres_integration.py -q
+→ 37 passed in 104.63s                        (baseline 30 → +7)
+```
+
+Two mid-phase failures were found and fixed honestly (never skipped):
+`test_token_with_non_uuid_sub_rejected` (the claims refactor moved
+`UUID(sub)` out of the 401-mapping try — fixed in `deps.py`) and
+`test_protected_route_deleted_user_rejected` (the new RESTRICT session
+rows block naive user deletion — the test now clears them first; the
+401-for-deleted-user assertion is unchanged). Pre-existing
+Starlette-422-deprecation warnings only.
+
+### 17.10 Live verification on `roamlary_dev` (real output, 2026-10-14)
+
+`alembic upgrade head` → `Running upgrade 426dcef31e27 -> 7f3a9c1e5b42`;
+`alembic current` → `7f3a9c1e5b42 (head)`. Server restarted (old Phase 7
+process killed, new Phase 8 uvicorn serving); `/api/v1/health` returned
+the **byte-identical** contract; OpenAPI census showed **49 paths**
+including all 19 Phase 8 routes.
+
+A 29-check live script (two throwaway accounts, owner CLI, policy
+toggles) passed **29/29**: health · make-owner · policy ON → chat send
+403 · policy OFF · sessions listed w/ current flag · ask 201 → duplicate
+409 → incoming visible → accept 200 · message 201 + reply 201 ·
+paginated history (total 2) · travel profiles · travel A→B 201 →
+opposite travel send 409 (race fix live) · block 201 → blocked send 403
+→ history still readable → cross-block travel ask 404 → blocked user
+gone from discovery · unblock 204 · policy ON → chat send 403 · logout
+200 → logged-out token 401 · B token alive.
+
+Cleanup removed every `live-*` row (verified: 0 remain,
+`user@example.com` untouched as the only dev user, 0 rows in all 7
+feature tables, policy ended `requires_verification=true`). The static
+UI at :3000 was found stopped (its background shell had ended) and was
+re-served from the untouched gitignored `build/web` (200) —
+`frontend/` untouched throughout.
+
+### 17.11 Known limitations & follow-up work
+
+- **No blocking-appeal/report flow**, no group chat, no trip events, no
+  notifications, no messaging search/attachments (text-only by scope).
+- **In-process limiters** (asks, messages) share all prior caveats.
+- **Stateless JWTs**: revocation is enforced at the API boundary on
+  every request; tokens are still bearer strings (no binding).
+- **`MAX_CANDIDATE_ROWS`, preference-filter staging, destination
+  exactness** — unchanged Phase 7 limits (§14.11).
+- **No client UI** for any Phase 8 route yet (Phase 9).
+
+### 17.12 Scope confirmation & git state
+
+**Built exactly the brief:** stranger message requests, accepted
+conversations, authorized messaging + paginated history, blocking, and
+session revocation — reusing Phase 7 relationships only as *policy
+context* (never as chat authorization), with tests, regression, docs.
+**Deliberately absent:** frontend/UI changes, group chat, meetups/
+invitations, AI features, notifications providers, emergency dispatch,
+identity providers, deployment, refactors, dependency upgrades. Health
+contract unchanged (live-verified). No AI-matching or safety claims
+anywhere: the score honesty note is untouched, and chat carries no
+"safety" fields at all. `DATABASE_URL`/`JWT_SECRET_KEY` read only from
+the gitignored `backend/.env`; the test PG URL was derived without ever
+being printed.
+
+**Git state:** branch `backend`, HEAD `2b52ec2` = `origin/backend`. Per
+the owner's standing rule there are **no commits and no pushes** from
+this phase — the working tree carries the Phase 8 change set as 19
+modified + 15 untracked files (§16.8 lists them exactly). Awaiting owner
+review; `main` untouched.
 
 ---
 

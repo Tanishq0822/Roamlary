@@ -7,19 +7,30 @@ from sqlalchemy import create_engine, inspect
 from app.db.base_class import Base
 from app.models import (
     AppSetting,
+    AuthSession,
+    ChatMessage,
     CheckIn,
     CommunityReport,
+    Conversation,
     IdentityVerification,
     SettingChange,
     SosEvent,
+    TravelPartnerRequest,
+    TravelPlan,
+    TravelProfile,
     TrustedContact,
     User,
+    UserBlock,
 )
 from app.models.enums import (
+    BuddyRequestStatus,
     CheckInStatus,
+    ConversationStatus,
+    PlanVisibility,
     ReportCategory,
     ReportStatus,
     SosStatus,
+    TravelPlanStatus,
     UserRole,
     VerificationRequestStatus,
     VerificationStatus,
@@ -34,6 +45,13 @@ EXPECTED_TABLES = {
     "identity_verifications",
     "app_settings",
     "setting_changes",
+    "travel_profiles",
+    "travel_plans",
+    "travel_partner_requests",
+    "user_blocks",
+    "conversations",
+    "messages",
+    "auth_sessions",
 }
 
 
@@ -229,3 +247,195 @@ def test_model_classes_map_to_expected_tables() -> None:
     assert IdentityVerification.__tablename__ == "identity_verifications"
     assert AppSetting.__tablename__ == "app_settings"
     assert SettingChange.__tablename__ == "setting_changes"
+
+
+# ----------------------- Phase 7 travel table metadata
+
+
+def test_travel_tables_map_to_expected_classes() -> None:
+    assert TravelProfile.__tablename__ == "travel_profiles"
+    assert TravelPlan.__tablename__ == "travel_plans"
+    assert TravelPartnerRequest.__tablename__ == "travel_partner_requests"
+
+
+def test_travel_foreign_keys_reference_users_table() -> None:
+    """Every travel table references users.id; requests also reference
+    travel_plans.id for the optional context plan (both RESTRICT)."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    for table_name in ("travel_profiles", "travel_plans", "travel_partner_requests"):
+        fks = inspector.get_foreign_keys(table_name)
+        user_fks = [fk for fk in fks if fk["referred_table"] == "users"]
+        assert user_fks, table_name
+    plan_fks = [
+        fk
+        for fk in inspector.get_foreign_keys("travel_partner_requests")
+        if fk["referred_table"] == "travel_plans"
+    ]
+    assert plan_fks and plan_fks[0]["constrained_columns"] == ["plan_id"]
+    engine.dispose()
+
+
+def test_travel_check_constraints_exist() -> None:
+    """Structural guarantees live in the database, not just the app."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+
+    plan_names = {c["name"] for c in inspector.get_check_constraints("travel_plans")}
+    assert "ck_travel_plans_end_date_after_start" in plan_names
+    assert "ck_travel_plans_status_valid" in plan_names
+    assert "ck_travel_plans_visibility_valid" in plan_names
+    request_names = {c["name"] for c in inspector.get_check_constraints("travel_partner_requests")}
+    assert "ck_travel_partner_requests_no_self_request" in request_names
+    assert "ck_travel_partner_requests_status_valid" in request_names
+    engine.dispose()
+
+
+def test_travel_profile_group_size_and_unique_user_constraints() -> None:
+    """travel_profiles is one-row-per-user (UNIQUE user_id index) and the
+    group-size preference carries a 2-12 CHECK."""
+    profiles = Base.metadata.tables["travel_profiles"]
+    unique_user_indexes = [
+        idx for idx in profiles.indexes if idx.unique and list(idx.columns.keys()) == ["user_id"]
+    ]
+    assert unique_user_indexes, "travel_profiles must have a UNIQUE index on user_id"
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    profile_checks = {c["name"] for c in inspector.get_check_constraints("travel_profiles")}
+    assert "ck_travel_profiles_group_size_pref_range" in profile_checks
+    engine.dispose()
+
+
+def test_travel_partner_request_pending_pair_indexes_are_partial_unique() -> None:
+    """The two pending-pair indexes are UNIQUE and carry the pending-only
+    WHERE predicate in metadata (both dialects)."""
+    requests = Base.metadata.tables["travel_partner_requests"]
+    pair_indexes = [
+        idx
+        for idx in requests.indexes
+        if idx.name.startswith("uq_travel_partner_requests_pending_pair")
+    ]
+    assert len(pair_indexes) == 2
+    for idx in pair_indexes:
+        assert idx.unique is True
+        assert idx.dialect_options["sqlite"]["where"] is not None
+        assert idx.dialect_options["postgresql"]["where"] is not None
+
+
+def test_travel_enums_match_the_contract() -> None:
+    """Phase 7 status/visibility sets hold exactly the documented values."""
+    assert {s.value for s in TravelPlanStatus} == {"active", "paused", "completed"}
+    assert {v.value for v in PlanVisibility} == {"private", "discoverable"}
+    assert {s.value for s in BuddyRequestStatus} == {
+        "pending",
+        "accepted",
+        "rejected",
+        "cancelled",
+    }
+
+
+# ----------------------- Phase 8 chat/block/session table metadata
+
+
+def test_phase8_tables_map_to_expected_classes() -> None:
+    assert UserBlock.__tablename__ == "user_blocks"
+    assert Conversation.__tablename__ == "conversations"
+    assert ChatMessage.__tablename__ == "messages"
+    assert AuthSession.__tablename__ == "auth_sessions"
+
+
+def test_phase8_foreign_keys_reference_parent_tables() -> None:
+    """Blocks/conversations/messages/sessions reference users (RESTRICT);
+    messages also reference their conversation (RESTRICT)."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    for table_name, expected_parents in (
+        ("user_blocks", {"users"}),
+        ("conversations", {"users"}),
+        ("messages", {"users", "conversations"}),
+        ("auth_sessions", {"users"}),
+    ):
+        parents = {fk["referred_table"] for fk in inspector.get_foreign_keys(table_name)}
+        assert expected_parents <= parents, table_name
+    engine.dispose()
+
+
+def test_phase8_check_constraints_exist() -> None:
+    """No self-blocks, no self-conversations, closed status sets."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    block_names = {c["name"] for c in inspector.get_check_constraints("user_blocks")}
+    assert "ck_user_blocks_no_self_block" in block_names
+    conv_names = {c["name"] for c in inspector.get_check_constraints("conversations")}
+    assert "ck_conversations_no_self_conversation" in conv_names
+    assert "ck_conversations_status_valid" in conv_names
+    engine.dispose()
+
+
+def test_phase8_uniqueness_structures_exist() -> None:
+    """One block row per directed pair, one conversation row per
+    unordered pair (database-level duplicate prevention)."""
+    blocks = Base.metadata.tables["user_blocks"]
+    assert any(getattr(c, "name", None) == "uq_user_blocks_pair" for c in blocks.constraints)
+    conversations = Base.metadata.tables["conversations"]
+    assert any(
+        getattr(c, "name", None) == "uq_conversations_pair" for c in conversations.constraints
+    )
+
+
+def test_users_token_version_column() -> None:
+    """Revocation version: NOT NULL integer defaulting to 0."""
+    users = Base.metadata.tables["users"]
+    column = users.columns["token_version"]
+    assert column.nullable is False
+    assert column.default.arg == 0
+
+
+def test_travel_canonical_pair_index_is_partial_unique() -> None:
+    """The Phase 8 race-fix index is UNIQUE with a pending-only WHERE
+    predicate in metadata (both dialects)."""
+    requests = Base.metadata.tables["travel_partner_requests"]
+    matches = [
+        idx
+        for idx in requests.indexes
+        if idx.name == "uq_travel_partner_requests_pending_canonical_pair"
+    ]
+    assert len(matches) == 1
+    assert matches[0].unique is True
+    assert matches[0].dialect_options["sqlite"]["where"] is not None
+    assert matches[0].dialect_options["postgresql"]["where"] is not None
+
+
+def test_conversation_status_enum_matches_the_contract() -> None:
+    """Phase 8 conversation states hold exactly the documented values."""
+    assert {s.value for s in ConversationStatus} == {
+        "pending",
+        "accepted",
+        "rejected",
+        "cancelled",
+    }
+
+
+def test_canonical_pair_orders_and_rejects_self() -> None:
+    """The unordered-pair helper is direction-independent and refuses
+    self-pairs (the structural basis of the race fix)."""
+    import uuid
+
+    from app.core.pairing import canonical_pair
+
+    a, b = uuid.uuid4(), uuid.uuid4()
+    low, high = canonical_pair(a, b)
+    assert (low, high) == canonical_pair(b, a)
+    assert low.int <= high.int
+    assert {low, high} == {a, b}
+    try:
+        canonical_pair(a, a)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for a self-pair")

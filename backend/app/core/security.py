@@ -83,15 +83,25 @@ def ensure_auth_configured() -> None:
     _require_secret()
 
 
-def create_access_token(user_id: UUID) -> str:
+def create_access_token(
+    user_id: UUID, session_id: UUID | None = None, token_version: int = 0
+) -> str:
     """Create a signed HS256 access token for a user.
 
     Claims (the token's data fields):
     - sub: the user's UUID as a string (who this token represents)
     - iat: issued-at time
     - exp: expiry, now + ACCESS_TOKEN_EXPIRE_MINUTES
+    - tv: the user's session-revocation version (Phase 8; always
+      present - "revoke all sessions" bumps the stored version and any
+      token carrying an older number stops working)
+    - sid: the login-session row id (Phase 8; present only for tokens
+      minted after a session row exists - every login/register)
 
     No password, hash, or other personal data is put inside the token.
+    The signature stays backward compatible: callers that pass only a
+    user_id get a token with tv=0 and no sid (a legacy shape the
+    validator still accepts, governed by the version check alone).
     """
     secret = _require_secret()
     now = datetime.now(UTC)
@@ -99,8 +109,39 @@ def create_access_token(user_id: UUID) -> str:
         "sub": str(user_id),
         "iat": now,
         "exp": now + timedelta(minutes=settings.access_token_expire_minutes),
+        "tv": int(token_version),
     }
+    if session_id is not None:
+        payload["sid"] = str(session_id)
     return jwt.encode(payload, secret, algorithm=ALGORITHM)
+
+
+def decode_token_claims(token: str) -> dict:
+    """Validate a token and return its full claims dict, or raise 401.
+
+    Same checks as decode_access_token below, but the caller also gets
+    the Phase 8 session claims (`tv`, optional `sid`) for revocation
+    enforcement. Only sub/exp are REQUIRED (pre-Phase-8 legacy tokens
+    carry no session claims and must keep validating).
+    """
+    secret = _require_secret()
+    try:
+        return jwt.decode(
+            token,
+            secret,
+            algorithms=[ALGORITHM],
+            options={"require": ["sub", "exp"]},
+        )
+    except jwt.ExpiredSignatureError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token has expired.",
+        ) from exc
+    except (jwt.InvalidTokenError, ValueError, KeyError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token.",
+        ) from exc
 
 
 def decode_access_token(token: str) -> UUID:
@@ -115,22 +156,4 @@ def decode_access_token(token: str) -> UUID:
     A validly signed token that references a deleted user is still returned
     here; the caller must then confirm the user still exists.
     """
-    secret = _require_secret()
-    try:
-        payload = jwt.decode(
-            token,
-            secret,
-            algorithms=[ALGORITHM],
-            options={"require": ["sub", "exp"]},
-        )
-        return UUID(payload["sub"])
-    except jwt.ExpiredSignatureError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired.",
-        ) from exc
-    except (jwt.InvalidTokenError, ValueError, KeyError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication token.",
-        ) from exc
+    return UUID(decode_token_claims(token)["sub"])

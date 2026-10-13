@@ -17,7 +17,7 @@ class RegisterRequest(BaseModel):
     """Body for POST /auth/register.
 
     `extra="forbid"` makes this a STRICT schema: any field that is not
-    display_name/email/password (for example a smuggled `id`,
+    display_name/email/password/device_label (for example a smuggled `id`,
     `password_hash`, or `firebase_uid`) is rejected with a 422 validation
     error instead of being silently ignored. That turns accidental API
     misuse into a visible error and keeps privileged fields impossible to
@@ -29,6 +29,10 @@ class RegisterRequest(BaseModel):
     display_name: str = Field(..., min_length=1, max_length=80)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
+    # Optional user-supplied session label ("my phone"). Purely a display
+    # aid for the session list (Phase 8); nothing is collected
+    # automatically, and a blank label is stored as NULL.
+    device_label: str | None = Field(None, max_length=80)
 
     @field_validator("display_name")
     @classmethod
@@ -45,6 +49,15 @@ class RegisterRequest(BaseModel):
         """Normalize email: trim + lowercase, so 'A@B.com' == 'a@b.com'."""
         return value.strip().lower()
 
+    @field_validator("device_label")
+    @classmethod
+    def clean_device_label(cls, value: str | None) -> str | None:
+        """Trim the label; a blank label is stored as NULL."""
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
+
 
 class LoginRequest(BaseModel):
     """Body for POST /auth/login.
@@ -57,11 +70,21 @@ class LoginRequest(BaseModel):
 
     email: EmailStr
     password: str = Field(..., min_length=1, max_length=128)
+    # Optional user-supplied session label, same meaning as on register.
+    device_label: str | None = Field(None, max_length=80)
 
     @field_validator("email")
     @classmethod
     def normalize_email(cls, value: str) -> str:
         return value.strip().lower()
+
+    @field_validator("device_label")
+    @classmethod
+    def clean_device_label(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
 
 class TokenResponse(BaseModel):
@@ -69,6 +92,32 @@ class TokenResponse(BaseModel):
 
     access_token: str
     token_type: str = "bearer"
+
+
+class AuthSessionRead(BaseModel):
+    """One login session as its owner sees it (Phase 8).
+
+    `current` marks the session behind the calling token. Timestamps
+    leave the API as UTC ISO strings (the Phase 4 convention), so SQLite
+    and PostgreSQL render identically.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    label: str | None
+    created_at: str
+    revoked_at: str | None
+    current: bool
+
+
+class AuthSessionList(BaseModel):
+    """The caller's own sessions, newest first."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    total: int
+    sessions: list[AuthSessionRead]
 
 
 class UserProfile(BaseModel):

@@ -316,13 +316,19 @@ def test_protected_route_deleted_user_rejected(auth_client, sqlite_engine):
     from sqlalchemy.orm import sessionmaker
 
     _register(auth_client, email="ghost@example.com")
-    from sqlalchemy import select
+    from sqlalchemy import delete, select
 
     factory = sessionmaker(bind=sqlite_engine)
     db = factory()
     user = db.scalar(select(User).where(User.email == "ghost@example.com"))
     token = create_access_token(user.id)
-    # Delete the user out from under the token.
+    # Delete the user out from under the token. Login-session rows
+    # reference users RESTRICT (like every other child table since
+    # Phase 8), so they are removed first - the point under test is the
+    # missing USER row, not cascade behavior.
+    from app.models import AuthSession
+
+    db.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
     db.delete(user)
     db.commit()
     db.close()
