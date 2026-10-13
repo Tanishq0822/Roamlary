@@ -3413,7 +3413,11 @@ carries the Phase 7 change set as 13 modified + 14 untracked files
 10. After the Phases 9–13 review: owner decides whether the change set is
     committed/pushed (and whether `main` is fast-forwarded again). No
     commit or push happens without that explicit instruction.
-11. Owner assigns the next phase (per the roadmap: Phase 14,
+11. ✅ **Done:** per-phase `PHASE*.md` review files removed (owner
+    instruction — their full content is preserved in this report §§7–19;
+    only `report.md` + `README.md` remain as docs) and jury run
+    instructions added to `README.md`.
+12. Owner assigns the next phase (per the roadmap: Phase 14,
     Flutter integration & API contract alignment — needs the frontend
     report from Laptop 2).
 12. Frontend `report.md` from Laptop 2 → enables Phase 14

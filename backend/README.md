@@ -277,6 +277,29 @@ A's origin. You set allowed origins in `.env` via `CORS_ORIGINS`.
   `http://192.168.1.50:8000`) added to `CORS_ORIGINS`.
 - This development CORS setup is **not** a production security review.
 
+## Run (jury quickstart — backend in 5 steps)
+
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+.venv\Scripts\python -m pip install -e ".[dev]"
+Copy-Item .env.example .env   # then set DATABASE_URL + JWT_SECRET_KEY inside
+docker run -d --name roamlary-postgres-dev -e POSTGRES_USER=roamlary `
+  -e POSTGRES_PASSWORD=<your-dev-password> -e POSTGRES_DB=roamlary_dev -p 5432:5432 postgres:16-alpine
+.venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+- Swagger UI (humans): <http://127.0.0.1:8000/docs>
+- Frontend app: `cd frontend/roamlary_app && flutter pub get && flutter run -d web-server --web-port 3000`
+  (point the app at `http://127.0.0.1:8000`; the zip ships no
+  `node_modules`, `.venv`, or build outputs — install steps above
+  recreate them).
+- Full design history and per-phase reviews live in ONE file:
+  [`report.md`](report.md) (per-phase `PHASE*.md` files were removed —
+  everything they said is preserved in `report.md` §§7–19).
+
 ## Run
 
 ```powershell
