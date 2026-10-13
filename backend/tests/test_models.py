@@ -7,8 +7,11 @@ from sqlalchemy import create_engine, inspect
 from app.db.base_class import Base
 from app.models import (
     AppSetting,
+    AuthSession,
+    ChatMessage,
     CheckIn,
     CommunityReport,
+    Conversation,
     IdentityVerification,
     SettingChange,
     SosEvent,
@@ -17,10 +20,12 @@ from app.models import (
     TravelProfile,
     TrustedContact,
     User,
+    UserBlock,
 )
 from app.models.enums import (
     BuddyRequestStatus,
     CheckInStatus,
+    ConversationStatus,
     PlanVisibility,
     ReportCategory,
     ReportStatus,
@@ -43,6 +48,10 @@ EXPECTED_TABLES = {
     "travel_profiles",
     "travel_plans",
     "travel_partner_requests",
+    "user_blocks",
+    "conversations",
+    "messages",
+    "auth_sessions",
 }
 
 
@@ -326,3 +335,107 @@ def test_travel_enums_match_the_contract() -> None:
         "rejected",
         "cancelled",
     }
+
+
+# ----------------------- Phase 8 chat/block/session table metadata
+
+
+def test_phase8_tables_map_to_expected_classes() -> None:
+    assert UserBlock.__tablename__ == "user_blocks"
+    assert Conversation.__tablename__ == "conversations"
+    assert ChatMessage.__tablename__ == "messages"
+    assert AuthSession.__tablename__ == "auth_sessions"
+
+
+def test_phase8_foreign_keys_reference_parent_tables() -> None:
+    """Blocks/conversations/messages/sessions reference users (RESTRICT);
+    messages also reference their conversation (RESTRICT)."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    for table_name, expected_parents in (
+        ("user_blocks", {"users"}),
+        ("conversations", {"users"}),
+        ("messages", {"users", "conversations"}),
+        ("auth_sessions", {"users"}),
+    ):
+        parents = {fk["referred_table"] for fk in inspector.get_foreign_keys(table_name)}
+        assert expected_parents <= parents, table_name
+    engine.dispose()
+
+
+def test_phase8_check_constraints_exist() -> None:
+    """No self-blocks, no self-conversations, closed status sets."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    block_names = {c["name"] for c in inspector.get_check_constraints("user_blocks")}
+    assert "ck_user_blocks_no_self_block" in block_names
+    conv_names = {c["name"] for c in inspector.get_check_constraints("conversations")}
+    assert "ck_conversations_no_self_conversation" in conv_names
+    assert "ck_conversations_status_valid" in conv_names
+    engine.dispose()
+
+
+def test_phase8_uniqueness_structures_exist() -> None:
+    """One block row per directed pair, one conversation row per
+    unordered pair (database-level duplicate prevention)."""
+    blocks = Base.metadata.tables["user_blocks"]
+    assert any(getattr(c, "name", None) == "uq_user_blocks_pair" for c in blocks.constraints)
+    conversations = Base.metadata.tables["conversations"]
+    assert any(
+        getattr(c, "name", None) == "uq_conversations_pair" for c in conversations.constraints
+    )
+
+
+def test_users_token_version_column() -> None:
+    """Revocation version: NOT NULL integer defaulting to 0."""
+    users = Base.metadata.tables["users"]
+    column = users.columns["token_version"]
+    assert column.nullable is False
+    assert column.default.arg == 0
+
+
+def test_travel_canonical_pair_index_is_partial_unique() -> None:
+    """The Phase 8 race-fix index is UNIQUE with a pending-only WHERE
+    predicate in metadata (both dialects)."""
+    requests = Base.metadata.tables["travel_partner_requests"]
+    matches = [
+        idx
+        for idx in requests.indexes
+        if idx.name == "uq_travel_partner_requests_pending_canonical_pair"
+    ]
+    assert len(matches) == 1
+    assert matches[0].unique is True
+    assert matches[0].dialect_options["sqlite"]["where"] is not None
+    assert matches[0].dialect_options["postgresql"]["where"] is not None
+
+
+def test_conversation_status_enum_matches_the_contract() -> None:
+    """Phase 8 conversation states hold exactly the documented values."""
+    assert {s.value for s in ConversationStatus} == {
+        "pending",
+        "accepted",
+        "rejected",
+        "cancelled",
+    }
+
+
+def test_canonical_pair_orders_and_rejects_self() -> None:
+    """The unordered-pair helper is direction-independent and refuses
+    self-pairs (the structural basis of the race fix)."""
+    import uuid
+
+    from app.core.pairing import canonical_pair
+
+    a, b = uuid.uuid4(), uuid.uuid4()
+    low, high = canonical_pair(a, b)
+    assert (low, high) == canonical_pair(b, a)
+    assert low.int <= high.int
+    assert {low, high} == {a, b}
+    try:
+        canonical_pair(a, a)
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("expected ValueError for a self-pair")

@@ -8,12 +8,12 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phases 6–7: community reports, identity verification & social access, travel buddies & discovery)
+## Current scope (Phases 6–8: reports, identity verification & social access, travel buddies & discovery, stranger chat/blocking/sessions)
 
 Implemented now (on top of the Phase 1 foundation + Phase 2 database +
 Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS +
 Phase 6 reports + Phase 6 second assignment identity verification +
-Phase 7 travel buddies):
+Phase 7 travel buddies + Phase 8 messaging):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -21,9 +21,10 @@ Phase 7 travel buddies):
 - CORS configured for Flutter development origins
 - Interactive API documentation (Swagger UI / ReDoc)
 - **PostgreSQL persistence** via SQLAlchemy 2.x (engine + per-request sessions)
-- **Eleven domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
+- **Fifteen domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
   `CommunityReport`, `IdentityVerification`, `AppSetting`, `SettingChange`,
-  `TravelProfile`, `TravelPlan`, `TravelPartnerRequest` —
+  `TravelProfile`, `TravelPlan`, `TravelPartnerRequest`,
+  `UserBlock`, `Conversation`, `ChatMessage`, `AuthSession` —
   with UUID keys, timestamps, CHECK constraints and
   `ON DELETE RESTRICT` foreign keys
 - **Alembic migrations** (initial schema + `password_hash` column +
@@ -32,7 +33,9 @@ Phase 7 travel buddies):
   `cancelled` status + Phase 6 `community_reports.category` CHECK
   constraint + Phase 6 second assignment `users.verification_status`/
   `users.role` columns and the verification/policy/audit tables +
-  Phase 7 travel profile/plan/partner-request tables)
+  Phase 7 travel profile/plan/partner-request tables +
+  Phase 8 block/conversation/message/session tables, `users.token_version`,
+  and the travel canonical-pair race-fix columns/index)
 - **Local authentication**: `POST /auth/register`, `POST /auth/login`
   (Argon2id password hashing + HS256 JWT access tokens)
 - **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
@@ -63,20 +66,34 @@ Phase 7 travel buddies):
   `GET /travel-buddies/requests/{request_id}` +
   `POST /travel-buddies/requests/{request_id}/accept|reject|cancel`, and
   the real `GET /social/discovery` (broad verified-user feed)
+- **Stranger chat (Phase 8)**: `POST/GET /chat/requests` +
+  `GET /chat/requests/{id}` + `POST .../accept|reject|cancel`,
+  `GET /chat/conversations` + `GET /chat/conversations/{id}`,
+  `GET/POST /chat/conversations/{id}/messages` (bounded pagination),
+  `DELETE /chat/messages/{id}` (sender-only soft delete) — one row per
+  unordered pair, text-only, no auto-chat from travel partners
+- **Blocking (Phase 8)**: `POST/GET /blocks`, `DELETE /blocks/{id}` —
+  stops both directions of messaging/requests/discovery; history stays
+  readable; reachable while unverified
+- **Session security (Phase 8)**: every login mints a trackable session
+  (`GET /auth/sessions`, `POST /auth/logout`,
+  `POST /auth/sessions/{id}/revoke`, `POST /auth/sessions/revoke-others`,
+  `POST /auth/revoke-all`) with immediate revocation enforcement
 - **Owner provisioning CLI**: `python -m app.cli make-owner <email>` (the
   only path that grants the `owner` role)
-- Automated test suite: **339 tests** (309 offline + 30 real-PostgreSQL
+- Automated test suite: **406 tests** (369 offline + 37 real-PostgreSQL
   integration; contacts + check-ins + SOS + reports + verification +
-  admin/policy + auth + profiles + travel buddies + models + migrations)
+  admin/policy + auth + profiles + travel buddies + chat + blocks +
+  sessions + models + migrations)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
 them to exist): Firebase Authentication, refresh tokens, password reset, email
 verification, report **moderation/approval workflow** (the
 `approved`/`rejected` states are reserved — no endpoint can set them yet), AI
 companion, notifications, **overdue-check-in alerts**, pagination on the
-non-report/non-travel endpoints, travel **chat/messaging and trip events**
-(discovery and partner requests exist; the two users are never connected
-by a messaging channel), a real
+non-report/non-travel/non-chat endpoints, **group chat** and trip events
+(one-to-one text chat exists since Phase 8; the two users are never
+connected by any other channel), a real
 identity-verification provider (verification here is **manual review only** —
 no Aadhaar/ID documents or sensitive identity data are collected, stored, or
 displayed anywhere), production deployment. Phase 5 only *records* SOS
@@ -85,7 +102,9 @@ contact, and never shares a location. Phase 6 only *stores and searches*
 reports — filing one sends nothing to anyone. Phase 7 only *matches and
 requests* — accepting a travel-partner request creates a connection row,
 never notifies anyone, never opens a chat, and never implies either user
-is safe. Authentication
+is safe. Phase 8 adds one-to-one text chat behind an explicit
+ask-and-accept, but still sends no notifications, opens no group chats,
+and never claims anyone is safe. Authentication
 here is a **local prototype** — it needs real security work (HTTPS, rate
 limiting, token revocation) before any production claim. Account/safety
 workflow endpoints (trusted contacts, check-ins, SOS, account profile,
@@ -159,7 +178,7 @@ Four separate concerns, so each stays small and testable:
 `create_all()` in production — Alembic owns the schema, so every change is a
 reviewed, replayable file.
 
-### The eleven tables
+### The fifteen tables
 
 | Table | Purpose | Key columns |
 | --- | --- | --- |
@@ -173,7 +192,11 @@ reviewed, replayable file.
 | `setting_changes` | Append-only audit of policy changes | `setting_key`, `old_value`, `new_value`, `changed_by` (FK) |
 | `travel_profiles` | One travel identity per account (Phase 7) | `user_id` (FK, **unique**), `travel_nickname`, `languages`/`travel_styles`/`interests` (JSON lists), `group_size_pref` (CHECK 2–12), `discoverable` |
 | `travel_plans` | One trip intention per row (Phase 7) | `user_id` (FK), `destination` + `destination_normalized`, `region` + `region_normalized`, `start_date`/`end_date` (CHECK end ≥ start), `flexible_dates`, `status` (active/paused/completed), `visibility` (private/discoverable) |
-| `travel_partner_requests` | "A wants to travel with B" (Phase 7) | `requester_id`/`recipient_id` (FKs, CHECK ≠), `plan_id` (FK→travel_plans, nullable, RESTRICT), `status` (pending/accepted/rejected/cancelled), two partial UNIQUE pending-pair indexes |
+| `travel_partner_requests` | "A wants to travel with B" (Phase 7) | `requester_id`/`recipient_id` (FKs, CHECK ≠), `plan_id` (FK→travel_plans, nullable, RESTRICT), `status` (pending/accepted/rejected/cancelled), per-direction partial UNIQUE pending indexes + Phase 8 canonical-pair pending UNIQUE index |
+| `user_blocks` | "Blocker wants nothing from blocked" (Phase 8) | `blocker_id`/`blocked_id` (FKs, CHECK ≠, UNIQUE pair) |
+| `conversations` | One messaging relationship per unordered user pair (Phase 8) | `user_low_id`/`user_high_id` (canonical, UNIQUE pair, CHECK ≠), `status` (pending/accepted/rejected/cancelled), `requested_by` (FK), `responded_at` |
+| `messages` | One text message (Phase 8) | `conversation_id` (FK), `sender_id` (FK), `body` (text), `is_deleted` + `deleted_at` (soft delete) |
+| `auth_sessions` | One login session per login (Phase 8) | `user_id` (FK), `label` (optional), `revoked_at` (NULL = active) |
 
 All children use **`ON DELETE RESTRICT`**: deleting a user who still has safety
 records is blocked at the database level, so safety history can never vanish by
@@ -184,6 +207,9 @@ are NOT NULL with CHECK-protected value sets and secure server-side defaults
 (`unverified`, `user`). Travel status/visibility/request columns are CHECK-
 protected sets (Phase 7); deleting a plan referenced by a partner request is
 blocked (RESTRICT) so request history keeps pointing at a real trip.
+`users.token_version` (Phase 8) is a NOT NULL integer defaulting to 0 for
+revocation; conversation/block/message columns carry the same CHECK +
+RESTRICT + uniqueness discipline as the travel tables.
 
 ### What CORS is and when it matters
 
@@ -779,11 +805,97 @@ Accepted is a **social connection only**: it grants no verification bypass,
 no chat, no notifications, and no access either user did not already have.
 Duplicates are refused before they are written: a second pending request in
 the same direction hits the database's partial UNIQUE index (concurrent
-duplicates lose there, not in application code), and the cross-direction
-duplicate ("B asks A while A's request to B is pending") is refused with
-`409` by the endpoint's either-direction pre-check. Sending is rate limited
+duplicates lose there, not in application code), and since Phase 8 the
+cross-direction duplicate ("B asks A while A's request to B is pending")
+is refused by the database too, via the canonical-pair pending UNIQUE
+index (`pair_low_id`, `pair_high_id`) — the endpoint's either-direction
+pre-check remains as the friendly first layer. Sending is rate limited
 to 30 requests/hour/user (`429` beyond that — in-process counter, same
 documented caveat as the owner policy limiter).
+
+## Stranger chat (Phase 8)
+
+One-to-one text messaging behind an explicit ask-and-accept. Accepting a
+**travel**-partner request does NOT open chat — this surface needs its
+own message request and its own accept (enforced by never reading travel
+tables in the chat code).
+
+`No conversation → pending ask → accepted conversation → messages`
+(reject/cancel are terminal for that ask; an explicit NEW ask may reopen
+the pair's single row — nothing reopens silently, and one row per
+unordered pair means duplicate pending asks are structurally impossible,
+even racing, even in opposite directions).
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `POST /api/v1/chat/requests` | Ask a user to chat (`{"recipient_id": "…"}`) | `201` · `401` · `403` · `404` unknown/ineligible/blocked · `409` duplicate · `422` self · `429` 30/hour |
+| `GET /api/v1/chat/requests?direction=incoming\|outgoing` | My asks (`?status=`, `?offset=`/`?limit=`) | `200` · `401` · `422` |
+| `GET /api/v1/chat/requests/{id}` | One ask I am part of (404 otherwise) | `200` · `401` · `404` |
+| `POST /api/v1/chat/requests/{id}/accept` | Recipient accepts (asker's eligibility rechecked live) | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/chat/requests/{id}/reject` | Recipient declines | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/chat/requests/{id}/cancel` | Asker withdraws | `200` · `401` · `404` · `409` |
+| `GET /api/v1/chat/conversations` | My conversations, recent first (`?offset=`/`?limit=`) | `200` · `401` |
+| `GET /api/v1/chat/conversations/{id}` | One conversation I am in (history stays readable after blocks) | `200` · `401` · `404` |
+| `GET /api/v1/chat/conversations/{id}/messages` | History, stable `(created_at, id)` order (`?offset=`/`?limit=` 1–100) | `200` · `401` · `403` · `404` |
+| `POST /api/v1/chat/conversations/{id}/messages` | Send one text message (1–2000 chars; sender always = you) | `201` · `401` · `403` blocked/ineligible · `404` · `409` not accepted · `422` · `429` 60/hour |
+| `DELETE /api/v1/chat/messages/{id}` | Delete MY message (soft: row kept, body hidden) | `200` · `401` · `404` not mine/missing |
+
+Sending rechecks everything live on every call: participant, `accepted`
+status, blocks in either direction, and the counterparty's verification
+eligibility (a lapsed counterparty cannot be messaged — old accepted
+relationships bypass nothing). A block and a lapsed counterparty produce
+the same neutral `403` ("Messaging is not available with this user right
+now"), so neither fact leaks through the error.
+
+## Blocking (Phase 8)
+
+One directed row ("I want nothing from them") that stops BOTH
+directions: once A blocks B, neither A→B nor B→A messaging, message
+requests, travel-buddy discovery results, public profiles, or new
+travel-partner requests are possible, and accepting an older ask fails
+instead of bypassing the block. Existing conversation history stays
+readable to both participants (nothing is silently deleted); sending
+stops until unblock. Blocking is independent of discoverability switches
+and verification, and — like cancelling your own request — it stays on
+**plain authentication** so a harassed user can block while unverified.
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `POST /api/v1/blocks` | Block a user (`{"blocked_id": "…"}`) | `201` · `401` · `404` unknown user · `409` duplicate · `422` self |
+| `GET /api/v1/blocks` | MY block list only (newest first) | `200` · `401` |
+| `DELETE /api/v1/blocks/{id}` | Remove MY block (204; only the blocker) | `204` · `401` · `404` |
+
+## Session security (Phase 8)
+
+Stateless JWTs cannot be "taken back" by themselves, so every
+login/register now mints a server-side session row and the token carries
+its id (`sid`) plus a revocation version (`tv`). **Every authenticated
+request re-checks both**: a revoked or missing session row, or a version
+older than the account's, makes the token stop working immediately — not
+at expiry. Pre-Phase-8 legacy tokens (no `sid`) are governed by the
+version check alone, so "revoke all" kills them too.
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `GET /api/v1/auth/sessions` | MY sessions, newest first (with `current` flag) | `200` · `401` |
+| `POST /api/v1/auth/logout` | Revoke THIS session (calling token dies on next use) | `200` · `401` · `404` legacy token · `410` already revoked |
+| `POST /api/v1/auth/sessions/{id}/revoke` | Revoke one of MY sessions (404 for anyone else's) | `200` · `401` · `404` |
+| `POST /api/v1/auth/sessions/revoke-others` | Keep exactly this session, kill the rest | `200` · `401` · `404` legacy token |
+| `POST /api/v1/auth/revoke-all` | Kill ALL my sessions + bump the version (current token dies too) | `200` · `401` |
+
+Revocation kills **tokens, not passwords**: logging in again after
+revoke-all works (there are no refresh tokens to reject — none ever
+existed). No device fingerprinting, IP tracking, or user-agent
+collection exists: the optional `device_label` on register/login is a
+free-form display aid the user supplies (`"my phone"`), never collected
+automatically. Raw tokens are never stored or logged — only session-row
+ids the tokens already carried.
+
+> **Remaining limitation:** the 30/hour chat-request and 60/hour message
+> limiters are in-process (reset on restart, per-process) — the same
+> documented caveat as the owner-policy and travel-request limiters. No
+> shared rate-limit store exists; none was added (no new infrastructure
+> per the brief).
 
 ## Migrations (Alembic)
 
@@ -850,6 +962,21 @@ Applied migrations on `roamlary_dev`:
   schema. Round-trip verified (`upgrade` → `downgrade` → `upgrade`) on
   SQLite and PostgreSQL, plus live on `roamlary_dev`. `alembic current`
   → `426dcef31e27 (head)`.
+- `7f3a9c1e5b42` — Phase 8: adds the four chat/block/session tables
+  (`user_blocks` with a UNIQUE blocker/blocked pair and a no-self
+  CHECK, `conversations` with one row per canonical unordered pair
+  (UNIQUE) plus a pending/accepted/rejected/cancelled CHECK,
+  `messages` text-only with soft-delete flags, `auth_sessions` one row
+  per login), the NOT NULL `users.token_version` column (server default
+  0), and the travel canonical-pair columns (`pair_low_id`/
+  `pair_high_id`, backfilled from the directed columns with a
+  dialect-aware UPDATE) with a pending-only UNIQUE index that closes
+  the Phase 7 cross-direction race. The **upgrade** needs no guard for
+  the new tables; the **downgrade** is guarded the same way as Phases
+  4–7: while any block, conversation, message, or session row exists it
+  **refuses** before touching the schema. Round-trip verified on SQLite
+  and PostgreSQL, plus live on `roamlary_dev`. `alembic current` →
+  `7f3a9c1e5b42 (head)`.
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -984,6 +1111,13 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `409` on `DELETE /travel-plans/{plan_id}` | A travel-partner request still references the plan (`ON DELETE RESTRICT`) | Cancel/close the request (or accept it — accepted requests keep their context plan), then delete |
 | `422` on `POST /travel-buddies/requests` with your own `recipient_id` | Self-requests are structurally impossible (schema + database CHECK) | Pick a recipient from discovery — never yourself |
 | `RuntimeError: Refusing to downgrade migration 426dcef31e27 …` | Travel profiles, plans, or partner requests exist that the older schema cannot hold | Intentional data-safety guard: nothing was changed. Export or delete those rows first, then re-run — or keep the Phase 7 schema |
+| `RuntimeError: Refusing to downgrade migration 7f3a9c1e5b42 …` | Block, conversation, message, or session rows exist that the older schema cannot hold | Intentional data-safety guard: nothing was changed (the error lists exact counts). Export or delete those rows first, then re-run — or keep the Phase 8 schema |
+| `401` "Session has been revoked. Please log in again." | The token's session was logged out/revoked, or "revoke all" bumped the account version (legacy tokens included) | Expected: log in again for a fresh session. To end just one device, use `POST /auth/sessions/{id}/revoke` instead of revoke-all |
+| `404` "User not found." on `POST /chat/requests` | The recipient is unknown, fails the live verification policy, or is blocked in either direction (all collapse to one 404 so blocks and eligibility cannot be probed) | Only ask users you can actually reach; if they just blocked you or hid, the `404` is the honest answer |
+| `403` "Messaging is not available with this user right now." on send | A block stands in either direction, or the counterparty fails the live verification policy (one neutral message for both causes) | Nothing to fix client-side beyond unblocking (your own block) or waiting for eligibility; history stays readable either way |
+| `409` on `POST /chat/requests` | A pending ask already exists between you two (either direction — one row per pair) or you already chat | Answer the pending ask instead (`/accept`/`/reject`), or open the existing conversation |
+| `429` on chat send/request | More than 60 messages or 30 requests from one user within an hour (in-process limits) | Expected throttle; wait for the window to pass, or restart the dev server (counters are in-memory) |
+| `404` on `DELETE /blocks/{id}` | No block by YOU of that user exists (includes trying to remove someone else's block of you) | Only the blocker removes their own block; check `GET /blocks` first |
 
 ## Development log
 

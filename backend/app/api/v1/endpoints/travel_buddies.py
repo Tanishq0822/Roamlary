@@ -58,6 +58,8 @@ from app.api.v1.schemas.travel import (
     PublicTravelProfileRead,
     TravelPlanRead,
 )
+from app.core.blocks import blocked_user_ids
+from app.core.pairing import canonical_pair
 from app.core.policy import get_policy
 from app.core.rate_limit import check_rate_limit
 from app.db.base_class import utc_now
@@ -307,16 +309,19 @@ def send_request(
     Rejected with:
     - 422 when targeting yourself;
     - 404 (privacy-preserving, identical to "unknown user") when the
-      recipient does not exist, has no discoverable profile, or fails
-      the live verification policy; likewise when a supplied plan_id is
-      not the recipient's eligible (discoverable/active/unexpired) plan;
+      recipient does not exist, has no discoverable profile, fails
+      the live verification policy, or is blocked in either direction;
+      likewise when a supplied plan_id is not the recipient's eligible
+      (discoverable/active/unexpired) plan;
     - 409 when a pending request already exists in EITHER direction, or
       the pair already has an accepted relationship;
     - 429 when the per-user hourly send limit is exceeded.
 
     The duplicate guard is enforced twice: a pre-check for a friendly
-    message and the partial UNIQUE index as the race-proof source of
-    truth (concurrent duplicate submissions lose at the database).
+    message and UNIQUE indexes as the race-proof source of truth
+    (concurrent duplicate submissions lose at the database - including
+    simultaneous opposite-direction sends, via the canonical-pair
+    pending index from Phase 8).
     """
     if body.recipient_id == current_user.id:
         raise HTTPException(
@@ -332,8 +337,10 @@ def send_request(
 
     requires_verification = get_policy(db)
 
-    # Recipient must exist, be discoverable, and pass the live policy -
-    # all collapses to one generic 404 so eligibility cannot be probed.
+    # Recipient must exist, be discoverable, pass the live policy, and
+    # be unblocked in either direction - all collapses to one generic
+    # 404 so eligibility cannot be probed (Phase 8: blocks join the
+    # same collapse; the blocker's list must never leak via an error).
     recipient = db.scalar(
         select(User)
         .join(TravelProfile, TravelProfile.user_id == User.id)
@@ -343,6 +350,11 @@ def send_request(
         )
     )
     if recipient is None or (requires_verification and recipient.verification_status != "verified"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Recipient not found.",
+        )
+    if body.recipient_id in blocked_user_ids(db, current_user.id):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Recipient not found.",
@@ -393,11 +405,17 @@ def send_request(
             detail="A pending travel-partner request already exists between you two.",
         )
 
+    # Canonical pair for the Phase 8 cross-direction race fix: two
+    # simultaneous opposite-direction sends cannot both land (the
+    # pending-only UNIQUE index on the pair rejects the loser).
+    pair_low_id, pair_high_id = canonical_pair(current_user.id, body.recipient_id)
     request_row = TravelPartnerRequest(
         requester_id=current_user.id,
         recipient_id=body.recipient_id,
         plan_id=body.plan_id,
         status=BuddyRequestStatus.PENDING,
+        pair_low_id=pair_low_id,
+        pair_high_id=pair_high_id,
     )
     db.add(request_row)
     try:
@@ -573,6 +591,16 @@ def accept_request(
                     "this request cannot be accepted. You may reject it instead."
                 ),
             )
+    # Phase 8: accepting an older ask must never bypass a block that
+    # landed afterwards (brief item 4.12) - 409, row stays pending.
+    if row.requester_id in blocked_user_ids(db, current_user.id):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "This request can no longer be accepted while the pair is "
+                "blocked. You may reject it instead."
+            ),
+        )
     return _request_read(
         _transition(
             db,

@@ -15,6 +15,7 @@ from pathlib import Path
 import sqlalchemy as sa
 
 from tests.conftest import (
+    insert_raw_phase8_rows,
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
@@ -35,6 +36,10 @@ EXPECTED_TABLES = {
     "travel_profiles",
     "travel_plans",
     "travel_partner_requests",
+    "user_blocks",
+    "conversations",
+    "messages",
+    "auth_sessions",
 }
 
 
@@ -520,9 +525,10 @@ def test_phase6b_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) ->
 
 
 def test_phase7_upgrade_creates_the_three_travel_tables(tmp_path) -> None:
-    """Upgrading from the Phase 6b revision creates exactly the three new
-    travel tables alongside the existing schema, and the partial pending-
-    pair UNIQUE indexes exist on the requests table."""
+    """Upgrading to head creates the travel tables alongside the existing
+    schema, and all three pending-pair UNIQUE indexes exist on the
+    requests table (the two per-direction Phase 7 ones plus the Phase 8
+    canonical-pair race-fix index)."""
     db_file = tmp_path / "migration_phase7_tables.db"
     url = f"sqlite:///{db_file}"
 
@@ -537,13 +543,14 @@ def test_phase7_upgrade_creates_the_three_travel_tables(tmp_path) -> None:
         index_names = conn.execute(
             sa.text(
                 "SELECT name FROM sqlite_master WHERE type='index' "
-                "AND name LIKE 'uq_travel_partner_requests_pending_pair%'"
+                "AND name LIKE 'uq_travel_partner_requests_pending%'"
             )
         ).scalars()
-    assert version == "426dcef31e27"
+    assert version == "7f3a9c1e5b42"
     assert set(index_names) == {
         "uq_travel_partner_requests_pending_pair_ab",
         "uq_travel_partner_requests_pending_pair_ba",
+        "uq_travel_partner_requests_pending_canonical_pair",
     }
     engine.dispose()
 
@@ -551,9 +558,14 @@ def test_phase7_upgrade_creates_the_three_travel_tables(tmp_path) -> None:
 def test_phase7_downgrade_refuses_when_travel_data_exists(tmp_path) -> None:
     """DATA-DEPENDENT DOWNGRADE (regression): any travel profile, plan, or
     partner request must make the Phase 7 downgrade REFUSE cleanly, so
-    travel history can never be destroyed by a stray rollback. The refusal
-    happens BEFORE any schema change - schema and records must both be
-    left exactly as they were."""
+    travel history can never be destroyed by a stray rollback. The
+    refusal happens BEFORE any Phase 7 schema change - the travel schema
+    and records must both be left exactly as they were.
+
+    (Phase 8 appends a later migration: the first downgrade step to the
+    Phase 7 revision succeeds while no Phase 8 rows exist, and only then
+    does the guarded Phase 7 step refuse.)
+    """
     db_file = tmp_path / "migration_phase7_guard.db"
     url = f"sqlite:///{db_file}"
 
@@ -562,6 +574,9 @@ def test_phase7_downgrade_refuses_when_travel_data_exists(tmp_path) -> None:
 
     engine = sa.create_engine(url)
     insert_raw_user_and_travel(engine)
+
+    step_down = _run_alembic(["downgrade", "426dcef31e27"], url)
+    assert step_down.returncode == 0, f"stdout={step_down.stdout}\nstderr={step_down.stderr}"
 
     downgrade = _run_alembic(["downgrade", "3e285edb0896"], url)
     assert downgrade.returncode != 0, (
@@ -589,8 +604,8 @@ def test_phase7_downgrade_refuses_when_travel_data_exists(tmp_path) -> None:
 
 
 def test_phase7_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> None:
-    """NORMAL PATH: with no travel rows the downgrade succeeds (tables
-    dropped); upgrading again restores the exact Phase 7 schema."""
+    """NORMAL PATH: with no travel rows the downgrade succeeds (travel +
+    Phase 8 tables dropped); upgrading again restores the exact schema."""
     db_file = tmp_path / "migration_phase7_roundtrip.db"
     url = f"sqlite:///{db_file}"
 
@@ -607,6 +622,10 @@ def test_phase7_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> 
     assert "travel_profiles" not in names
     assert "travel_plans" not in names
     assert "travel_partner_requests" not in names
+    assert "user_blocks" not in names
+    assert "conversations" not in names
+    assert "messages" not in names
+    assert "auth_sessions" not in names
     with engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
         count = conn.execute(sa.text("SELECT count(*) FROM users")).scalar_one()
@@ -622,5 +641,150 @@ def test_phase7_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> 
     assert tables == EXPECTED_TABLES
     with engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "7f3a9c1e5b42"
+    engine.dispose()
+
+
+# ----------------------- Phase 8 chat/block/session migration tests
+
+
+def test_phase8_upgrade_creates_the_four_new_tables(tmp_path) -> None:
+    """Upgrading to head creates the Phase 8 tables plus users.token_version
+    and the travel canonical-pair columns with their pending-only UNIQUE
+    index."""
+    db_file = tmp_path / "migration_phase8_tables.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    tables = set(sa.inspect(engine).get_table_names()) - {"alembic_version"}
+    assert tables == EXPECTED_TABLES
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        token_version = conn.execute(sa.text("SELECT token_version FROM users")).all()
+        pair_cols = {c["name"] for c in sa.inspect(engine).get_columns("travel_partner_requests")}
+        canonical = conn.execute(
+            sa.text(
+                "SELECT name FROM sqlite_master WHERE type='index' "
+                "AND name = 'uq_travel_partner_requests_pending_canonical_pair'"
+            )
+        ).scalars()
+    assert version == "7f3a9c1e5b42"
+    assert token_version == []  # no users yet; the column itself exists
+    assert {"pair_low_id", "pair_high_id"} <= pair_cols
+    assert list(canonical) == ["uq_travel_partner_requests_pending_canonical_pair"]
+    engine.dispose()
+
+
+def test_phase8_pair_backfill_orders_preexisting_travel_rows(tmp_path) -> None:
+    """Migrating OVER existing travel rows backfills the canonical pair
+    columns in exactly the app/core/pairing.canonical_pair order, so old
+    rows and new rows share one key space (no false conflicts, no
+    misses). Proves the SQLite min/max backfill branch."""
+    from app.core.pairing import canonical_pair
+
+    db_file = tmp_path / "migration_phase8_backfill.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade_old = _run_alembic(["upgrade", "426dcef31e27"], url)
+    assert upgrade_old.returncode == 0, f"stdout={upgrade_old.stdout}\nstderr={upgrade_old.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_travel(engine)
+    with engine.connect() as conn:
+        pair = conn.execute(
+            sa.text("SELECT requester_id, recipient_id FROM travel_partner_requests")
+        ).one()
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    with engine.connect() as conn:
+        backfilled = conn.execute(
+            sa.text("SELECT pair_low_id, pair_high_id FROM travel_partner_requests")
+        ).one()
+    from uuid import UUID as _UUID
+
+    expected_low, expected_high = canonical_pair(
+        _UUID(str(pair.requester_id)),
+        _UUID(str(pair.recipient_id)),
+    )
+    # UUID() parses dashed and undashed forms alike, so this holds no
+    # matter how the backend stores UUIDs.
+    assert _UUID(str(backfilled.pair_low_id)) == expected_low
+    assert _UUID(str(backfilled.pair_high_id)) == expected_high
+    engine.dispose()
+
+
+def test_phase8_downgrade_refuses_when_phase8_data_exists(tmp_path) -> None:
+    """DATA-DEPENDENT DOWNGRADE (regression): any block, conversation,
+    message, or session row must make the Phase 8 downgrade REFUSE
+    cleanly, before any schema change."""
+    db_file = tmp_path / "migration_phase8_guard.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_phase8_rows(engine)
+
+    downgrade = _run_alembic(["downgrade", "426dcef31e27"], url)
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while Phase 8 data exists, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(engine)
+    names = {t for t in inspector.get_table_names() if t != "alembic_version"}
+    assert {"user_blocks", "conversations", "messages", "auth_sessions"} <= names
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        body = conn.execute(sa.text("SELECT body FROM messages")).scalar_one()
+    assert version == "7f3a9c1e5b42"  # still at the Phase 8 revision
+    assert body == "hello"  # the message itself is untouched
+    engine.dispose()
+
+
+def test_phase8_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> None:
+    """NORMAL PATH: with no Phase 8 rows the downgrade succeeds (tables +
+    columns removed); upgrading again restores the exact schema."""
+    db_file = tmp_path / "migration_phase8_roundtrip.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_checkin(engine, "pending")  # unrelated row survives
+
+    downgrade = _run_alembic(["downgrade", "426dcef31e27"], url)
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(engine)
+    names = set(inspector.get_table_names())
+    assert "user_blocks" not in names
+    assert "conversations" not in names
+    assert "messages" not in names
+    assert "auth_sessions" not in names
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        user_cols = {c["name"] for c in inspector.get_columns("users")}
     assert version == "426dcef31e27"
+    assert "token_version" not in user_cols
+
+    upgrade_again = _run_alembic(["upgrade", "head"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(engine)
+    tables = set(inspector.get_table_names()) - {"alembic_version"}
+    assert tables == EXPECTED_TABLES
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "7f3a9c1e5b42"
     engine.dispose()

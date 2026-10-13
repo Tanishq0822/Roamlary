@@ -29,6 +29,7 @@ from uuid import UUID
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.blocks import blocked_user_ids
 from app.core.matching import (
     FLEXIBLE_DATE_GRACE_DAYS,
     PlanFacts,
@@ -237,6 +238,13 @@ def discover(
     if partners:
         conds.append(TravelPlan.user_id.not_in(partners))
 
+    # Phase 8: a block in either direction removes the pair from
+    # discovery entirely (same rule object as messaging and travel
+    # requests - app/core/blocks.blocked_user_ids).
+    blocked = blocked_user_ids(db, searcher.id)
+    if blocked:
+        conds.append(TravelPlan.user_id.not_in(blocked))
+
     stmt = (
         select(TravelPlan, TravelProfile, User)
         .join(TravelProfile, TravelProfile.user_id == TravelPlan.user_id)
@@ -371,10 +379,12 @@ def public_profile_for(
 
     Returns None (-> identical privacy-preserving 404) when the target
     does not exist, has no profile, is not discoverable, is ineligible
-    under the verification policy, has no eligible plan, or is the
-    searcher themselves. The caller must not distinguish these cases in
-    the response.
+    under the verification policy, has no eligible plan, is blocked in
+    either direction (Phase 8), or is the searcher themselves. The
+    caller must not distinguish these cases in the response.
     """
+    if target_id in blocked_user_ids(db, searcher.id):
+        return None
     today = today_utc()
     conds = list(_eligible_plan_conditions(today)) + [User.id == target_id]
     ver = _verification_condition(requires_verification)

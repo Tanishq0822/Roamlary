@@ -214,3 +214,25 @@ class BuddyRequestStatus(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
+
+
+class ConversationStatus(StrEnum):
+    """Lifecycle of a one-to-one message-request conversation (Phase 8).
+
+    One row covers the unordered user pair (canonical low/high IDs), so
+    the state machine below is the ONLY copy of the relationship state:
+
+        pending   -> request sent, awaiting the RECIPIENT's decision
+        accepted  -> recipient agreed; both parties may exchange messages
+        rejected  -> recipient declined (terminal for this ask; an
+                     explicit NEW request may move it back to pending)
+        cancelled -> requester withdrew their own pending ask (same)
+
+    Reopening after rejection/cancellation happens ONLY through an
+    explicit new request call - never silently, never by reading history.
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    REJECTED = "rejected"
+    CANCELLED = "cancelled"

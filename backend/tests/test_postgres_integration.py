@@ -25,10 +25,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 
 import app.models  # noqa: F401  (registers all tables)
+from app.core.pairing import canonical_pair
 from app.db.base_class import Base
 from app.models import TravelPlan, TravelProfile, TrustedContact, User
 from app.models.enums import CheckInStatus
 from tests.conftest import (
+    insert_raw_phase8_rows,
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
@@ -963,12 +965,17 @@ def test_phase7_json_list_columns_round_trip_on_pg(pg_session: Session) -> None:
 
 def test_pg_phase7_downgrade_refuses_when_travel_data_exists(pg_engine) -> None:
     """DATA-DEPENDENT DOWNGRADE on real PostgreSQL: travel rows make the
-    rollback REFUSE cleanly, leaving schema and records untouched."""
+    Phase 7 rollback REFUSE cleanly, leaving the travel schema and
+    records untouched. (The later Phase 8 step downgrades first while no
+    Phase 8 rows exist; only then does the guarded Phase 7 step run.)"""
     _reset_for_alembic(pg_engine)
     upgrade = _run_alembic_on_pg(["upgrade", "head"])
     assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
 
     insert_raw_user_and_travel(pg_engine)
+
+    step_down = _run_alembic_on_pg(["downgrade", "426dcef31e27"])
+    assert step_down.returncode == 0, f"stdout={step_down.stdout}\nstderr={step_down.stderr}"
 
     downgrade = _run_alembic_on_pg(["downgrade", "3e285edb0896"])
     assert downgrade.returncode != 0, (
@@ -1019,4 +1026,216 @@ def test_pg_phase7_downgrade_upgrade_roundtrip(pg_engine) -> None:
     )
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "7f3a9c1e5b42"
+
+
+# ----------------------- Phase 8 chat/block/session surface on PostgreSQL
+
+
+def test_phase8_token_version_defaults_to_zero_on_pg(pg_engine) -> None:
+    """users.token_version is NOT NULL with a 0 default (legacy accounts
+    and raw inserts land on the secure starting point)."""
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Version', now(), now())"
+            ),
+            {"id": uid},
+        )
+        version = conn.execute(
+            sa.text("SELECT token_version FROM users WHERE id = :id"), {"id": uid}
+        ).scalar_one()
+        assert version == 0
+        conn.rollback()
+
+
+def test_phase8_backfill_uses_least_greatest_on_pg(pg_engine) -> None:
+    """Migrating OVER pre-Phase-8 travel rows backfills the canonical
+    pair with PostgreSQL LEAST/GREATEST, matching
+    app/core/pairing.canonical_pair exactly."""
+    _reset_for_alembic(pg_engine)
+    upgrade_old = _run_alembic_on_pg(["upgrade", "426dcef31e27"])
+    assert upgrade_old.returncode == 0, f"stdout={upgrade_old.stdout}\nstderr={upgrade_old.stderr}"
+
+    insert_raw_user_and_travel(pg_engine)
+    with pg_engine.connect() as conn:
+        pair = conn.execute(
+            sa.text("SELECT requester_id, recipient_id FROM travel_partner_requests")
+        ).one()
+
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    with pg_engine.connect() as conn:
+        backfilled = conn.execute(
+            sa.text("SELECT pair_low_id, pair_high_id FROM travel_partner_requests")
+        ).one()
+    expected_low, expected_high = canonical_pair(pair.requester_id, pair.recipient_id)
+    assert backfilled.pair_low_id == expected_low
+    assert backfilled.pair_high_id == expected_high
+
+
+def test_phase8_canonical_pair_blocks_cross_direction_on_pg(pg_engine) -> None:
+    """On real PostgreSQL, a pending A->B row makes a simultaneous B->A
+    pending insert fail at the database (the Phase 7 race fix)."""
+    with pg_engine.begin() as conn:
+        a_id, b_id = uuid.uuid4(), uuid.uuid4()
+        for uid in (a_id, b_id):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'PG Pair', now(), now())"
+                ),
+                {"id": uid},
+            )
+        low, high = canonical_pair(a_id, b_id)
+        base = (
+            "INSERT INTO travel_partner_requests "
+            "(id, requester_id, recipient_id, status, pair_low_id, pair_high_id, "
+            "created_at, updated_at) "
+            "VALUES (:rid, :req, :rec, 'pending', :low, :high, now(), now())"
+        )
+        conn.execute(
+            sa.text(base),
+            {"rid": uuid.uuid4(), "req": a_id, "rec": b_id, "low": low, "high": high},
+        )
+        with pytest.raises(IntegrityError):
+            conn.execute(
+                sa.text(base),
+                {"rid": uuid.uuid4(), "req": b_id, "rec": a_id, "low": low, "high": high},
+            )
+        conn.rollback()
+
+
+def test_phase8_conversation_pair_unique_on_pg(pg_engine) -> None:
+    """One conversation row per unordered pair on PostgreSQL, even when
+    the second insert orders the pair oppositely."""
+    with pg_engine.begin() as conn:
+        a_id, b_id = uuid.uuid4(), uuid.uuid4()
+        for uid in (a_id, b_id):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'PG Chat', now(), now())"
+                ),
+                {"id": uid},
+            )
+        low, high = canonical_pair(a_id, b_id)
+        base = (
+            "INSERT INTO conversations "
+            "(id, user_low_id, user_high_id, status, requested_by, created_at, updated_at) "
+            "VALUES (:cid, :low, :high, 'pending', :req, now(), now())"
+        )
+        conn.execute(sa.text(base), {"cid": uuid.uuid4(), "low": low, "high": high, "req": a_id})
+        with pytest.raises(IntegrityError):
+            conn.execute(
+                sa.text(base), {"cid": uuid.uuid4(), "low": low, "high": high, "req": b_id}
+            )
+        conn.rollback()
+
+
+def test_phase8_block_pair_unique_and_self_check_on_pg(pg_engine) -> None:
+    """Duplicate blocks and self-blocks fail at the database on PostgreSQL."""
+    with pg_engine.begin() as conn:
+        a_id, b_id = uuid.uuid4(), uuid.uuid4()
+        for uid in (a_id, b_id):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'PG Block', now(), now())"
+                ),
+                {"id": uid},
+            )
+        base = (
+            "INSERT INTO user_blocks (id, blocker_id, blocked_id, created_at, updated_at) "
+            "VALUES (:bid, :blocker, :blocked, now(), now())"
+        )
+        conn.execute(sa.text(base), {"bid": uuid.uuid4(), "blocker": a_id, "blocked": b_id})
+        with pytest.raises(IntegrityError):
+            conn.execute(sa.text(base), {"bid": uuid.uuid4(), "blocker": a_id, "blocked": b_id})
+        conn.rollback()
+    with pg_engine.begin() as conn:
+        a_id = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Block', now(), now())"
+            ),
+            {"id": a_id},
+        )
+        with pytest.raises(IntegrityError):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO user_blocks (id, blocker_id, blocked_id, created_at, updated_at) "
+                    "VALUES (:bid, :uid, :uid, now(), now())"
+                ),
+                {"bid": uuid.uuid4(), "uid": a_id},
+            )
+        conn.rollback()
+
+
+def test_pg_phase8_downgrade_refuses_when_phase8_data_exists(pg_engine) -> None:
+    """DATA-DEPENDENT DOWNGRADE on real PostgreSQL: block/conversation/
+    message/session rows make the Phase 8 rollback REFUSE cleanly."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_phase8_rows(pg_engine)
+
+    downgrade = _run_alembic_on_pg(["downgrade", "426dcef31e27"])
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while Phase 8 data exists, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(pg_engine)
+    assert {"user_blocks", "conversations", "messages", "auth_sessions"} <= set(
+        inspector.get_table_names()
+    )
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        body = conn.execute(sa.text("SELECT body FROM messages")).scalar_one()
+    assert version == "7f3a9c1e5b42"
+    assert body == "hello"
+
+
+def test_pg_phase8_downgrade_upgrade_roundtrip(pg_engine) -> None:
+    """Normal path on REAL PostgreSQL: clean state downgrades (Phase 8
+    tables/columns removed); upgrading again restores the exact schema."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_checkin(pg_engine, "pending")  # unrelated row survives
+
+    downgrade = _run_alembic_on_pg(["downgrade", "426dcef31e27"])
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(pg_engine)
+    names = set(inspector.get_table_names())
+    assert "user_blocks" not in names
+    assert "conversations" not in names
+    assert "messages" not in names
+    assert "auth_sessions" not in names
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        user_cols = {c["name"] for c in inspector.get_columns("users")}
     assert version == "426dcef31e27"
+    assert "token_version" not in user_cols
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(pg_engine)
+    assert {"user_blocks", "conversations", "messages", "auth_sessions"} <= set(
+        inspector.get_table_names()
+    )
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "7f3a9c1e5b42"

@@ -29,6 +29,7 @@ from app.db.base_class import Base, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.enums import UserRole, VerificationStatus
 
 if TYPE_CHECKING:
+    from app.models.auth_session import AuthSession
     from app.models.check_in import CheckIn
     from app.models.community_report import CommunityReport
     from app.models.identity_verification import IdentityVerification
@@ -92,6 +93,13 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         server_default="user",
     )
 
+    # Session-revocation version (Phase 8). Every access token carries
+    # this number as its `tv` claim; "revoke all sessions" bumps it, and
+    # any token with an older number stops working immediately. Starts at
+    # 0 (the migration backfills existing accounts to 0, matching the
+    # `tv` that pre-Phase-8 legacy tokens implicitly carry).
+    token_version: Mapped[int] = mapped_column(nullable=False, default=0, server_default="0")
+
     # Relationships ("one user has many X"). Deleting a user who still
     # has safety records is deliberately BLOCKED at the database level
     # (ON DELETE RESTRICT on each child table) so safety history can
@@ -111,3 +119,8 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         back_populates="user", uselist=False
     )
     travel_plans: Mapped[list[TravelPlan]] = relationship(back_populates="user")
+    # Login sessions (Phase 8). One row per login; revoking a row kills
+    # the token that points at it. No backrefs from blocks/conversations/
+    # messages/travel requests: their user FKs are ambiguous pairs and
+    # every query selects those rows directly.
+    auth_sessions: Mapped[list[AuthSession]] = relationship(back_populates="user")

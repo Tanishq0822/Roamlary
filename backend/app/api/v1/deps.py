@@ -24,6 +24,7 @@ what stops one user from acting as another.
 """
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -31,8 +32,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.policy import get_policy
-from app.core.security import decode_access_token
+from app.core.security import decode_token_claims
 from app.db.session import get_db
+from app.models.auth_session import AuthSession
 from app.models.enums import UserRole, VerificationStatus
 from app.models.user import User
 
@@ -55,15 +57,66 @@ def get_current_user(
     3. Look that user up in the database.
     4. A validly signed token whose user no longer exists still gets 401 -
        the account was deleted, so the token must stop working.
+    5. Phase 8 revocation: the token's `tv` claim must equal the user's
+       stored `token_version` (a "revoke all" bump kills the token), and
+       when the token carries a `sid` claim its session row must exist,
+       belong to this user, and not be revoked. A pre-Phase-8 legacy
+       token (no `sid`) is governed by the version check alone.
     """
-    user_id = decode_access_token(token)
+    claims = decode_token_claims(token)
+    try:
+        user_id = UUID(claims["sub"])
+    except (ValueError, KeyError, TypeError, AttributeError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid authentication token.",
+        ) from None
     user = db.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication token.",
         )
+    _enforce_session_revocation(db, user, claims)
     return user
+
+
+def _enforce_session_revocation(db: Session, user: User, claims: dict) -> None:
+    """Reject tokens killed by logout/revoke-all (Phase 8), or do nothing.
+
+    Raises 401 with a neutral message that never says WHICH check
+    failed (version vs session row) - both mean "log in again".
+    """
+    try:
+        token_version = int(claims.get("tv", 0))
+    except (TypeError, ValueError):
+        token_version = -1
+    if token_version != (user.token_version or 0):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked. Please log in again.",
+        )
+    session_id = claims.get("sid")
+    if session_id is None:
+        return  # legacy token: the version check above is the whole rule
+    try:
+        session_uuid = UUID(str(session_id))
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked. Please log in again.",
+        ) from None
+    session = db.scalar(
+        select(AuthSession).where(
+            AuthSession.id == session_uuid,
+            AuthSession.user_id == user.id,
+        )
+    )
+    if session is None or session.revoked_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session has been revoked. Please log in again.",
+        )
 
 
 # Type-hint aliases so route handlers stay short and readable.
@@ -143,3 +196,29 @@ def require_verified_user(
 # Gatekeeper aliases for route handlers (CurrentUser/DbSession above).
 OwnerUser = Annotated[User, Depends(require_owner)]
 SocialUser = Annotated[User, Depends(require_verified_user)]
+
+
+def get_current_session(
+    token: Annotated[str, Depends(oauth2_scheme)],
+    db: Annotated[Session, Depends(get_db)],
+) -> tuple[User, UUID | None]:
+    """Return (authenticated user, current session id or None).
+
+    Reuses get_current_user for authentication + revocation, then reads
+    the token's `sid` claim a second time so session endpoints (logout,
+    revoke-others) know WHICH row is "current". A pre-Phase-8 legacy
+    token yields None - those endpoints answer 404 for it (the row they
+    would act on does not exist; revoke-all still covers legacy tokens).
+    """
+    user = get_current_user(token, db)
+    session_id = decode_token_claims(token).get("sid")
+    if session_id is None:
+        return user, None
+    try:
+        return user, UUID(str(session_id))
+    except ValueError:
+        return user, None
+
+
+# (User, session-id-or-None) for endpoints that act on "this session".
+CurrentSession = Annotated[tuple[User, UUID | None], Depends(get_current_session)]

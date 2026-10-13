@@ -387,16 +387,17 @@ def test_accept_rechecks_requester_eligibility(api_client, sqlite_engine) -> Non
 def test_duplicate_insert_race_is_caught_by_database(api_client, sqlite_engine) -> None:
     """Concurrent duplicate submissions cannot create two pending rows.
 
-    The partial UNIQUE indexes are the source of truth PER DIRECTION:
-    inserting a second pending row with the same (requester, recipient)
-    key - bypassing the endpoint pre-check, exactly as a racing request
-    would - raises IntegrityError. The mirrored direction is locked by
-    its own index the same way. The CROSS-direction duplicate (A->B and
-    B->A both pending) is blocked one layer up, by the endpoint's
-    either-direction pre-check (see
-    test_duplicate_pending_in_either_direction_is_409).
+    The UNIQUE indexes are the source of truth: inserting a second
+    pending row with the same directed key - bypassing the endpoint
+    pre-check, exactly as a racing request would - raises
+    IntegrityError (per-direction indexes). Phase 8 closed the
+    cross-direction race the same way: the canonical-pair pending index
+    rejects a simultaneous opposite-direction insert at the database
+    (the last assertion below is that fix, proven with raw inserts).
     """
     from sqlalchemy.exc import IntegrityError
+
+    from app.core.pairing import canonical_pair
 
     a_email, a_h, b_email, b_id, _ = _pair(api_client, sqlite_engine)
     assert (
@@ -407,21 +408,37 @@ def test_duplicate_insert_race_is_caught_by_database(api_client, sqlite_engine) 
     try:
         a = db.scalar(select(User).where(User.email == a_email))
         b = db.scalar(select(User).where(User.email == b_email))
+        low, high = canonical_pair(a.id, b.id)
         # Same-direction duplicate loses at the database.
-        db.add(TravelPartnerRequest(requester_id=a.id, recipient_id=b.id, status="pending"))
+        db.add(
+            TravelPartnerRequest(
+                requester_id=a.id,
+                recipient_id=b.id,
+                status="pending",
+                pair_low_id=low,
+                pair_high_id=high,
+            )
+        )
         try:
             db.commit()
             raise AssertionError("expected the pending-pair UNIQUE index to reject this")
         except IntegrityError:
             db.rollback()
-        # Seed ONE mirrored b->a pending row directly, then prove a
-        # duplicate of it is rejected by the second index.
-        db.add(TravelPartnerRequest(requester_id=b.id, recipient_id=a.id, status="pending"))
-        db.commit()
-        db.add(TravelPartnerRequest(requester_id=b.id, recipient_id=a.id, status="pending"))
+        # Cross-direction duplicate ALSO loses at the database now (the
+        # Phase 8 canonical-pair index): a racing B->A send cannot land
+        # while A->B is pending, even past the endpoint pre-check.
+        db.add(
+            TravelPartnerRequest(
+                requester_id=b.id,
+                recipient_id=a.id,
+                status="pending",
+                pair_low_id=low,
+                pair_high_id=high,
+            )
+        )
         try:
             db.commit()
-            raise AssertionError("expected the mirrored pending-pair UNIQUE index to reject this")
+            raise AssertionError("expected the canonical-pair UNIQUE index to reject this")
         except IntegrityError:
             db.rollback()
     finally:
