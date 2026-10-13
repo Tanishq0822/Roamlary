@@ -22,4 +22,14 @@ class AppConfig {
 
   /// Name shown on the splash / app bar.
   static const String appName = 'Roamlary';
+
+  /// Demo account used by the "Explore demo" path.
+  ///
+  /// The real backend has no anonymous/guest account, so the demo button
+  /// signs into this seeded account instead (the UI then loads real data).
+  /// If the account does not exist yet (e.g. a fresh database), the guest
+  /// flow registers it on the fly.
+  static const String demoDisplayName = 'Demo Traveler';
+  static const String demoEmail = 'demo@roamlary.app';
+  static const String demoPassword = 'RoamlaryDemo123!';
 }

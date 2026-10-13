@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../core/config.dart';
 import '../data/app_repository.dart';
 import '../models/models.dart';
 
@@ -52,13 +53,31 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  /// Continue without credentials — used by the "Explore demo" path so the UI
-  /// is reachable even before auth is wired end-to-end.
+  /// Demo / guest entry point — used by the "Explore demo" button.
+  ///
+  /// The real backend has no anonymous account, so this signs into a seeded
+  /// demo account ([AppConfig.demoEmail]) to reach real data. In mock mode
+  /// [login] accepts any credentials, so the same call path works for both.
+  /// If the account doesn't exist yet (fresh database), it is registered.
   Future<void> continueAsGuest() async {
     _setBusy(true);
     try {
-      final profile = await _repo.me();
-      _session = AuthSession(token: 'guest', profile: profile);
+      AuthSession session;
+      try {
+        session = await _repo.login(
+          email: AppConfig.demoEmail,
+          password: AppConfig.demoPassword,
+        );
+      } catch (_) {
+        // Account not created yet — register it (register also returns a
+        // session, so we land signed-in either way).
+        session = await _repo.register(
+          displayName: AppConfig.demoDisplayName,
+          email: AppConfig.demoEmail,
+          password: AppConfig.demoPassword,
+        );
+      }
+      _session = session;
       _lastError = null;
     } catch (e) {
       _lastError = _message(e);

@@ -59,11 +59,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _guest() async {
     final app = context.read<AppState>();
+    app.clearError();
     await app.continueAsGuest();
     if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute<void>(builder: (_) => const HomeShell()),
-    );
+    if (app.session != null) {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute<void>(builder: (_) => const HomeShell()),
+      );
+    } else if (app.lastError != null) {
+      // Only reach the home shell when the demo sign-in actually succeeded;
+      // otherwise surface the error instead of a tokenless, 401-everywhere app.
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(app.lastError!)),
+      );
+    }
   }
 
   @override
