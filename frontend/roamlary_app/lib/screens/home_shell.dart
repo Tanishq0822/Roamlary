@@ -115,7 +115,18 @@ class _BottomBar extends StatelessWidget {
                 selected: index == 1,
                 onTap: () => onSelect(1),
               ),
-              Expanded(child: Center(child: _SosButton(onTap: onSos))),
+              // Raised above the bar so it reads as the centre button rather
+              // than a fifth inline item. The Row still gives every child an
+              // equal Expanded slot (2 left / SOS / 2 right), which is what
+              // keeps the button mathematically centred on screen.
+              Expanded(
+                child: Center(
+                  child: Transform.translate(
+                    offset: const Offset(0, -22),
+                    child: _SosButton(onTap: onSos),
+                  ),
+                ),
+              ),
               _NavItem(
                 icon: Icons.forum_outlined,
                 selectedIcon: Icons.forum,
@@ -190,22 +201,33 @@ class _SosButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Semantics(
       button: true,
       label: 'Activate SOS mode',
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          width: 66,
-          height: 66,
+          width: 74,
+          height: 74,
           alignment: Alignment.center,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: AppTheme.danger.withValues(alpha: 0.12),
+            // Opaque ring: once the button floats above the bar this masks
+            // whatever scrolls underneath, instead of letting it show
+            // through a translucent halo.
+            color: theme.colorScheme.surface,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.10),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
           child: Container(
-            width: 58,
-            height: 58,
+            width: 60,
+            height: 60,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: const LinearGradient(
@@ -216,9 +238,9 @@ class _SosButton extends StatelessWidget {
               border: Border.all(color: Colors.white, width: 3),
               boxShadow: [
                 BoxShadow(
-                  color: AppTheme.danger.withValues(alpha: 0.40),
-                  blurRadius: 14,
-                  offset: const Offset(0, 4),
+                  color: AppTheme.danger.withValues(alpha: 0.45),
+                  blurRadius: 16,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
