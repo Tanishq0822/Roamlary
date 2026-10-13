@@ -21,9 +21,16 @@ class MeetupsScreen extends StatefulWidget {
 
 class _MeetupsScreenState extends State<MeetupsScreen> {
   List<Meetup>? _items;
+  List<Invitation> _invitations = const [];
   Object? _error;
   bool _busy = false;
   MeetupCategory? _categoryFilter;
+
+  /// House parties never appear in `GET /meetups` (the endpoint kind-filters
+  /// them out in SQL), so `GET /invitations` is loaded alongside and surfaced
+  /// as its own card at the top of this screen.
+  List<Invitation> get _pendingInvitations =>
+      _invitations.where((i) => i.isPending).toList();
 
   @override
   void initState() {
@@ -37,8 +44,18 @@ class _MeetupsScreenState extends State<MeetupsScreen> {
       _items = null;
     });
     try {
-      final items = await context.read<AppState>().repo.listMeetups();
-      if (mounted) setState(() => _items = items);
+      final repo = context.read<AppState>().repo;
+      final results = await Future.wait([
+        repo.listMeetups(),
+        repo.listInvitations().catchError((_) => <Invitation>[]),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _items = results[0] as List<Meetup>;
+        // A failed invitation fetch must not blank the whole screen — the
+        // meetups above are still useful.
+        _invitations = results[1] as List<Invitation>;
+      });
     } catch (e) {
       if (mounted) setState(() => _error = e);
     }
@@ -103,7 +120,9 @@ class _MeetupsScreenState extends State<MeetupsScreen> {
           ? const LoadingView()
           : _error != null
               ? ErrorView(message: '$_error', onRetry: _load)
-              : filtered!.isEmpty
+              // Empty only when there are no meetups AND no invitations to
+              // show — otherwise the house-party card would be swallowed.
+              : filtered!.isEmpty && _invitations.isEmpty
                   ? EmptyView(
                       icon: Icons.event_outlined,
                       title: 'No meetups here',
@@ -118,20 +137,54 @@ class _MeetupsScreenState extends State<MeetupsScreen> {
                     )
                   : RefreshIndicator(
                       onRefresh: _load,
-                      child: ListView.separated(
+                      child: ListView(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 88),
-                        itemCount: filtered.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (context, i) => _MeetupCard(
-                          meetup: filtered[i],
-                          busy: _busy,
-                          onJoin: () =>
-                              _run(() => context.read<AppState>().repo
-                                  .joinMeetup(filtered[i].id)),
-                          onLeave: () =>
-                              _run(() => context.read<AppState>().repo
-                                  .leaveMeetup(filtered[i].id)),
-                        ),
+                        children: [
+                          // House parties are invisible to GET /meetups, so
+                          // pending invitations get their own card up top.
+                          if (_pendingInvitations.isNotEmpty) ...[
+                            _InvitationsCard(
+                              invitations: _pendingInvitations,
+                              busy: _busy,
+                              onAccept: (id) => _run(
+                                () => context.read<AppState>().repo
+                                    .acceptInvitation(id),
+                              ),
+                              onDecline: (id) => _run(
+                                () => context.read<AppState>().repo
+                                    .declineInvitation(id),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                          ],
+                          for (final m in filtered) ...[
+                            _MeetupCard(
+                              meetup: m,
+                              busy: _busy,
+                              onJoin: () => _run(() =>
+                                  context.read<AppState>().repo
+                                      .joinMeetup(m.id)),
+                              onLeave: () => _run(() =>
+                                  context.read<AppState>().repo
+                                      .leaveMeetup(m.id)),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (filtered.isEmpty)
+                            EmptyView(
+                              icon: Icons.event_outlined,
+                              title: 'No meetups here',
+                              message: _categoryFilter == null
+                                  ? 'Host the first one — hikers and foodies '
+                                      'are waiting.'
+                                  : 'Nothing in ${_categoryFilter!.label} '
+                                      'right now.',
+                              action: OutlinedButton(
+                                onPressed: _pickFilter,
+                                child: const Text('Change filter'),
+                              ),
+                            ),
+                        ],
                       ),
                     ),
     );
@@ -161,6 +214,128 @@ class _MeetupsScreenState extends State<MeetupsScreen> {
       ),
     );
     setState(() => _categoryFilter = picked);
+  }
+}
+
+/// Pending house-party invitations — the only visible face of Phase 10,
+/// since `/meetups` deliberately kind-filters house parties out.
+class _InvitationsCard extends StatelessWidget {
+  const _InvitationsCard({
+    required this.invitations,
+    required this.busy,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  final List<Invitation> invitations;
+  final bool busy;
+  final ValueChanged<String> onAccept;
+  final ValueChanged<String> onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppTheme.purple.withValues(alpha: 0.35)),
+        color: AppTheme.purple.withValues(alpha: 0.07),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.mail_outline, size: 18, color: AppTheme.purple),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'House-party invitations',
+                  style: theme.textTheme.titleSmall
+                      ?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppTheme.purple,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  '${invitations.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          for (final invite in invitations) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                color: theme.colorScheme.surface,
+                border: Border.all(color: theme.dividerColor),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    invite.eventTitle,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Invited ${formatDateTime(invite.createdAt)}',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (!invite.isPending) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      invite.status.label,
+                      style: theme.textTheme.bodySmall
+                          ?.copyWith(color: AppTheme.green),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            onPressed:
+                                busy ? null : () => onDecline(invite.id),
+                            child: const Text('Decline'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: FilledButton(
+                            onPressed:
+                                busy ? null : () => onAccept(invite.id),
+                            child: const Text('Accept'),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
+        ],
+      ),
+    );
   }
 }
 

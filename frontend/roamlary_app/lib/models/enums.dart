@@ -239,3 +239,27 @@ enum UserRole {
         orElse: () => UserRole.user,
       );
 }
+
+/// Lifecycle of a house-party invitation — mirrors backend
+/// `InvitationStatus` (Phase 10). accepted/declined/revoked/expired are
+/// terminal for that invitation; the host may always invite again.
+enum InvitationStatus {
+  pending('pending', 'Awaiting your reply'),
+  accepted('accepted', 'Accepted'),
+  declined('declined', 'Declined'),
+  revoked('revoked', 'Withdrawn'),
+  expired('expired', 'Expired'),
+  unknown('unknown', 'Unknown');
+
+  const InvitationStatus(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  bool get isPending => this == InvitationStatus.pending;
+
+  static InvitationStatus fromWire(String value) =>
+      InvitationStatus.values.firstWhere(
+        (e) => e.wire == value,
+        orElse: () => InvitationStatus.unknown,
+      );
+}

@@ -650,6 +650,33 @@ class ApiRepository implements AppRepository {
     await _send('POST', '/meetups/$id/cancel');
   }
 
+  // House-party invitations (Phase 10) ----------------------------------------
+  @override
+  Future<List<Invitation>> listInvitations({int offset = 0, int limit = 20}) async {
+    final data = await _send(
+      'GET',
+      '/invitations',
+      query: {'offset': '$offset', 'limit': '$limit'},
+    ) as Map<String, dynamic>;
+    return (data['results'] as List<dynamic>? ?? const [])
+        .map((e) => Invitation.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<Invitation> acceptInvitation(String id) async {
+    final data = await _send('POST', '/invitations/$id/accept')
+        as Map<String, dynamic>;
+    return Invitation.fromJson(data);
+  }
+
+  @override
+  Future<Invitation> declineInvitation(String id) async {
+    final data = await _send('POST', '/invitations/$id/decline')
+        as Map<String, dynamic>;
+    return Invitation.fromJson(data);
+  }
+
   // Notifications inbox (Phase 11) --------------------------------------------
   @override
   Future<List<AppNotification>> listNotifications() async {

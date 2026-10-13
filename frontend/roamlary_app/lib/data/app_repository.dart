@@ -134,6 +134,12 @@ abstract class AppRepository {
   Future<void> leaveMeetup(String id);
   Future<void> cancelMeetup(String id);
 
+  // House-party invitations (Phase 10) --------------------------------------
+  // The only read path for house parties: GET /meetups kind-filters them out.
+  Future<List<Invitation>> listInvitations({int offset = 0, int limit = 20});
+  Future<Invitation> acceptInvitation(String id);
+  Future<Invitation> declineInvitation(String id);
+
   // Notifications inbox (Phase 11) -------------------------------------------
   Future<List<AppNotification>> listNotifications();
   Future<void> markNotificationRead(String id);

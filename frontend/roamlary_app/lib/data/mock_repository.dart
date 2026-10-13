@@ -27,6 +27,20 @@ class MockRepository implements AppRepository {
   final List<AppNotification> _sosNotifications = [];
   final List<AppNotification> _inbox = [];
   final List<Meetup> _meetups = [];
+
+/// Seeded house-party invitations — `/meetups` never returns these rows.
+final List<Invitation> _invitations = [
+  Invitation(
+    id: 'inv-mock-1',
+    meetupId: 'meetup-mock-1',
+    eventTitle: 'Rooftop dinner in Lisbon',
+    inviterId: 'u-mock-sofia',
+    inviteeId: 'me',
+    inviteeDisplayName: 'You',
+    status: InvitationStatus.pending,
+    createdAt: DateTime.now().toUtc(),
+  ),
+];
   final List<TripShare> _tripShares = [];
   final List<SharedItinerary> _sharedWithMe = [];
   final List<CommunityReport> _reports = [];
@@ -1142,6 +1156,43 @@ class MockRepository implements AppRepository {
     final i = _meetups.indexWhere((m) => m.id == id);
     if (i < 0) throw StateError('Meetup not found');
     _meetups[i] = _copyMeetup(_meetups[i], status: MeetupStatus.cancelled);
+  }
+
+  // House-party invitations (Phase 10) ----------------------------------------
+  @override
+  Future<List<Invitation>> listInvitations({int offset = 0, int limit = 20}) async {
+    await _delay();
+    return List.unmodifiable(_invitations);
+  }
+
+  @override
+  Future<Invitation> acceptInvitation(String id) async =>
+      _answerInvitation(id, InvitationStatus.accepted);
+
+  @override
+  Future<Invitation> declineInvitation(String id) async =>
+      _answerInvitation(id, InvitationStatus.declined);
+
+  Invitation _answerInvitation(String id, InvitationStatus status) {
+    final i = _invitations.indexWhere((v) => v.id == id);
+    if (i < 0) throw StateError('Invitation not found');
+    final old = _invitations[i];
+    if (!old.isPending) {
+      throw StateError('This invitation has already been answered.');
+    }
+    final updated = Invitation(
+      id: old.id,
+      meetupId: old.meetupId,
+      eventTitle: old.eventTitle,
+      inviterId: old.inviterId,
+      inviteeId: old.inviteeId,
+      inviteeDisplayName: old.inviteeDisplayName,
+      status: status,
+      respondedAt: DateTime.now().toUtc(),
+      createdAt: old.createdAt,
+    );
+    _invitations[i] = updated;
+    return updated;
   }
 
   Meetup _copyMeetup(

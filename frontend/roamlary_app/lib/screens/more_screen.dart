@@ -5,6 +5,7 @@ import '../core/app_theme.dart';
 import '../state/app_state.dart';
 import 'blocked_users_screen.dart';
 import 'contacts_screen.dart';
+import 'feature_tests_screen.dart';
 import 'meetups_screen.dart';
 import 'notifications_screen.dart';
 import 'owner_review_screen.dart';
@@ -155,6 +156,19 @@ class MoreScreen extends StatelessWidget {
                 title: 'Sign out',
                 titleColor: AppTheme.danger,
                 onTap: () => _confirmSignOut(context),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _Section(
+            title: 'Diagnostics',
+            children: [
+              _Tile(
+                icon: Icons.biotech_outlined,
+                selectedIcon: Icons.biotech,
+                title: 'Feature tests',
+                subtitle: 'Run live checks against the backend',
+                onTap: () => _push(context, const FeatureTestsScreen()),
               ),
             ],
           ),

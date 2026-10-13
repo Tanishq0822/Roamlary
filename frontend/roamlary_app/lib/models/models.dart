@@ -633,6 +633,52 @@ class Meetup {
       );
 }
 
+/// One house-party invitation as the invitee sees it — mirrors backend
+/// `InvitationRead` (Phase 10).
+///
+/// House parties share the `meetups` table but are excluded from
+/// `GET /meetups` (kind-filtered in SQL), so `GET /invitations` is the only
+/// read path that surfaces them.
+class Invitation {
+  const Invitation({
+    required this.id,
+    required this.meetupId,
+    required this.eventTitle,
+    required this.inviterId,
+    required this.inviteeId,
+    required this.inviteeDisplayName,
+    required this.status,
+    this.respondedAt,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String meetupId;
+  final String eventTitle;
+  final String inviterId;
+  final String inviteeId;
+  final String inviteeDisplayName;
+  final InvitationStatus status;
+  final DateTime? respondedAt;
+  final DateTime createdAt;
+
+  bool get isPending => status.isPending;
+
+  factory Invitation.fromJson(Map<String, dynamic> json) => Invitation(
+        id: json['id'] as String,
+        meetupId: json['meetup_id'] as String,
+        eventTitle: json['event_title'] as String,
+        inviterId: json['inviter_id'] as String,
+        inviteeId: json['invitee_id'] as String,
+        inviteeDisplayName: json['invitee_display_name'] as String,
+        status: InvitationStatus.fromWire(json['status'] as String),
+        respondedAt: json['responded_at'] == null
+            ? null
+            : DateTime.parse(json['responded_at'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
 /// One notification row — mirrors backend `NotificationRead` (Phase 11).
 /// Also used for per-SOS contact-attempt rows.
 class AppNotification {
