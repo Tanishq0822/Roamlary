@@ -4,17 +4,22 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     admin,
+    ai,
     auth,
     blocks,
     chat,
     check_ins,
     community_reports,
     health,
+    meetups,
+    notifications,
+    parties,
     social,
     sos_events,
     travel_buddies,
     travel_plans,
     travel_profile,
+    trip_shares,
     trusted_contacts,
     users,
     verification,
@@ -26,6 +31,12 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(blocks.router)
 api_router.include_router(chat.router)
+api_router.include_router(meetups.router)
+api_router.include_router(parties.router)
+api_router.include_router(parties.invitations_router)
+api_router.include_router(notifications.router)
+api_router.include_router(trip_shares.router)
+api_router.include_router(ai.router)
 api_router.include_router(trusted_contacts.router)
 api_router.include_router(check_ins.router)
 api_router.include_router(sos_events.router)

@@ -65,11 +65,18 @@ class ReportStatus(StrEnum):
     clients, and ordinary users cannot mark their own reports approved.
     Until then, every submitted report is user-submitted content
     (`pending`), and only `rejected` rows are hidden from the public API.
+
+    Phase 11 adds the owner-only moderation endpoint plus RESOLVED (an
+    approved report whose concern was handled). Transitions:
+    pending -> approved|rejected; approved -> resolved|rejected;
+    resolved|rejected are terminal. Every decision stamps
+    reviewed_by/reviewed_at for auditability.
     """
 
     PENDING = "pending"  # submitted, not yet reviewed
     APPROVED = "approved"  # visible to the community
     REJECTED = "rejected"  # declined during review
+    RESOLVED = "resolved"  # approved earlier; concern handled since
 
 
 class ReportCategory(StrEnum):
@@ -236,3 +243,119 @@ class ConversationStatus(StrEnum):
     ACCEPTED = "accepted"
     REJECTED = "rejected"
     CANCELLED = "cancelled"
+
+
+class MeetupCategory(StrEnum):
+    """Closed activity set for meetups and house parties (Phases 9-10).
+
+    Validated at the schema layer and enforced by the database CHECK,
+    like every other closed set in this project.
+    """
+
+    HIKING = "hiking"
+    FOOD = "food"
+    CULTURE = "culture"
+    ADVENTURE = "adventure"
+    LEISURE = "leisure"
+    NIGHTLIFE = "nightlife"
+    OTHER = "other"
+
+
+class MeetupKind(StrEnum):
+    """Which event family a row belongs to (Phase 9 vs Phase 10).
+
+    One shared table, one shared lifecycle - the kind only switches the
+    access rules: meetups are publicly discoverable with open or
+    approval-based joining; house parties are invitation-only and never
+    appear in public discovery.
+    """
+
+    MEETUP = "meetup"
+    HOUSE_PARTY = "house_party"
+
+
+class MeetupStatus(StrEnum):
+    """Lifecycle of a meetup or house party (Phases 9-10).
+
+        active    -> open for joins/invites/announcements (start state)
+        cancelled -> host cancelled (terminal; everything freezes)
+        completed -> ended (terminal; joins/invites refused)
+
+    `completed` is set explicitly by the host; end-time checks at read
+    time additionally refuse joins/invites to past events. Nothing
+    auto-transitions rows.
+    """
+
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+
+
+class MeetupVisibility(StrEnum):
+    """Who may discover the event listing (Phase 9).
+
+    House parties are ALWAYS private regardless of this value (enforced
+    in the endpoint, not trusted from the client).
+    """
+
+    PUBLIC = "public"
+    PRIVATE = "private"
+
+
+class ParticipationPolicy(StrEnum):
+    """How joining works (Phases 9-10)."""
+
+    OPEN = "open"  # join creates an approved membership (capacity-checked)
+    APPROVAL = "approval"  # join creates a request the host decides on
+
+
+class MembershipStatus(StrEnum):
+    """One user's relationship to one event (Phases 9-10).
+
+    requested -> waiting for host approval (approval policy only)
+    approved  -> participant
+    declined  -> host refused (terminal for this ask; a new join may
+                 reopen it - same rule as chat/travel requests)
+    removed   -> host removed a participant (terminal; rejoin allowed
+                 as a fresh ask)
+    left      -> participant left on their own (rejoin allowed)
+    """
+
+    REQUESTED = "requested"
+    APPROVED = "approved"
+    DECLINED = "declined"
+    REMOVED = "removed"
+    LEFT = "left"
+
+
+class InvitationStatus(StrEnum):
+    """Lifecycle of a house-party invitation (Phase 10).
+
+    accepted/declined/revoked/expired are terminal for THAT invitation;
+    the host may always invite again (fresh state on the same UNIQUE
+    pair row, like chat re-requests).
+    """
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    DECLINED = "declined"
+    REVOKED = "revoked"
+    EXPIRED = "expired"
+
+
+class NotificationStatus(StrEnum):
+    """Delivery state of one notification record (Phase 12).
+
+    Honest vocabulary: `delivered` means visible in-app via
+    GET /notifications (the only channel that exists); `unavailable`
+    means no provider is configured for the requested external channel;
+    `unknown` means handed to a provider without a delivery receipt.
+    Provider acceptance is NEVER reported as confirmed delivery.
+    """
+
+    QUEUED = "queued"
+    ATTEMPTED = "attempted"
+    DELIVERED = "delivered"
+    FAILED = "failed"
+    UNAVAILABLE = "unavailable"
+    UNKNOWN = "unknown"

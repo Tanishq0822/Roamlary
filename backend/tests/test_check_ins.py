@@ -288,3 +288,37 @@ def test_no_notification_or_sos_side_effect(api_client, db_session):
     assert "notified" not in body
     assert "sos" not in body
     assert "alert" not in body
+
+
+# --------------------------------------------------------------- overdue (Phase 12D)
+
+
+def test_overdue_lists_only_past_due_pending(api_client, sqlite_engine):
+    """GET /check-ins/overdue surfaces pending rows past their deadline
+    (read-time evaluation - nothing auto-transitions, nothing alerts).
+    Time is simulated by backdating a row past its deadline, since the
+    API only accepts future deadlines at creation."""
+    import uuid as uuid_module
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+    from sqlalchemy.orm import sessionmaker
+
+    from app.models.check_in import CheckIn
+
+    _, h = register_user(api_client, "overdue@example.com")
+    first = _create(api_client, h, due_at=_future(hours=2)).json()
+    _create(api_client, h, due_at=_future(hours=3))
+
+    factory = sessionmaker(bind=sqlite_engine)
+    db = factory()
+    try:
+        row = db.scalar(select(CheckIn).where(CheckIn.id == uuid_module.UUID(first["id"])))
+        row.due_at = datetime.now(UTC) - timedelta(hours=1)  # time passes
+        db.commit()
+    finally:
+        db.close()
+
+    overdue = api_client.get(BASE + "overdue", headers=h).json()
+    assert [c["id"] for c in overdue] == [first["id"]]  # only the past-due pending row
+    assert api_client.get(BASE + "overdue").status_code == 401

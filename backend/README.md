@@ -8,12 +8,13 @@ safety prototype (CODE X 3.0 hackathon).
 > Those integrations belong to later phases and will only be documented as
 > working after they are actually verified.
 
-## Current scope (Phases 6–8: reports, identity verification & social access, travel buddies & discovery, stranger chat/blocking/sessions)
+## Current scope (Phases 6–13: reports, verification, travel buddies, chat, events, moderation, notifications, sharing, SOS, AI companion)
 
 Implemented now (on top of the Phase 1 foundation + Phase 2 database +
 Phase 3 authentication + Phase 4 contacts/check-ins + Phase 5 SOS +
 Phase 6 reports + Phase 6 second assignment identity verification +
-Phase 7 travel buddies + Phase 8 messaging):
+Phase 7 travel buddies + Phase 8 messaging + Phases 9–13 events and
+services):
 
 - Runnable FastAPI application with versioned routing (`/api/v1`)
 - `GET /api/v1/health` liveness endpoint (documented contract below)
@@ -21,10 +22,12 @@ Phase 7 travel buddies + Phase 8 messaging):
 - CORS configured for Flutter development origins
 - Interactive API documentation (Swagger UI / ReDoc)
 - **PostgreSQL persistence** via SQLAlchemy 2.x (engine + per-request sessions)
-- **Fifteen domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
+- **Twenty-one domain models**: `User`, `TrustedContact`, `CheckIn`, `SosEvent`,
   `CommunityReport`, `IdentityVerification`, `AppSetting`, `SettingChange`,
   `TravelProfile`, `TravelPlan`, `TravelPartnerRequest`,
-  `UserBlock`, `Conversation`, `ChatMessage`, `AuthSession` —
+  `UserBlock`, `Conversation`, `ChatMessage`, `AuthSession`,
+  `Meetup`, `MeetupMembership`, `EventInvitation`, `MeetupAnnouncement`,
+  `Notification`, `TripShare` —
   with UUID keys, timestamps, CHECK constraints and
   `ON DELETE RESTRICT` foreign keys
 - **Alembic migrations** (initial schema + `password_hash` column +
@@ -35,7 +38,10 @@ Phase 7 travel buddies + Phase 8 messaging):
   `users.role` columns and the verification/policy/audit tables +
   Phase 7 travel profile/plan/partner-request tables +
   Phase 8 block/conversation/message/session tables, `users.token_version`,
-  and the travel canonical-pair race-fix columns/index)
+  and the travel canonical-pair race-fix columns/index +
+  Phases 9–12 meetup/membership/invitation/announcement/notification/
+  trip-share tables, report review columns + `resolved` status, and the
+  SOS acknowledgement stamp)
 - **Local authentication**: `POST /auth/register`, `POST /auth/login`
   (Argon2id password hashing + HS256 JWT access tokens)
 - **Protected profile endpoints**: `GET /users/me`, `PATCH /users/me`
@@ -79,21 +85,49 @@ Phase 7 travel buddies + Phase 8 messaging):
   (`GET /auth/sessions`, `POST /auth/logout`,
   `POST /auth/sessions/{id}/revoke`, `POST /auth/sessions/revoke-others`,
   `POST /auth/revoke-all`) with immediate revocation enforcement
+- **Meetups & group activities (Phase 9)**: `POST/GET /meetups`,
+  `GET/PATCH /meetups/{id}`, `POST .../cancel|complete|join|leave`,
+  `GET .../participants`, `POST .../requests/{uid}/approve|reject`,
+  `DELETE .../participants/{uid}`, host bulletins
+  (`POST/GET .../announcements`) — public discovery, capacity-guarded
+  joining, no group chat
+- **Private house parties (Phase 10)**: `POST/GET/PATCH /parties`,
+  `POST .../cancel|complete|leave`, `GET .../participants`,
+  `POST .../invite`, `DELETE .../invite/{uid}`,
+  `GET /invitations` + `POST .../accept|decline` — invitation-only,
+  never in public discovery, venue visible to host + approved only
+- **Report moderation (Phase 11)**: `PATCH /reports/{id}/moderate`
+  (owner only; `approved`/`rejected`/`resolved` with audit stamps)
+- **Notifications (Phase 12)**: `GET /notifications`,
+  `POST .../{id}/read|retry` — honest states (in-app delivered,
+  external unavailable), idempotent retries
+- **Trip sharing (Phase 12)**: `POST/GET /trip-shares`,
+  `GET .../shared-with-me`, `GET .../{id}` (plan facts only, no live
+  location), `DELETE .../{id}` (owner revokes at once)
+- **SOS improvements (Phase 12)**: `POST /sos/{id}/acknowledge`,
+  `POST .../notify-retry`, `GET .../notifications` (per-contact honest
+  attempts); `GET /check-ins/overdue` (read-time only, no background job)
+- **AI travel companion (Phase 13)**: `GET /ai/status`,
+  `POST /ai/chat` — own-trip context only, mock provider in tests,
+  explicit "unavailable" with no provider (never fabricated)
 - **Owner provisioning CLI**: `python -m app.cli make-owner <email>` (the
   only path that grants the `owner` role)
-- Automated test suite: **406 tests** (369 offline + 37 real-PostgreSQL
+- Automated test suite: **472 tests** (430 offline + 42 real-PostgreSQL
   integration; contacts + check-ins + SOS + reports + verification +
   admin/policy + auth + profiles + travel buddies + chat + blocks +
-  sessions + models + migrations)
+  sessions + meetups + parties + moderation + notifications + shares +
+  AI + models + migrations)
 
 **Intentionally NOT implemented yet** (assigned to later phases, do not expect
 them to exist): Firebase Authentication, refresh tokens, password reset, email
-verification, report **moderation/approval workflow** (the
-`approved`/`rejected` states are reserved — no endpoint can set them yet), AI
-companion, notifications, **overdue-check-in alerts**, pagination on the
-non-report/non-travel/non-chat endpoints, **group chat** and trip events
-(one-to-one text chat exists since Phase 8; the two users are never
-connected by any other channel), a real
+verification, **group chat** and trip events (one-to-one text chat exists
+since Phase 8; event bulletins since Phases 9–10 are host-only with no
+replies), message search/attachments, SMS/email/push delivery (notification
+rows honestly record `unavailable`), live GPS sharing (trip shares carry
+plan facts + check-in states only), background monitoring, offline AI
+tunnels, pagination on the contact/check-in/SOS/travel-plan lists
+(reports, discovery, chat, events, notifications, and shares are
+paginated), a real
 identity-verification provider (verification here is **manual review only** —
 no Aadhaar/ID documents or sensitive identity data are collected, stored, or
 displayed anywhere), production deployment. Phase 5 only *records* SOS
@@ -104,11 +138,17 @@ requests* — accepting a travel-partner request creates a connection row,
 never notifies anyone, never opens a chat, and never implies either user
 is safe. Phase 8 adds one-to-one text chat behind an explicit
 ask-and-accept, but still sends no notifications, opens no group chats,
-and never claims anyone is safe. Authentication
-here is a **local prototype** — it needs real security work (HTTPS, rate
-limiting, token revocation) before any production claim. Account/safety
+and never claims anyone is safe. Phases 9–10 add meetups, private
+parties, and host bulletins (no group chat, no trip events); Phase 11
+adds owner-only report moderation; Phase 12 records honest notification
+states, shares trip plans without live location, and tracks SOS contact
+attempts without dispatching anything; Phase 13 answers from the mock
+provider in tests and reports "unavailable" with no provider — never
+fabricated, never a safety verdict. Authentication
+here is a **local prototype** — it needs real security work (HTTPS,
+production rate limiting) before any production claim. Account/safety
 workflow endpoints (trusted contacts, check-ins, SOS, account profile,
-travel profile & plans) stay reachable while
+travel profile & plans, blocks) stay reachable while
 **unverified** — incomplete verification must never lock anyone out of
 safety tools.
 
@@ -178,15 +218,15 @@ Four separate concerns, so each stays small and testable:
 `create_all()` in production — Alembic owns the schema, so every change is a
 reviewed, replayable file.
 
-### The fifteen tables
+### The twenty-one tables
 
 | Table | Purpose | Key columns |
 | --- | --- | --- |
-| `users` | App account / profile | `id` (UUID PK), `firebase_uid` (optional, unique), `display_name`, `email` (optional, unique), `verification_status` (unverified/pending/verified/rejected), `role` (user/owner) |
+| `users` | App account / profile | `id` (UUID PK), `firebase_uid` (optional, unique), `display_name`, `email` (optional, unique), `verification_status` (unverified/pending/verified/rejected), `role` (user/owner), `token_version` (Phase 8) |
 | `trusted_contacts` | People to notify in an SOS | `user_id` (FK→users), `name`, `phone`, `email` |
 | `check_ins` | "Ping me by time T" promises | `user_id` (FK), `status`, `due_at`, `completed_at` |
-| `sos_events` | **Simulated** emergency incidents | `user_id` (FK), `status`, `latitude`/`longitude`, `resolved_at` |
-| `community_reports` | Crowd-sourced safety notes | `user_id` (FK), `category` (6-value set, Phase 6), `description`, `latitude`/`longitude`, `status` |
+| `sos_events` | **Simulated** emergency incidents | `user_id` (FK), `status`, `latitude`/`longitude`, `resolved_at`, `acknowledged_at` (Phase 12) |
+| `community_reports` | Crowd-sourced safety notes | `user_id` (FK), `category` (6-value set, Phase 6), `description`, `latitude`/`longitude`, `status` (+`resolved`, Phase 11), `reviewed_by`/`reviewed_at` audit (Phase 11) |
 | `identity_verifications` | One row per verification **request** (history) | `user_id` (FK), `status` (pending/approved/rejected), `applicant_note`, `review_note`, `reviewed_at`, `reviewed_by` (FK) |
 | `app_settings` | Runtime configuration (one key today: `social_requires_verification`) | `key` (unique), `value`, `updated_by` (FK) |
 | `setting_changes` | Append-only audit of policy changes | `setting_key`, `old_value`, `new_value`, `changed_by` (FK) |
@@ -197,6 +237,12 @@ reviewed, replayable file.
 | `conversations` | One messaging relationship per unordered user pair (Phase 8) | `user_low_id`/`user_high_id` (canonical, UNIQUE pair, CHECK ≠), `status` (pending/accepted/rejected/cancelled), `requested_by` (FK), `responded_at` |
 | `messages` | One text message (Phase 8) | `conversation_id` (FK), `sender_id` (FK), `body` (text), `is_deleted` + `deleted_at` (soft delete) |
 | `auth_sessions` | One login session per login (Phase 8) | `user_id` (FK), `label` (optional), `revoked_at` (NULL = active) |
+| `meetups` | One group activity or house party (Phases 9–10, shared foundation) | `host_id` (FK), `kind` (meetup/house_party), `status`, `visibility`, `participation`, closed `category` set, `capacity` (CHECK 2–500), `start_at`/`end_at` (CHECK end > start), public `location_text` + host/approved-only `venue_details` |
+| `meetup_memberships` | One user's state in one event (Phases 9–10) | `meetup_id` + `user_id` (FKs, UNIQUE pair), `status` (requested/approved/declined/removed/left), `decided_at`/`decided_by` audit |
+| `event_invitations` | One host invitation of one user to one private event (Phase 10) | `meetup_id` + `inviter_id` + `invitee_id` (FKs, UNIQUE meetup/invitee), `status` (pending/accepted/declined/revoked/expired) |
+| `meetup_announcements` | One host bulletin for one event (Phases 9–10; no replies by design) | `meetup_id` + `author_id` (FKs), `body` (text) |
+| `notifications` | One notification attempt for one user (Phase 12) | `user_id` (FK), `kind`, `channel` (only `in_app` delivers), honest `status` set, `attempts`, `last_error`, UNIQUE `idempotency_key` |
+| `trip_shares` | One trip-sharing grant (Phase 12) | `owner_id` + optional `plan_id` (FKs), `expires_at` (≤90 days), `revoked_at` (NULL = live) |
 
 All children use **`ON DELETE RESTRICT`**: deleting a user who still has safety
 records is blocked at the database level, so safety history can never vanish by
@@ -209,7 +255,10 @@ protected sets (Phase 7); deleting a plan referenced by a partner request is
 blocked (RESTRICT) so request history keeps pointing at a real trip.
 `users.token_version` (Phase 8) is a NOT NULL integer defaulting to 0 for
 revocation; conversation/block/message columns carry the same CHECK +
-RESTRICT + uniqueness discipline as the travel tables.
+RESTRICT + uniqueness discipline as the travel tables. Report
+`reviewed_by`/`reviewed_at` (Phase 11) and SOS `acknowledged_at`
+(Phase 12) are nullable audit stamps; event/notification/share tables
+follow the same RESTRICT + named-CHECK + UNIQUE discipline throughout.
 
 ### What CORS is and when it matters
 
@@ -897,6 +946,139 @@ ids the tokens already carried.
 > shared rate-limit store exists; none was added (no new infrastructure
 > per the brief).
 
+## Meetups & group activities (Phase 9)
+
+Public group activities with open or approval-based joining, on the
+shared event foundation (one table for meetups + house parties; the
+kind only switches access rules). Hosts create/edit/cancel/complete,
+manage a guest list, approve or reject join requests, and post one-way
+bulletins (no replies — group chat is out of scope by design).
+Capacity is CHECK-guarded (2–500) and enforced against overbooking
+(409), including a row lock so concurrent approvals cannot overbook on
+PostgreSQL. Discovery lists public, active, upcoming meetups only
+(house parties and private events never appear), excluding blocked
+hosts; ended events refuse joins at read time (no background job).
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `POST /api/v1/meetups` | Host a public meetup | `201` · `401` · `403` · `422` · `429` 20/hour |
+| `GET /api/v1/meetups` | Discover (`?category=`/`?start_from=`/`?start_to=`/`?available_only=`/`?offset=`/`?limit=`) | `200` · `401` · `403` · `422` |
+| `GET /api/v1/meetups/{id}` | Read one public meetup | `200` · `401` · `403` · `404` |
+| `PATCH /api/v1/meetups/{id}` | Host edits (capacity floor = approved count) | `200` · `401` · `403` · `404` · `409` · `422` |
+| `POST /api/v1/meetups/{id}/cancel` | Host cancels (members notified in-app) | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/meetups/{id}/complete` | Host marks completed | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/meetups/{id}/join` | Join (open → approved; approval → requested) | `201` · `401` · `403` · `404` · `409` full/duplicate · `422` · `429` 30/hour |
+| `GET /api/v1/meetups/{id}/participants` | Guest list (host: all states; members: approved) | `200` · `401` · `403` · `404` |
+| `POST /api/v1/meetups/{id}/requests/{uid}/approve\|reject` | Host decides a join request | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/meetups/{id}/leave` | Member leaves | `200` · `401` · `403` · `404` · `409` · `422` |
+| `DELETE /api/v1/meetups/{id}/participants/{uid}` | Host removes a participant | `200` · `401` · `403` · `404` · `409` · `422` |
+| `POST /api/v1/meetups/{id}/announcements` | Host bulletin | `201` · `401` · `403` · `404` · `409` · `422` |
+| `GET /api/v1/meetups/{id}/announcements` | Host + approved read | `200` · `401` · `403` · `404` |
+
+## Private house parties (Phase 10)
+
+Invitation-only events on the same foundation. Kind (`house_party`)
+and `private` visibility are forced server-side at creation and
+immutable afterwards — a party can never become public. Parties never
+appear in meetup discovery, public profiles, or search; reads 404 for
+everyone except host, approved participants, and pending invitees.
+The exact venue (`venue_details`) travels ONLY to host + approved —
+pending invitees decide on title/time/area first and learn the address
+after accepting. Invitations are UNIQUE per (party, invitee):
+re-inviting reopens the same row, and only pending rows can be
+answered (no replay). Accepts create the membership atomically with a
+capacity recheck; blocks freeze accepts (409); ended/cancelled parties
+freeze invites.
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `POST /api/v1/parties` | Host a private party | `201` · `401` · `403` · `422` · `429` |
+| `GET /api/v1/parties/{id}` | Read an entitled party (venue gated) | `200` · `401` · `403` · `404` |
+| `PATCH /api/v1/parties/{id}` | Host edits | `200` · `401` · `403` · `404` · `409` · `422` |
+| `POST /api/v1/parties/{id}/cancel\|complete` | Host closes (cancel notifies) | `200` · `401` · `403` · `404` · `409` |
+| `POST /api/v1/parties/{id}/invite` | Host invites one eligible user | `201` · `401` · `403` · `404` · `409` · `422` |
+| `DELETE /api/v1/parties/{id}/invite/{uid}` | Host withdraws a pending invite | `200` · `401` · `403` · `404` · `409` |
+| `GET /api/v1/parties/{id}/participants` | Guest list (insiders only) | `200` · `401` · `403` · `404` |
+| `POST /api/v1/parties/{id}/leave` | Approved member leaves | `200` · `401` · `403` · `404` · `409` · `422` |
+| `GET /api/v1/invitations` | My incoming invitations | `200` · `401` · `403` |
+| `POST /api/v1/invitations/{id}/accept\|decline` | Invitee answers | `200` · `401` · `403` · `404` · `409` |
+
+> **Boundaries:** no safety verdicts anywhere — verification never
+> implies trustworthiness and attending is never claimed risk-free.
+> Verification confirms an account passed manual review, nothing more.
+
+## Report moderation (Phase 11)
+
+The owner-only workflow Phase 6 reserved: `PATCH
+/reports/{report_id}/moderate` with `{"status":
+"approved"|"rejected"|"resolved"}`. Moves: pending → approved/rejected;
+approved → resolved/rejected; rejected/resolved terminal (a bad decision
+is corrected by a new report, not rewritten history). Every decision
+stamps reviewer + server clock (`reviewed_by`/`reviewed_at`;
+reviewer identity stays server-side). Ordinary users cannot set any
+status — not their own reports, not anyone's. Responses stay
+identity-free; `?status=` filtering gains `resolved`; `rejected` stays
+hidden.
+
+## Notifications (Phase 12)
+
+One service, honest states: rows are created by events (SOS, invites,
+approvals, cancellations, shares) with UNIQUE idempotency keys, so
+retries update the SAME row (attempts + 1) and can never duplicate
+alerts. `delivered` + `in_app` means visible via `GET /notifications`
+(the only channel that exists); external channels record `unavailable`
+with the reason — nothing is sent, nothing is claimed sent.
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `GET /api/v1/notifications` | My inbox (`?unread_only=`/`?offset=`/`?limit=`) | `200` · `401` |
+| `POST /api/v1/notifications/{id}/read` | Mark mine read (idempotent) | `200` · `401` · `404` |
+| `POST /api/v1/notifications/{id}/retry` | Retry failed/unavailable in place | `200` · `401` · `404` · `409` |
+
+## Trip sharing (Phase 12)
+
+Bounded grants ("my accepted travel partners may see this trip until
+Friday"), enforced server-side at every read: expired or revoked shares
+read as gone. Viewers are exactly the owner's accepted travel-partner
+counterparts (no new identity system). Shared content is plan facts
+only — destination, dates, owner name, grant window. There is no live
+GPS infrastructure, so no live location is shared or claimed; messages,
+SOS records, and anyone else's data never travel.
+
+| Method + path | Purpose | Success / errors |
+| --- | --- | --- |
+| `POST /api/v1/trip-shares` | Open a share (own plan, expiry ≤90 days) | `201` · `401` · `404` · `422` · `409` |
+| `GET /api/v1/trip-shares` | My grants (live, expired, revoked) | `200` · `401` |
+| `GET /api/v1/trip-shares/shared-with-me` | Live shares I may view | `200` · `401` |
+| `GET /api/v1/trip-shares/{id}` | Shared itinerary (plan facts only) | `200` · `401` · `404` |
+| `DELETE /api/v1/trip-shares/{id}` | Owner revokes (viewers lose access at once) | `204` · `401` · `404` |
+
+## SOS improvements (Phase 12)
+
+Same SOS contracts, plus: `POST /sos/{id}/acknowledge` (owner records
+handling via compare-and-set; acknowledged still resolves/cancels);
+activation records one honest per-contact attempt row (idempotent key
+`sos:{sos}:contact:{contact}` — `unavailable` until a provider exists,
+and the SOS persists regardless); `POST /sos/{id}/notify-retry`
+re-attempts in place on active incidents only; `GET
+/sos/{id}/notifications` makes every outcome observable. Check-ins gain
+`GET /check-ins/overdue` — pending rows past their deadline, evaluated
+at read time (no background job, no alerts, no auto-transitions).
+
+## AI travel companion (Phase 13)
+
+`GET /ai/status` (provider name + configured boolean — keys never
+travel) and `POST /ai/chat` (`{message ≤2000 chars, optional own
+plan_id}`; 20/hour/user). Context is the caller's OWN plan
+(destination/dates) + interests only — foreign plans 404, and no other
+user's data ever enters. With no provider configured (the default) the
+endpoint answers 200 with the documented unavailable message
+(`verified=false`, empty sources); the mock provider gives
+deterministic structured answers in tests (no network, no cost). Every
+answer carries uncertainty + emergency footers; provider faults return
+honest 503s, never crashes or fabricated fallbacks. No safety verdicts
+about people, places, or events — ever.
+
 ## Migrations (Alembic)
 
 Alembic creates and evolves the schema. The migration files live in
@@ -977,6 +1159,21 @@ Applied migrations on `roamlary_dev`:
   **refuses** before touching the schema. Round-trip verified on SQLite
   and PostgreSQL, plus live on `roamlary_dev`. `alembic current` →
   `7f3a9c1e5b42 (head)`.
+- `b8e2f4a1c6d9` — Phases 9–12: adds the six event/notification/share
+  tables (`meetups` with kind/status/visibility/participation/category/
+  capacity/date CHECKs, `meetup_memberships` with UNIQUE meetup/user
+  pair, `event_invitations` with UNIQUE meetup/invitee pair,
+  `meetup_announcements`, `notifications` with UNIQUE idempotency key,
+  `trip_shares`), the nullable `community_reports.reviewed_by`/
+  `reviewed_at` moderation-audit columns, a widened report status CHECK
+  (+ `resolved`, applied with the established batch pattern for
+  SQLite), and the nullable `sos_events.acknowledged_at` stamp. The
+  **upgrade** needs no data guard (new tables; widening a CHECK cannot
+  violate existing rows). The **downgrade** is guarded the same way as
+  Phases 4–8: while any row exists in the six new tables or any report
+  carries status `resolved`, it **refuses** before touching the schema.
+  Round-trip verified on SQLite and PostgreSQL, plus live on
+  `roamlary_dev`. `alembic current` → `b8e2f4a1c6d9 (head)`.
 
 ```powershell
 # Apply all pending migrations to the configured database (reads DATABASE_URL)
@@ -1118,6 +1315,14 @@ $env:ROAMLARY_TEST_DATABASE_URL = "postgresql+psycopg://roamlary:<pw>@localhost:
 | `409` on `POST /chat/requests` | A pending ask already exists between you two (either direction — one row per pair) or you already chat | Answer the pending ask instead (`/accept`/`/reject`), or open the existing conversation |
 | `429` on chat send/request | More than 60 messages or 30 requests from one user within an hour (in-process limits) | Expected throttle; wait for the window to pass, or restart the dev server (counters are in-memory) |
 | `404` on `DELETE /blocks/{id}` | No block by YOU of that user exists (includes trying to remove someone else's block of you) | Only the blocker removes their own block; check `GET /blocks` first |
+| `404` on a meetup/party/invitation/share/notification | Unknown id, private event you are not entitled to, blocked host, foreign share/notification, or a revoked/expired share (all read as gone) | These 404s are deliberate privacy: use discovery, your invitations, or your own lists — never guess ids |
+| `409` on join/invite/accept | Event full, duplicate ask/membership, non-`pending` row, ended/cancelled/completed event, or a block landed afterwards | Read the event first; ended and cancelled events never reopen (create a new one) |
+| `409` on capacity edit or moderation | Capacity below approved headcount, or a terminal report/event transition | Raise capacity first / get more room; terminal states (cancelled, completed, rejected, resolved) never move again |
+| `422` on event create/edit/share | Naive or inverted datetimes, past expiry beyond 90 days, overlong/blank bodies, or an injected server field | Send ISO 8601 **with** `Z`/offset, end after start, expiry within 90 days, and only documented fields |
+| `429` on meetup create/join or AI chat | More than 20 events, 30 joins, or 20 AI chats per user per hour (in-process) | Expected throttle; wait or restart the dev server (counters are in-memory) |
+| `unavailable` notification status | No external provider is configured (SMS/email/push) | Expected and honest: nothing was sent. In-app rows show `delivered`; retry only re-attempts failed/unavailable rows |
+| AI answers "not configured" | `AI_PROVIDER` is `none` (default) | Expected: set `AI_PROVIDER=mock` for deterministic test answers, or configure a real provider (never commit keys) |
+| `RuntimeError: Refusing to downgrade migration b8e2f4a1c6d9 …` | Event, invitation, notification, or share rows exist, or a report carries status `resolved` | Intentional data-safety guard: nothing was changed (exact counts listed). Export or delete those rows first, then re-run — or keep the schema |
 
 ## Development log
 

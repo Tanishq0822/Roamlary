@@ -48,8 +48,8 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import case, func, select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.v1.deps import CurrentUser, DbSession
-from app.api.v1.schemas.community_report import ReportCreate, ReportRead
+from app.api.v1.deps import CurrentUser, DbSession, OwnerUser
+from app.api.v1.schemas.community_report import ReportCreate, ReportModerate, ReportRead
 from app.models.community_report import CommunityReport
 from app.models.enums import ReportCategory, ReportStatus
 
@@ -135,12 +135,12 @@ def list_community_reports(
         Query(description="Optional filter: only reports of this category."),
     ] = None,
     report_status: Annotated[
-        Literal[ReportStatus.PENDING, ReportStatus.APPROVED] | None,
+        Literal[ReportStatus.PENDING, ReportStatus.APPROVED, ReportStatus.RESOLVED] | None,
         Query(
             alias="status",
             description=(
-                "Optional filter: pending (unverified) or approved. "
-                "'rejected' is hidden from the public API entirely."
+                "Optional filter: pending (unverified), approved, or "
+                "resolved. 'rejected' is hidden from the public API entirely."
             ),
         ),
     ] = None,
@@ -247,4 +247,58 @@ def get_community_report(
 ) -> ReportRead:
     """Fetch a single visible report. 404 if it is missing OR rejected."""
     report = _get_visible_report(report_id, db)
+    return ReportRead.model_validate(report)
+
+
+# Allowed moderation moves (Phase 11). Terminal states lock: rejected
+# and resolved never move again (a bad decision is corrected by a new
+# report, not by rewriting review history).
+_MODERATION_MOVES: dict[str, set[str]] = {
+    ReportStatus.PENDING: {ReportStatus.APPROVED, ReportStatus.REJECTED},
+    ReportStatus.APPROVED: {ReportStatus.RESOLVED, ReportStatus.REJECTED},
+    ReportStatus.REJECTED: set(),
+    ReportStatus.RESOLVED: set(),
+}
+
+
+@router.patch(
+    "/{report_id}/moderate",
+    response_model=ReportRead,
+    summary="Moderate a report (owner only)",
+)
+def moderate_community_report(
+    report_id: UUID,
+    body: ReportModerate,
+    owner: OwnerUser,
+    db: DbSession,
+) -> ReportRead:
+    """Owner sets the moderation state with an audit stamp (reviewer +
+    server clock). Ordinary users cannot approve/reject/resolve anything
+    - not their own reports, not anyone else's: this is the ONLY route
+    that writes `status`, and it demands the owner role. Illegal moves
+    (including re-deciding terminal rows) are 409; the row keeps its
+    state. Moderation never exposes the submitter (responses stay
+    identity-free) and never notifies anyone (notifications are Phase
+    12's explicit surface, not a side effect)."""
+    from datetime import UTC, datetime
+
+    report = db.scalar(select(CommunityReport).where(CommunityReport.id == report_id))
+    if report is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Report not found.",
+        )
+    if body.status not in _MODERATION_MOVES.get(report.status, set()):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Cannot move a report from '{report.status}' to '{body.status}'. "
+                "Terminal states (rejected, resolved) never move again."
+            ),
+        )
+    report.status = body.status
+    report.reviewed_by = owner.id
+    report.reviewed_at = datetime.now(UTC)
+    db.commit()
+    db.refresh(report)
     return ReportRead.model_validate(report)

@@ -16,10 +16,11 @@ moderation system - no endpoint sets them today.
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, Float, ForeignKey, String, Text, Uuid
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -35,7 +36,7 @@ class CommunityReport(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "community_reports"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'approved', 'rejected')",
+            "status IN ('pending', 'approved', 'rejected', 'resolved')",
             name="status_valid",
         ),
         # Phase 6: the category list is now a closed set (was a loose
@@ -70,4 +71,11 @@ class CommunityReport(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     status: Mapped[str] = mapped_column(String(20), default=ReportStatus.PENDING, nullable=False)
 
-    user: Mapped[User] = relationship(back_populates="community_reports")
+    # Moderation audit (Phase 11, owner-only writes): who decided and
+    # when. NULL while pending (never reviewed).
+    reviewed_by: Mapped[UUID | None] = mapped_column(
+        Uuid, ForeignKey("users.id", ondelete="RESTRICT")
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship(back_populates="community_reports", foreign_keys=[user_id])

@@ -30,13 +30,13 @@ Flutter (`frontend` branch) · Laptop 3 = AI/ML + QA (`ai-ml` branch) ·
 Project owner = reviews and merges into `main`. **Phase assignments come from
 the project owner; the backend lead implements only assigned phases.**
 
-## 2. Current environment and baseline (verified 2026-10-14)
+## 2. Current environment and baseline (verified 2026-10-15)
 
 | Item | Verified status |
 |---|---|
 | Repository | `C:\Projects\Roamlary` (Git, remote `origin` → github.com/Tanishq0822/Roamlary.git) |
-| Branch | `backend` (all work pushed to `origin/backend` through Phase 7: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; Phase 6 as `9029047`; Phase 6 second assignment as `30977c0`; **Phase 7 committed and pushed, 2026-10-13, as `2b52ec2`** — see `git log`). HEAD **`2b52ec2`** = `origin/backend`; the working tree carries the **uncommitted Phase 8 change set** (owner rule: no commits during a phase). **Owner also decided (2026-10-12) to fast-forward `main` to this branch and add `docs/README.md`** — both done, see §16 |
-| History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → `9029047` Phase 6 (+ docs placeholder commit) → **`main` fast-forwarded to match** (2026-10-12, owner-instructed) → `30977c0` Phase 6 second assignment → `2b52ec2` Phase 7 |
+| Branch | `backend` (all work pushed to `origin/backend` through Phase 8: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/`f26536e`; Phases 4+5 as `f602505`; Phase 6 as `9029047`; Phase 6 second assignment as `30977c0`; Phase 7 as `2b52ec2`; **Phase 8 committed and pushed, 2026-10-14, as `a0123dc`** — see `git log`). HEAD **`a0123dc`** = `origin/backend`; the working tree carries the **uncommitted Phases 9–13 change set** (owner rule: no commits during a phase). **Owner also decided (2026-10-12) to fast-forward `main` to this branch and add `docs/README.md`** — both done, see §16 |
+| History | `4761b41` initial setup (includes the Flutter template `frontend/`) → `c06d092` scaffolding → `11f2d7e` report → `5ea9b59` Phase 1 → `eb8e709` Phase 2 → `3d728ac` Phase 3 → `f26536e` Phase 3 audit → `f602505` Phases 4+5 → `9029047` Phase 6 (+ docs placeholder commit) → **`main` fast-forwarded to match** (2026-10-12, owner-instructed) → `30977c0` Phase 6 second assignment → `2b52ec2` Phase 7 → `a0123dc` Phase 8 |
 | Python | 3.13.2 in project venv (system also has 3.11.3) |
 | pip | 26.2.1 inside `.venv` |
 | PostgreSQL | **Running locally** — server 16.15 in the Docker container `roamlary-postgres-dev` (databases: `roamlary_dev`, `roamlary_test`). No system-wide install | 
@@ -48,8 +48,8 @@ the project owner; the backend lead implements only assigned phases.**
 
 ## 3. Development phases and status
 
-Roadmap assigned by the project owner (Phases 0–8 complete; Phase 9+ are NOT
-started — the backend lead waits for each phase assignment):
+Roadmap assigned by the project owner (Phases 0–13 complete; no further
+phases assigned — the backend lead waits for each phase assignment):
 
 | Phase | Name | Status |
 |---|---|---|
@@ -62,10 +62,11 @@ started — the backend lead waits for each phase assignment):
 | 6 | Community safety reports & location data | ✅ **Complete — implemented & verified** (this report §12); stayed uncommitted during the phase per the owner's rule, then the owner instructed commit & push (2026-10-12) — **committed and pushed to `origin/backend`** (see `git log`) |
 | 6 (second assignment) | Identity verification & social access foundation | ✅ **Complete — implemented & verified** (this report §13); committed and pushed after the phase as `30977c0` (owner-authorized, 2026-10-12 23:47 — the report's earlier "awaiting review" note predates that commit) |
 | 7 | Travel buddies & social discovery (owner's brief; the original roadmap proposal was "AI companion & safety signals" — replaced by the owner's actual assignment) | ✅ **Complete — implemented & verified** (this report §14); committed and pushed after the phase as `2b52ec2` (owner-authorized, 2026-10-13 — the report's earlier "awaiting review" note predates that commit) |
-| 8 | Stranger chat, blocking & account security (owner's brief; the original roadmap proposal was "Notifications & background-job interfaces" — replaced by the owner's actual assignment) | ✅ **Complete — implemented & verified** (this report §17); uncommitted working-tree changes awaiting owner review (owner rule: no commits during the phase) |
-| 9 | Flutter integration & API contract alignment | ⏳ Not started (needs frontend report) |
-| 10 | Automated testing, security checks, QA | ⏳ Not started |
-| 11 | Final integration, documentation, demo readiness | ⏳ Not started |
+| 8 | Stranger chat, blocking & account security (owner's brief; the original roadmap proposal was "Notifications & background-job interfaces" — replaced by the owner's actual assignment) | ✅ **Complete — implemented & verified** (this report §17); committed and pushed after the phase as `a0123dc` (owner-authorized, 2026-10-14 — the report's earlier "awaiting review" note predates that commit) |
+| 9–13 | Meetups & group activities · Private house parties · Community-report moderation & location · Notifications, trip sharing & improved SOS · AI travel companion (one coordinated owner assignment; the original roadmap proposals for these numbers were replaced by it) | ✅ **Complete — implemented & verified** (this report §18); uncommitted working-tree changes awaiting owner review (owner rule: no commits during the phase) |
+| 14 | Flutter integration & API contract alignment | ⏳ Not started (needs frontend report) |
+| 15 | Automated testing, security checks, QA | ⏳ Not started |
+| 16 | Final integration, documentation, demo readiness | ⏳ Not started |
 
 **Strict phase boundaries:** Phase 2 added the database *foundation* only —
 configuration, engine, sessions, five ORM models, and Alembic migrations. It
@@ -91,11 +92,12 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | 2026-10-12 | **Phase 6** | Owner assigned Phase 6 → reused the Phase 2 `community_reports` table; added a closed 6-value `ReportCategory` set (+ DB CHECK, migration `ab32047c8481` with an **upgrade-side** data guard), 4 report endpoints (create/list with filters+pagination/nearby haversine search/get-by-id) with `ReportRead` (identity-free, UTC); 35 new tests (28 endpoint + 2 SQLite migration + 3 PostgreSQL + 2 model-contract), live E2E 51/51 + live migration-guard demo on `roamlary_dev`, README + this report + `PHASE6_CHANGES.md` | **uncommitted working-tree changes** during the phase → owner instructed commit & push (2026-10-12) → **committed and pushed to `origin/backend`** (see `git log`) |
 | 2026-10-12 | **Phase 6 (second assignment)** | Owner assigned a second Phase 6 brief (identity verification & social access foundation) → `users.verification_status` + `users.role` columns, `identity_verifications` request history, `app_settings` policy row + append-only `setting_changes` audit (fail-closed `get_policy`), `require_owner` / `require_verified_user` server-side gates, 7 new routes (verification status/submit, owner queue approve/reject, owner policy read/patch with 5/hour rate limit, gated social discovery placeholder), server CLI `python -m app.cli make-owner <email>`, migration `3e285edb0896` (downgrade guarded by data), 52 new tests; live E2E 54/54 + live guard-refusal + live downgrade/upgrade roundtrip on `roamlary_dev`, README + this report + `PHASE6_IDENTITY_CHANGES.md` | *was* uncommitted at the time; owner later authorized → committed as `30977c0`, pushed to `origin/backend` |
 | 2026-10-13 | **Phase 7** | Owner assigned Phase 7 (travel buddies & social discovery) → audit-first (§14.1, recorded before any code); 3 new tables (`travel_profiles`, `travel_plans`, `travel_partner_requests`) + 3 new VARCHAR-backed CHECK enums + migration `426dcef31e27` (downgrade data-guarded); pure-function matching engine (`app/core/matching.py`, documented weights summing to 100, honesty note in every response) + discovery service (`app/services/discovery.py`: indexed SQL prefilter, self/partner/pending exclusion, verification join, grace-widened date window as a documented superset, Python precise overlap classification, dedupe, deterministic ranking, offset/limit pagination, `MAX_CANDIDATE_ROWS=500`); 12 new routes (travel-profile CRUD, travel-plan CRUD, `/travel-buddies/discover`, `/travel-buddies/{user_id}`, request send/list/get/accept/reject/cancel) reusing the Phase 6b `require_verified_user` gate unchanged for outward-facing actions; `/social/discovery` reimplemented over `broad_feed()` keeping the `{profiles, message}` contract; in-process 30/hour send rate limit; 94 new tests (88 offline: 79 in four new files + 6 model-contract + 3 SQLite migration; + 6 real-PostgreSQL integration); live E2E 24/24 on `roamlary_dev` + live `alembic upgrade head`; README + this report + `PHASE7_TRAVEL_BUDDIES.md` | *was* uncommitted at the time; owner later authorized → committed as `2b52ec2`, pushed to `origin/backend` |
-| 2026-10-14 | **Phase 8** | Owner assigned Phase 8 (stranger chat, blocking & account security) → focused audit-first (§17.1, Phase 7 verified present as commit `2b52ec2`); 4 new tables (`user_blocks`, `conversations`, `messages`, `auth_sessions`) + `ConversationStatus` enum + `users.token_version` + travel canonical-pair columns/index (migration `7f3a9c1e5b42`, downgrade data-guarded; closes the Phase 7 cross-direction race at the database); pure `canonical_pair` helper + shared `blocked_user_ids` rule; JWT `sid`/`tv` claims with per-request revocation enforcement; every login mints a session row; 16 chat routes (request lifecycle, conversations, paginated history, text-only send, sender-only soft delete) with NO auto-chat from travel partners; 3 block routes on plain auth (safety tool); 5 session routes (list/logout/revoke/revoke-others/revoke-all); blocks integrated into discovery, public profiles, travel send/accept; in-process 30/hour ask + 60/hour message limiters (shared mechanism, documented caveat); 67 new tests (60 offline + 7 real-PostgreSQL); live E2E 29/29 on `roamlary_dev`; README + this report + `PHASE8_CHAT_BLOCKS_SESSIONS.md` | **uncommitted working-tree changes** (owner rule: no commits during the phase) → awaiting owner review |
+| 2026-10-14 | **Phase 8** | Owner assigned Phase 8 (stranger chat, blocking & account security) → focused audit-first (§17.1, Phase 7 verified present as commit `2b52ec2`); 4 new tables (`user_blocks`, `conversations`, `messages`, `auth_sessions`) + `ConversationStatus` enum + `users.token_version` + travel canonical-pair columns/index (migration `7f3a9c1e5b42`, downgrade data-guarded; closes the Phase 7 cross-direction race at the database); pure `canonical_pair` helper + shared `blocked_user_ids` rule; JWT `sid`/`tv` claims with per-request revocation enforcement; every login mints a session row; 16 chat routes (request lifecycle, conversations, paginated history, text-only send, sender-only soft delete) with NO auto-chat from travel partners; 3 block routes on plain auth (safety tool); 5 session routes (list/logout/revoke/revoke-others/revoke-all); blocks integrated into discovery, public profiles, travel send/accept; in-process 30/hour ask + 60/hour message limiters (shared mechanism, documented caveat); 67 new tests (60 offline + 7 real-PostgreSQL); live E2E 29/29 on `roamlary_dev`; README + this report + `PHASE8_CHAT_BLOCKS_SESSIONS.md` | *was* uncommitted at the time; owner later authorized → committed as `a0123dc`, pushed to `origin/backend` |
+| 2026-10-15 | **Phases 9–13 (combined)** | Owner assigned one coordinated implementation (meetups, house parties, report moderation, notifications/trip-sharing/SOS, AI companion) → focused audit-first (§18.1; Phase 8 verified present as commit `a0123dc`, no messaging/event/notification/AI code existed); shared event foundation (`meetups` + `meetup_memberships` + `event_invitations` + `meetup_announcements`), owner-only report moderation with `resolved` state + audit stamps, honest notification service (in-app delivered, external unavailable, idempotent retries), trip shares for accepted partners with server-side expiry/revocation, SOS acknowledge + per-contact attempt tracking, read-time overdue check-ins, mock/unavailable AI provider abstraction; migration `b8e2f4a1c6d9` (downgrade data-guarded); 35 new API paths (84 OpenAPI paths total); 66 new tests (472 passed total: 430 offline + 42 PostgreSQL); live E2E 30/30 on `roamlary_dev`; README + this report + `PHASE9_13_REVIEW.md` | **uncommitted working-tree changes** (owner rule: no commits during the phase) → awaiting owner review |
 
 ## 5. Proposed API contract — only what is IMPLEMENTED is a contract
 
-**Implemented and verified (Phase 1 + Phase 3 + Phase 4 + Phase 5 + Phase 6 + Phase 6 second assignment + Phase 7 + Phase 8):**
+**Implemented and verified (Phases 1 + 3 + 4 + 5 + 6 + 6 second assignment + 7 + 8 + 9–13):**
 
 | Method + Path | Purpose | Auth | Response |
 |---|---|---|---|
@@ -167,6 +169,47 @@ them over HTTP. Each of those belongs to its assigned later phase.
 | `GET /api/v1/chat/conversations/{conversation_id}/messages` | History, stable `(created_at, id)` order (`?offset=`/`?limit=` 1–100) | Bearer JWT + verified while policy requires it | `MessageList` |
 | `POST /api/v1/chat/conversations/{conversation_id}/messages` | Send one text message (1–2000 chars; sender always = caller) | Bearer JWT + verified while policy requires it | `MessageRead` (HTTP 201) |
 | `DELETE /api/v1/chat/messages/{message_id}` | Delete MY message (soft delete; row kept, body hidden) | Bearer JWT | `MessageRead` |
+| `POST /api/v1/meetups` | Host a public meetup (kind always `meetup`) | Bearer JWT + verified while policy requires it | `MeetupRead` (HTTP 201) |
+| `GET /api/v1/meetups` | Discover public upcoming meetups (`?category=`/`?start_from=`/`?start_to=`/`?available_only=`/`?offset=`/`?limit=`) | Bearer JWT + verified while policy requires it | `[MeetupRead]` |
+| `GET /api/v1/meetups/{meetup_id}` | Read one public meetup (404 for private/parties/blocked/outsiders alike) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `PATCH /api/v1/meetups/{meetup_id}` | Host edits (frozen when not active; capacity floor = approved count) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `POST /api/v1/meetups/{meetup_id}/cancel` | Host cancels (terminal; approved members notified in-app) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `POST /api/v1/meetups/{meetup_id}/complete` | Host marks completed (terminal) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `POST /api/v1/meetups/{meetup_id}/join` | Join (`open` → approved at once; `approval` → requested) | Bearer JWT + verified while policy requires it | `MembershipRead` (HTTP 201) |
+| `GET /api/v1/meetups/{meetup_id}/participants` | Guest list (host sees all states; members see approved) | Bearer JWT + verified while policy requires it | `[MembershipRead]` |
+| `POST /api/v1/meetups/{meetup_id}/requests/{user_id}/approve` | Host approves a join request (capacity rechecked under lock) | Bearer JWT + verified while policy requires it | `MembershipRead` |
+| `POST /api/v1/meetups/{meetup_id}/requests/{user_id}/reject` | Host declines a join request | Bearer JWT + verified while policy requires it | `MembershipRead` |
+| `POST /api/v1/meetups/{meetup_id}/leave` | Approved member leaves | Bearer JWT + verified while policy requires it | `MembershipRead` |
+| `DELETE /api/v1/meetups/{meetup_id}/participants/{user_id}` | Host removes a participant | Bearer JWT + verified while policy requires it | `MembershipRead` |
+| `POST /api/v1/meetups/{meetup_id}/announcements` | Host posts a bulletin (no replies by design) | Bearer JWT + verified while policy requires it | `AnnouncementRead` (HTTP 201) |
+| `GET /api/v1/meetups/{meetup_id}/announcements` | Host + approved read bulletins | Bearer JWT + verified while policy requires it | `[AnnouncementRead]` |
+| `POST /api/v1/parties` | Host a private house party (kind + private forced server-side) | Bearer JWT + verified while policy requires it | `MeetupRead` (HTTP 201) |
+| `GET /api/v1/parties/{party_id}` | Read a party I am entitled to (host/approved/pending-invited; venue gated) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `PATCH /api/v1/parties/{party_id}` | Host edits (kind/visibility immutable) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `POST /api/v1/parties/{party_id}/cancel` | Host cancels (terminal; members notified) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `POST /api/v1/parties/{party_id}/complete` | Host marks completed (terminal) | Bearer JWT + verified while policy requires it | `MeetupRead` |
+| `POST /api/v1/parties/{party_id}/invite` | Host invites one eligible user | Bearer JWT + verified while policy requires it | `InvitationRead` (HTTP 201) |
+| `DELETE /api/v1/parties/{party_id}/invite/{invitee_id}` | Host withdraws a pending invitation | Bearer JWT + verified while policy requires it | `InvitationRead` |
+| `GET /api/v1/parties/{party_id}/participants` | Guest list (host sees all; members see approved) | Bearer JWT + verified while policy requires it | `[MembershipRead]` |
+| `POST /api/v1/parties/{party_id}/leave` | Approved participant leaves | Bearer JWT + verified while policy requires it | `MembershipRead` |
+| `GET /api/v1/invitations` | My incoming invitations (`?offset=`/`?limit=`) | Bearer JWT + verified while policy requires it | `InvitationList` |
+| `POST /api/v1/invitations/{invitation_id}/accept` | Invitee accepts (membership approved atomically) | Bearer JWT + verified while policy requires it | `InvitationRead` |
+| `POST /api/v1/invitations/{invitation_id}/decline` | Invitee declines | Bearer JWT + verified while policy requires it | `InvitationRead` |
+| `PATCH /api/v1/reports/{report_id}/moderate` | Owner sets moderation state (`approved`/`rejected`/`resolved`) with audit stamp | Bearer JWT + **owner role** | `ReportRead` |
+| `GET /api/v1/notifications` | My inbox (`?unread_only=`/`?offset=`/`?limit=`) | Bearer JWT | `NotificationList` |
+| `POST /api/v1/notifications/{notification_id}/read` | Mark one of my notifications read | Bearer JWT | `NotificationRead` |
+| `POST /api/v1/notifications/{notification_id}/retry` | Retry a failed/unavailable row in place | Bearer JWT | `NotificationRead` |
+| `POST /api/v1/trip-shares` | Share a trip with accepted partners (expiry ≤90 days) | Bearer JWT | `TripShareRead` (HTTP 201) |
+| `GET /api/v1/trip-shares` | My share grants (live, expired, revoked) | Bearer JWT | `TripShareList` |
+| `GET /api/v1/trip-shares/shared-with-me` | Live shares I may view | Bearer JWT | `TripShareList` |
+| `GET /api/v1/trip-shares/{share_id}` | Shared itinerary (plan facts only; no live location) | Bearer JWT | `SharedItineraryRead` |
+| `DELETE /api/v1/trip-shares/{share_id}` | Owner revokes a share (viewers lose access at once) | Bearer JWT | HTTP 204, no body |
+| `POST /api/v1/sos/{sos_id}/acknowledge` | Owner marks active SOS acknowledged (compare-and-set) | Bearer JWT | `SosEventRead` |
+| `POST /api/v1/sos/{sos_id}/notify-retry` | Re-attempt contact notifications in place (active only) | Bearer JWT | list of notification states |
+| `GET /api/v1/sos/{sos_id}/notifications` | Contact-attempt rows for one OWN incident | Bearer JWT | list of notification states |
+| `GET /api/v1/check-ins/overdue` | My pending check-ins past their deadline (read-time only) | Bearer JWT | `[CheckInRead]` |
+| `GET /api/v1/ai/status` | Provider state (boolean, never keys) | Bearer JWT | `AIStatusResponse` |
+| `POST /api/v1/ai/chat` | Ask the companion (own-trip context only; unavailable by default) | Bearer JWT + verified while policy requires it | `AIChatResponse` |
 
 Phase 4 request/response examples, field rules, status transitions, and
 timestamp policy: **§10.6** (details) and `README.md` (client-facing).
@@ -177,6 +220,10 @@ reports" section. Phase 6 second assignment (verification/social):
 Phase 7 (travel buddies): **§14.6** and the README's "Travel buddies &
 discovery" section. Phase 8 (chat/blocks/sessions): **§17.6** and the
 README's "Stranger chat", "Blocking", and "Session security" sections.
+Phases 9–13 (events/reports/notifications/sharing/SOS/AI): **§18** and
+the README's "Meetups", "House parties", "Report moderation",
+"Notifications", "Trip sharing", "SOS improvements", and "AI travel
+companion" sections.
 Note the SOS and report paths have no trailing slash
 (`/sos`, `/reports`, per their specs) while the Phase 4 collections use
 one (`/check-ins/`); Phase 7 collections follow the Phase 4 style
@@ -273,8 +320,27 @@ fields, `limit` outside 1–100, or `offset` < 0 → **422**; more than 30
 chat asks or 60 messages per user per hour → **429** (in-process
 limiters, same caveat); logging out an already-revoked session → **410**.
 
+Phases 9–13 error behaviour: every new route without a valid bearer
+token → **401**; meetup/party/invitation/AI actions without passing the
+social gate → **403**; events, invitations, shares, or notifications the
+caller is not entitled to → privacy-preserving **404** (private parties
+and venues never leak through ids); duplicate joins/invites (races lose
+at UNIQUE indexes), full events, moves on non-`pending` asks, terminal
+event transitions, capacity-floor violations, or re-deciding terminal
+reports → **409**; self-joins/invites, naive or inverted datetimes, past
+expiry beyond 90 days, overlong/blank bodies, injected
+server-controlled fields, `limit` outside 1–100, or `offset` < 0 →
+**422**; more than 20 event creates, 30 joins, or 20 AI chats per user
+per hour → **429** (in-process limiters, same caveat).
+
 **Proposed for future phases — NOT IMPLEMENTED, do not call these:**
-`POST /ai/companion/messages`.
+group chat, trip events, message search/attachments, SMS/email/push
+delivery, live GPS sharing, background monitoring, offline AI tunnels.
+*(An AI workflow now exists at `/api/v1/ai` — §18 — but it answers from
+the mock provider in tests and reports "unavailable" with no provider
+configured; it never fabricates guidance. An SOS workflow exists at
+`/api/v1/sos` — §11/§18 — but contact notification rows record honest
+`unavailable` outcomes; nothing is dispatched anywhere.)*
 *(A report workflow now exists at `/api/v1/reports` — §12 — but it only
 stores and searches rows; every report is an unverified user submission,
 nothing is moderated, and filing one notifies no one. An SOS workflow
@@ -344,14 +410,30 @@ applied to `roamlary_dev`:
   guard for the new tables; the **downgrade** is data-guarded like
   Phases 4–7 and refuses while any block, conversation, message, or
   session row exists. Full rationale in §17.4.
+- `b8e2f4a1c6d9` — "add meetups, invitations, notifications, trip shares
+  + report/SOS review columns" (Phases 9–12): adds six tables
+  (`meetups` with kind/status/visibility/participation/category/
+  capacity/date CHECKs, `meetup_memberships` with UNIQUE meetup/user
+  pair + status CHECK, `event_invitations` with UNIQUE meetup/invitee
+  pair + status CHECK, `meetup_announcements` host bulletins,
+  `notifications` with UNIQUE idempotency key + status CHECK,
+  `trip_shares` with owner/plan/expiry/revocation), the nullable
+  `community_reports.reviewed_by`/`reviewed_at` moderation-audit
+  columns, a widened report status CHECK (+ `resolved`, applied with
+  the established batch pattern for SQLite), and the nullable
+  `sos_events.acknowledged_at` stamp. The **upgrade** needs no data
+  guard (new tables; widening a CHECK cannot violate existing rows);
+  the **downgrade** is data-guarded like Phases 4–8 and refuses while
+  any row exists in the six new tables or any report carries status
+  `resolved`. Full rationale in §18.4.
 
 | Table | Purpose | Owner / deletion rule |
 |---|---|---|
 | `users` | Account profile (UUID PK, `firebase_uid` nullable+unique, `display_name`, `email` nullable+unique, `password_hash` nullable, `verification_status` ∈ unverified/pending/verified/rejected, `role` ∈ user/owner, `token_version` ∈ integer ≥ 0 for session revocation (Phase 8), timestamps) | — |
 | `trusted_contacts` | Nominated safety contact (`name`, `phone`, `relationship` nullable, `email` nullable) | `users` · `ON DELETE RESTRICT` |
 | `check_ins` | "Ping me by time T" (`status` ∈ pending/safe/needs_help/expired/**cancelled**, `due_at`, `note` nullable, `completed_at`) | `users` · `ON DELETE RESTRICT` |
-| `sos_events` | **Simulated** incident (`status` ∈ active/acknowledged/resolved/false_alarm/**cancelled**, lat/lon, `description` nullable, `location_recorded_at`, `resolved_at`, `cancelled_at`) | `users` · `ON DELETE RESTRICT` |
-| `community_reports` | Crowd-sourced note (`category` ∈ 6-value Phase 6 set, `description`, lat/lon, `status` ∈ pending/approved/rejected) | `users` · `ON DELETE RESTRICT` |
+| `sos_events` | **Simulated** incident (`status` ∈ active/acknowledged/resolved/false_alarm/**cancelled**, lat/lon, `description` nullable, `location_recorded_at`, `resolved_at`, `cancelled_at`, `acknowledged_at` (Phase 12)) | `users` · `ON DELETE RESTRICT` |
+| `community_reports` | Crowd-sourced note (`category` ∈ 6-value Phase 6 set, `description`, lat/lon, `status` ∈ pending/approved/rejected/**resolved** (Phase 11), `reviewed_by`/`reviewed_at` moderation audit (Phase 11)) | `users` (submitter + reviewer) · `ON DELETE RESTRICT` |
 | `identity_verifications` | One row per verification **request** (`status` ∈ pending/approved/rejected, `applicant_note` nullable, `review_note` nullable, `reviewed_at`/`reviewed_by` nullable) — history, never edited by clients | `users` (applicant + reviewer) · `ON DELETE RESTRICT` |
 | `app_settings` | Runtime configuration (currently the single key `social_requires_verification`; unique index on `key`) | `users` (`updated_by` nullable) · `ON DELETE RESTRICT` |
 | `setting_changes` | Append-only audit of policy changes (`setting_key`, `old_value` nullable, `new_value`, `changed_by`) | `users` · `ON DELETE RESTRICT` |
@@ -362,6 +444,12 @@ applied to `roamlary_dev`:
 | `conversations` | One messaging relationship per unordered pair (Phase 8): `status` ∈ pending/accepted/rejected/cancelled, `requested_by` (current asker), `responded_at` nullable; CHECK no self-conversation + status set; UNIQUE (low, high) canonical pair | `users` (low + high + requester) · `ON DELETE RESTRICT` |
 | `messages` | One text message (Phase 8): `body` text, `is_deleted` + `deleted_at` (soft delete; rows never removed) | `conversations` + `users` (sender) · `ON DELETE RESTRICT` |
 | `auth_sessions` | One login session per login (Phase 8): optional `label`, `revoked_at` NULL = active | `users` · `ON DELETE RESTRICT` |
+| `meetups` | One group activity or house party (Phases 9–10, shared foundation): `kind` ∈ meetup/house_party, `status` ∈ active/cancelled/completed, `visibility` ∈ public/private, `participation` ∈ open/approval, closed `category` set, `capacity` (CHECK 2–500), `start_at`/`end_at` (CHECK end > start), public `location_text` + host/approved-only `venue_details` | `users` (host) · `ON DELETE RESTRICT` |
+| `meetup_memberships` | One user's state in one event (Phases 9–10): `status` ∈ requested/approved/declined/removed/left, `decided_at`/`decided_by` audit; UNIQUE (meetup, user) | `meetups` + `users` · `ON DELETE RESTRICT` |
+| `event_invitations` | One host invitation of one user to one private event (Phase 10): `status` ∈ pending/accepted/declined/revoked/expired; UNIQUE (meetup, invitee) | `meetups` + `users` (inviter + invitee) · `ON DELETE RESTRICT` |
+| `meetup_announcements` | One host bulletin for one event (Phases 9–10; no replies by design) | `meetups` + `users` (author) · `ON DELETE RESTRICT` |
+| `notifications` | One notification attempt for one user (Phase 12): `kind`, `channel` (only `in_app` delivers), honest `status` ∈ queued/attempted/delivered/failed/unavailable/unknown, `attempts`, `last_error`, UNIQUE `idempotency_key` | `users` · `ON DELETE RESTRICT` |
+| `trip_shares` | One trip-sharing grant (Phase 12): optional `plan_id`, `expires_at` (≤90 days), `revoked_at` NULL = live | `users` (owner) + `travel_plans` (optional) · `ON DELETE RESTRICT` |
 
 All Phase 4 and Phase 5 schema changes were additive and nullable — no
 existing row was altered or dropped (verified by downgrade→re-upgrade on
@@ -3035,41 +3123,50 @@ carries the Phase 7 change set as 13 modified + 14 untracked files
 
 ## 15. Known limitations (current)
 
-- Served endpoints: health, register/login, `GET/PATCH /users/me`, the five
-  **trusted-contact** routes, the five **check-in** routes (Phase 4, §10),
-  the five **SOS** routes (Phase 5, §11), the four **community-report**
-  routes (Phase 6, §12: create, list, nearby, get-by-id), the seven
-  **identity-verification/social** routes (Phase 6 second assignment, §13:
-  status, submit, owner queue list/approve/reject, owner policy read/patch,
-  social discovery), and the seventeen **travel-buddy** routes (Phase 7,
-  §14: travel-profile CRUD, travel-plan CRUD, discover, public profile,
-  request send/list/get/accept/reject/cancel — `/social/discovery` is now
-  the real broad feed), and the twenty-four **chat/block/session**
-  routes (Phase 8, §17: message-request send/list/get/accept/reject/
-  cancel, conversation list/get, message history/send/soft-delete,
-  block/unblock/list, session list/logout/revoke/revoke-others/
-  revoke-all). Nothing else exposes the database over HTTP.
+- Served endpoints: health, register/login, session list/logout/revoke/
+  revoke-others/revoke-all (Phase 8), `GET/PATCH /users/me`, the five
+  **trusted-contact** routes, the five **check-in** routes plus overdue
+  listing (Phases 4 + 12, §10/§18), the eight **SOS** routes (Phases 5 +
+  12, §11/§18: activate, list, get, cancel, resolve, acknowledge,
+  notify-retry, notifications), the five **community-report** routes
+  (Phases 6 + 11, §12/§18: create, list, nearby, get-by-id, owner
+  moderate), the seven **identity-verification/social** routes (Phase 6
+  second assignment, §13: status, submit, owner queue list/approve/
+  reject, owner policy read/patch, social discovery), the seventeen
+  **travel-buddy** routes (Phase 7, §14), the twenty-four
+  **chat/block/session** routes (Phase 8, §17), the fourteen **meetup**
+  routes + nine **house-party** routes + three **invitation** routes
+  (Phases 9–10, §18), the three **notification** routes, five
+  **trip-share** routes (Phase 12, §18), and the two **AI companion**
+  routes (Phase 13, §18). Nothing else exposes the database over HTTP.
 - Authentication is a **local prototype**: Argon2id password hashing + HS256
   JWTs. No refresh tokens, password reset, email verification, rate limiting,
   or account recovery yet — all belong to later phases.
 - Phase 4 stores contact/check-in data **only**: no notifications, no contact
-  verification, no overdue-check-in handling — those belong to later
-  phases. Saving a contact never messages anyone, and an overdue check-in
-  changes nothing.
+  verification — those belong to later phases. Saving a contact never
+  messages anyone. Overdue check-ins change nothing by themselves; since
+  Phase 12 they are surfaced read-only via `GET /check-ins/overdue` (no
+  background job, no alerts — §18).
 - Phase 5 records SOS incidents **only**: activating one writes a row and
   never contacts emergency services, trusted contacts, or nearby users.
-  `acknowledged`/`false_alarm` exist in the schema but are unreachable (no
-  responder system); SOS activation has no rate limiting yet; there is no
+  `false_alarm` exists in the schema but is unreachable (no responder
+  system); `acknowledged` is reachable since Phase 12 (owner-recorded
+  handling, §18); SOS activation has no rate limiting yet; there is no
   emergency UI (Phase 10).
-- Phase 6 stores and searches reports **only**: every report is an
-  **unverified user submission** (always `pending` — no moderation/roles
-  exist, so `approved`/`rejected` are unreachable via the API), filing one
-  notifies no one, submitter identity is never exposed, reports have no
-  owner edit/delete actions, and the nearby search is an O(n) SQL haversine
+  *(Amended by Phase 12 (§18): activating an SOS additionally records
+  one honest per-contact notification attempt row (`unavailable` until a
+  provider exists) — still no dispatch, no messages sent.)*
+- Phase 6 stores and searches reports: new reports arrive as **unverified
+  user submissions** (`pending`); since Phase 11 an owner may moderate
+  them (`approved`/`rejected`/`resolved`, §18), filing one notifies no
+  one, submitter identity is never exposed, reports have no owner
+  edit/delete actions, and the nearby search is an O(n) SQL haversine
   (no index/PostGIS, radius ≤ 50 km, <1% error at city scale).
   *(Amended by Phase 6 second assignment (§13): `users.role`/verification
-  now exist, but report moderation is still untouched — `community_reports`
-  status remains `pending`-only, as scoped.)*
+  now exist; amended by Phase 11 (§18): owner-only moderation with
+  `resolved` state and review audit stamps now exists — reports still
+  have no owner edit/delete actions, and ordinary users still cannot set
+  any status.)*
 - Phase 6 second assignment (§13) verification is **manual review only**:
   no Aadhaar/ID documents or any sensitive identity data are accepted,
   stored, logged, or displayed anywhere; no real identity-provider
@@ -3085,10 +3182,11 @@ carries the Phase 7 change set as 13 modified + 14 untracked files
   feed, on the same unchanged dependency); account/safety workflows
   (trusted contacts, check-ins, SOS, profile) stay reachable while
   unverified, by design.
-- The identity-verification feature has **no client UI** yet (Phase 9) and
+- The identity-verification feature has **no client UI** yet (Phase 14) and
   no email/verification notifications (none are claimed to work).
 - Pagination exists on the report endpoints, on the Phase 7 discovery/
-  request-list endpoints, and on the Phase 8 conversation/history lists
+  request-list endpoints, on the Phase 8 conversation/history lists, and
+  on the Phases 9–13 meetup/invitation/notification/share lists
   (offset/limit, 1–100); contact/check-in/SOS lists and the travel-plan
   list remain unbounded arrays (fine at prototype scale, revisit before
   real traffic). Discovery additionally caps its SQL prefilter at 500
@@ -3108,28 +3206,34 @@ carries the Phase 7 change set as 13 modified + 14 untracked files
   limiters are in-process like all prior limiters; the cross-direction
   travel race is fixed at the database (§17.8); chat carries no safety
   fields and makes no safety claims.
-- AI and notifications remain unimplemented entirely.
+- AI and notifications as external delivery remain unimplemented: the
+  notification system tracks honest states (in-app `delivered`, external
+  `unavailable`) but sends nothing externally (§18); the AI companion
+  answers from the mock provider in tests and reports "unavailable" with
+  no provider configured, never fabricating content (§18).
 - Dev-grade CORS and configuration only; no HTTPS.
 - Runs only on this laptop, local machine, port 8000.
 - The `backend` branch is pushed to GitHub (`origin/backend`) through
-  **Phase 7**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
+  **Phase 8**: Phases 1–3 + audit as `5ea9b59`/`eb8e709`/`3d728ac`/
   `f26536e`, Phases 4 + 5 as `f602505`, Phase 6 as `9029047`, Phase 6
-  second assignment as `30977c0`, and **Phase 7 committed and pushed
-  (owner-authorized) as `2b52ec2`** (see `git log`, HEAD =
-  `origin/backend`). The working tree now carries the **uncommitted
-  Phase 8 change set** (owner rule: no commits during a phase); every
+  second assignment as `30977c0`, Phase 7 as `2b52ec2`, and **Phase 8
+  committed and pushed (owner-authorized) as `a0123dc`** (see `git log`,
+  HEAD = `origin/backend`). The working tree now carries the
+  **uncommitted Phases 9–13 change set** (owner rule: no commits during
+  a phase); every
   push of this branch contains the full tree (`backend/`, `frontend/`,
   `.gitignore`, and — since the owner's decision of 2026-10-12 —
   `docs/README.md`, so the `docs/` folder now exists on GitHub). GitHub's
   **`main` branch was fast-forwarded to this branch** the same day (owner
-  decision, §16), so the GitHub homepage shows Phases 1–7 as
+  decision, §16), so the GitHub homepage shows Phases 1–8 as
   committed so far.
 - Database lives in a Docker container; if that container's volume is removed,
   recreate the schema with `alembic upgrade head`.
 - Frontend cannot integrate beyond the health + auth + Phase 4 + Phase 5
-  contract until Phase 9 (the Phase 6 report contract, the Phase 6
-  second assignment verification/social contract, and the Phase 7
-  travel-buddy contract are committed; the Phase 8 chat/block/session
+  contract until Phase 14 (the Phase 6 report contract, the Phase 6
+  second assignment verification/social contract, the Phase 7
+  travel-buddy contract, and the Phase 8 chat/block/session contract are
+  committed; the Phases 9–13 event/report/notification/share/SOS/AI
   contract is implemented and verified but still uncommitted, §16).
 
 ## 16. Pending tasks and next steps
@@ -3199,13 +3303,13 @@ carries the Phase 7 change set as 13 modified + 14 untracked files
 
    (`backend/app/services/` is the untracked directory containing
    `__init__.py` and `discovery.py`. `frontend/` has **zero** changes.)
-8. ⏳ **Awaiting owner review (2026-10-14):** Phase 8 (§17 +
-   `PHASE8_CHAT_BLOCKS_SESSIONS.md` + test results: **406 passed, 0
-   skipped** — 369 offline + 37 real-PostgreSQL; live E2E 29/29 on
-   `roamlary_dev`) is ready for review; the change set stays
-   **uncommitted** until the owner approves (owner rule: no commits
-   during a phase). Exact `git status --short` output (branch
-   `backend`, HEAD `2b52ec2` = `origin/backend`):
+8. ✅ **Settled (2026-10-14, after this report's earlier draft):** Phase 8
+   (§17 + `PHASE8_CHAT_BLOCKS_SESSIONS.md`, **406 passed** — 369 offline
+   + 37 real-PostgreSQL; live E2E 29/29) was reviewed by the owner and
+   **committed and pushed to `origin/backend` as `a0123dc`** (34 files,
+   `git log` verifies) — the phase-8-era note that called it
+   "uncommitted" (with the `git status` listing below) predates that
+   commit and is preserved as the phase record.
 
    ```text
    M backend/README.md
@@ -3247,16 +3351,77 @@ carries the Phase 7 change set as 13 modified + 14 untracked files
 
    (19 modified + 15 untracked files, all under `backend/`.
    `frontend/` has **zero** changes.)
-9. After the Phase 8 review: owner decides whether Phase 8 is committed/
-   pushed (and whether `main` is fast-forwarded again). No commit or push
-   happens without that explicit instruction.
-10. Owner assigns the next phase (per the roadmap: Phase 9,
+9. ⏳ **Awaiting owner review (2026-10-15):** Phases 9–13 (§18 +
+   `PHASE9_13_REVIEW.md` + test results: **472 passed, 0 skipped** —
+   430 offline + 42 real-PostgreSQL; live E2E 30/30 on `roamlary_dev`)
+   is ready for review; the change set stays **uncommitted** until the
+   owner approves (owner rule: no commits during a phase). Exact
+   `git status --short` output (branch `backend`, HEAD `a0123dc` =
+   `origin/backend`):
+
+   ```text
+   M backend/.env.example
+   M backend/README.md
+   M backend/app/api/v1/endpoints/check_ins.py
+   M backend/app/api/v1/endpoints/community_reports.py
+   M backend/app/api/v1/endpoints/sos_events.py
+   M backend/app/api/v1/router.py
+   M backend/app/api/v1/schemas/community_report.py
+   M backend/app/api/v1/schemas/sos_event.py
+   M backend/app/core/config.py
+   M backend/app/models/__init__.py
+   M backend/app/models/community_report.py
+   M backend/app/models/enums.py
+   M backend/app/models/sos_event.py
+   M backend/app/models/user.py
+   M backend/report.md
+   M backend/tests/conftest.py
+   M backend/tests/test_check_ins.py
+   M backend/tests/test_migrations.py
+   M backend/tests/test_models.py
+   M backend/tests/test_postgres_integration.py
+   M backend/tests/test_reports.py
+   M backend/tests/test_sos_events.py
+   ?? backend/PHASE9_13_REVIEW.md
+   ?? backend/alembic/versions/b8e2f4a1c6d9_add_meetups_notifications_shares_moderation.py
+   ?? backend/app/api/v1/endpoints/ai.py
+   ?? backend/app/api/v1/endpoints/meetups.py
+   ?? backend/app/api/v1/endpoints/notifications.py
+   ?? backend/app/api/v1/endpoints/parties.py
+   ?? backend/app/api/v1/endpoints/trip_shares.py
+   ?? backend/app/api/v1/schemas/ai.py
+   ?? backend/app/api/v1/schemas/meetup.py
+   ?? backend/app/api/v1/schemas/sharing.py
+   ?? backend/app/models/event_invitation.py
+   ?? backend/app/models/meetup.py
+   ?? backend/app/models/meetup_announcement.py
+   ?? backend/app/models/meetup_membership.py
+   ?? backend/app/models/notification.py
+   ?? backend/app/models/trip_share.py
+   ?? backend/app/services/ai_provider.py
+   ?? backend/app/services/events.py
+   ?? backend/app/services/notifications.py
+   ?? backend/tests/test_ai.py
+   ?? backend/tests/test_meetups.py
+   ?? backend/tests/test_moderation.py
+   ?? backend/tests/test_notifications.py
+   ?? backend/tests/test_parties.py
+   ```
+
+   (22 modified + 24 untracked files, all under `backend/`.
+   `frontend/` has **zero** changes.)
+10. After the Phases 9–13 review: owner decides whether the change set is
+    committed/pushed (and whether `main` is fast-forwarded again). No
+    commit or push happens without that explicit instruction.
+11. Owner assigns the next phase (per the roadmap: Phase 14,
     Flutter integration & API contract alignment — needs the frontend
     report from Laptop 2).
-11. Frontend `report.md` from Laptop 2 → enables Phase 9 contract-alignment
-    planning and the `docs/merge-report.md` integration document.
-12. Laptop 3 to publish the AI contract before any AI-companion work can be
-    real (stub until then).
+12. Frontend `report.md` from Laptop 2 → enables Phase 14
+    contract-alignment planning and the `docs/merge-report.md`
+    integration document.
+13. Laptop 3 to publish the AI contract before any real AI-provider work
+    can replace the mock/unavailable answers (configured explicitly,
+    never silently).
 
 ## 17. Phase 8 record — Stranger chat, blocking & account security
 
@@ -3594,6 +3759,335 @@ the owner's standing rule there are **no commits and no pushes** from
 this phase — the working tree carries the Phase 8 change set as 19
 modified + 15 untracked files (§16.8 lists them exactly). Awaiting owner
 review; `main` untouched.
+
+---
+
+## 18. Phases 9–13 record — Meetups, house parties, moderation, notifications, sharing, SOS & AI
+
+### 18.1 Focused audit (recorded BEFORE any code, 2026-10-15)
+
+**Starting state (verified by command):** branch `backend`, HEAD
+**`a0123dc`** = `origin/backend`, clean tree, no stash. Phase 8 is
+committed (the brief's "uncommitted work" caution does not apply —
+verified, not assumed); all Phase 8 files, migration `7f3a9c1e5b42`,
+and routes exist in the tree. `roamlary_dev` at migration head
+`7f3a9c1e5b42` (single linear chain of 8 migrations).
+
+**Confirmed repository facts:**
+
+1. **No meetup/event/party/invitation/notification/share/AI structures
+   exist.** The audit grep finds only unrelated word matches
+   ("party" inside `expected_party`/`counterpart` identifiers,
+   "event" inside generic prose). All five phases are greenfield on
+   existing conventions.
+2. **Reusable systems confirmed:** `require_verified_user` (live
+   fail-closed policy — reused unchanged for all outward-facing event
+   and AI actions); `require_owner` (reused for report moderation);
+   the travel/chat request lifecycle pattern (pre-check + UNIQUE index
+   + terminal states + identical 404s — reused for memberships and
+   invitations); the in-process `check_rate_limit` (reused for event
+   creates/joins/AI chats — no shared store exists, so no new
+   infrastructure per the brief); RESTRICT FKs + named CHECKs +
+   `extra="forbid"` schemas + UTC serializers + offset/limit
+   pagination (all reused).
+3. **Genuine Phase 11 gap confirmed:** reports have NO moderation
+   endpoint (`approved`/`rejected` unreachable, §12/§15) — the one
+   Phase 6 system that needs extending rather than rebuilding.
+4. **Genuine Phase 12 gaps confirmed:** no notification records or
+   provider surface; no trip-sharing grants; SOS has no acknowledgement
+   or observable contact attempts (`acknowledged` unreachable);
+   check-in overdue handling is read-never (no overdue listing).
+5. **Genuine Phase 13 gap confirmed:** no AI code, config, or provider
+   dependency anywhere (only `JWT_SECRET_KEY`/`ACCESS_TOKEN_EXPIRE_*`
+   in config) — a provider abstraction with an honest unavailable
+   default is required, not a real provider integration.
+6. **Conventions confirmed:** `api_client` + `register_user` helpers,
+   real-`set_policy` flips, direct-DB shortcuts, subprocess Alembic
+   tests with `EXPECTED_TABLES` + data-guard assertions ("Refusing to
+   downgrade" / "data-handling decision"), per-phase raw-insert helpers
+   in `conftest.py`, route prefixes with literal-before-parameter
+   ordering, `IntegrityError → 409`, batch_alter_table for SQLite
+   constraint changes (Phase 4 pattern — required for the report CHECK
+   widening).
+
+**Implementation checklist (written from the audit, then executed in
+order 9 → 10 → 11 → 12 → 13):** enums + 6 models + report/SOS column
+changes → migration `b8e2f4a1c6d9` → notification + AI services →
+meetup/party endpoints on shared helpers → moderation endpoint →
+notification/share endpoints → SOS acknowledge/retry/attempts +
+overdue check-ins → AI endpoints → router → tests alongside (new
+files first, affected suites next) → consolidated suite + PG suite +
+live smoke → docs LAST (this record, README, review doc).
+
+### 18.2 Architecture & design decisions
+
+1. **One event table for Phases 9–10** (`meetups` + `kind`): the brief
+   forbids a second incompatible event system, so meetups and house
+   parties share the table, lifecycle, memberships, and announcements —
+   only the access rules fork (public discovery + joins vs
+   invitation-only + venue gating). `services/events.py` holds the
+   shared rules (visibility, venue, serialization, capacity/ended
+   guards) so the two endpoint modules cannot drift apart.
+2. **No group chat, ever:** announcements are host-posted one-way
+   bulletins with no replies; Phase 8 chat stays 1:1. "Event-specific
+   communication" is satisfied without creating the unrestricted group
+   chat the brief bans as a shortcut.
+3. **Venue privacy by construction:** the serializer takes an explicit
+   flag — `venue_details` is populated ONLY for host + approved
+   participants of private events; every other path (discovery, lists,
+   pending-invitee reads, public meetups) yields None. There is no code
+   path that serves the raw row.
+4. **Travel partners do not auto-anything:** accepting a travel request
+   opens no chat (Phase 8 rule, kept); trip-share viewers are accepted
+   partners resolved LIVE at read time (a later partnership sees the
+   share — the set only grows since accepted is terminal).
+5. **Honest delivery vocabulary:** `delivered` means visible in-app (the
+   only channel); `unavailable` means no provider (nothing sent);
+   `unknown` means handed off without receipt. Provider acceptance is
+   never reported as delivery. Retries update the SAME row (UNIQUE
+   idempotency key) — repeats can never duplicate alerts.
+6. **SOS persistence never waits for notifications:** attempts are
+   recorded AFTER the incident commits; retry/acknowledge use the
+   established compare-and-set pattern; acknowledged still
+   resolves/cancels (cancel/resolve guards widened from active-only).
+7. **AI data minimization:** context is the caller's OWN plan + own
+   interests only (foreign plans 404); no other users, messages, SOS,
+   contacts, or locations enter. Unavailable-by-default with a stable
+   200 contract; mock provider for tests (no network, no cost); keys
+   server-side only; every answer carries uncertainty + emergency
+   footers with NO fabricated numbers.
+8. **Same gate matrix as Phases 7–8:** plain login for own-data
+   management (membership lists I belong to, my invitations, my inbox,
+   my shares, AI status); the unchanged social gate for creating,
+   joining, inviting, messaging-adjacent actions, and AI chat;
+   owner-only moderation. No verification-policy change of any kind.
+9. **One migration for Phases 9–12** (`b8e2f4a1c6d9`): six tables +
+   review/acknowledgement columns + CHECK widening (additive-safe
+   upgrade; data-guarded downgrade). AI needs no schema.
+
+### 18.3 Changed and newly created files
+
+**Created (code):** `app/models/meetup.py`, `meetup_membership.py`,
+`event_invitation.py`, `meetup_announcement.py`, `notification.py`,
+`trip_share.py`; `app/services/events.py`, `services/notifications.py`,
+`services/ai_provider.py`; `app/api/v1/schemas/meetup.py`,
+`schemas/sharing.py`, `schemas/ai.py`; `app/api/v1/endpoints/meetups.py`,
+`endpoints/parties.py` (+ `invitations_router`), `endpoints/
+notifications.py`, `endpoints/trip_shares.py`, `endpoints/ai.py`;
+`alembic/versions/b8e2f4a1c6d9_add_meetups_notifications_shares_moderation.py`.
+**Created (tests):** `test_meetups.py` (17), `test_parties.py` (13),
+`test_moderation.py` (8), `test_notifications.py` (7), `test_ai.py` (6).
+**Created (docs):** `PHASE9_13_REVIEW.md`.
+**Modified:** `enums.py` (+8 enums incl. `resolved` report state),
+`community_report.py` (audit columns + widened CHECK +
+`foreign_keys` disambiguation), `sos_event.py` (`acknowledged_at`),
+`user.py` (same disambiguation), `models/__init__.py`, `config.py`
+(AI settings, neutral defaults) + `.env.example`, `router.py` (+6
+routers), `community_reports.py` (+moderate, `resolved` filter),
+`sos_events.py` (+acknowledge/retry/attempts-listing, widened close
+guards), `check_ins.py` (+overdue), `schemas/community_report.py`
+(`reviewed_at` read, `ReportModerate`), `schemas/sos_event.py`
+(`acknowledged_at` read); `conftest.py` (`insert_raw_phase912_rows`);
+`test_models.py` (+6 → 34), `test_migrations.py` (+3 → 23),
+`test_postgres_integration.py` (+5 → 42), `test_check_ins.py` (+1
+overdue), `test_reports.py` + `test_sos_events.py` (pinned response
+shapes extended with the additive fields); `README.md`, this report.
+`deps.py`, auth, verification policy, health contract, and `frontend/`
+were **not** changed in behavior.
+
+### 18.4 Database tables, constraints, indexes, migration
+
+Migration `b8e2f4a1c6d9` (head = `b8e2f4a1c6d9`, chain still single and
+linear, applied to `roamlary_dev`). Additive-only plus two nullable
+audit columns and one CHECK widening; no existing row altered/dropped.
+Full DDL in §6. Downgrade counts the six new tables plus `resolved`
+reports FIRST and refuses ("Refusing to downgrade … a deliberate
+data-handling decision") before touching the schema — proven on
+SQLite, PostgreSQL, and live. Model-vs-migration index names verified
+equal by command (21 tables total).
+
+### 18.5 Meetup lifecycle, invitation lifecycle, authorization
+
+Meetup: host creates (public, active) → discovery (upcoming only) →
+join (open→approved / approval→requested) → host approves/rejects →
+participate → leave / host-removes / host cancels|completes (terminal,
+members notified). Capacity enforced at join AND approve (row lock on
+PG) + UNIQUE pair (races lose at the DB) + floor on edit.
+Invitation: host invites eligible user → pending → invitee
+accepts (membership approved atomically, capacity rechecked) /
+declines; host revokes pending; re-invite reopens the same row; only
+pending rows answer (no replay). Ended/cancelled/completed freeze
+everything (409); blocks collapse to 404 on invite/discovery and 409
+on accept; private reads 404 for outsiders (no id enumeration);
+meetup↔party id spaces never cross (kind-filtered 404s both ways).
+
+### 18.6 Community-report moderation and location privacy
+
+Owner-only `PATCH /reports/{id}/moderate` (`approved`/`rejected`/
+`resolved`): pending→approved|rejected, approved→resolved|rejected,
+rejected/resolved terminal; every decision stamps reviewer + server
+clock (reviewer id stays server-side). Ordinary users cannot set any
+status on any report. Responses stay identity-free (`user_id` never
+added; `reviewed_at` added for auditability); `?status=` gains
+`resolved`; `rejected` stays hidden from lists/reads/nearby. Location
+handling unchanged (exact coordinates as submitted, haversine search,
+NULL-coordinate exclusion) — moderation adds no new location exposure.
+
+### 18.7 Notification, trip-sharing, SOS lifecycle and delivery limits
+
+- **Notifications:** events record rows with UNIQUE idempotency keys
+  (SOS per-contact, invites, decisions, cancellations); inbox lists/
+  reads/retries are owner-scoped with identical 404s; retries update in
+  place (attempts+1) and refuse non-retryable states (409). In-app
+  rows are `delivered`; external channels are `unavailable` with the
+  reason — nothing external is ever sent or claimed sent.
+- **Trip sharing:** owner opens bounded grants (own plans only, future
+  expiry ≤90 days); viewers are accepted partners resolved live;
+  itinerary is plan facts only (no GPS — none exists); expiry and
+  revocation enforced server-side at every read (gone reads as 404).
+- **SOS:** activate (unchanged contract + honest per-contact attempt
+  rows, persistence never gated) → acknowledge (compare-and-set,
+  server clock) → resolve/cancel (guards widened to include
+  acknowledged; repeats stay 409) → notify-retry (active only,
+  in-place) with observable attempts listing. No dispatch, no
+  responder identities invented.
+- **Check-ins:** overdue listing is read-time evaluation (pending +
+  past-due, oldest first); no auto-transitions, no alerts, no
+  background claims.
+
+### 18.8 AI provider architecture, data handling, failure behavior
+
+`AIProvider` 3-method surface (`name`/`configured`/`answer`);
+`UnavailableProvider` default (explicit unavailable answer,
+verified=false, empty sources); `MockProvider` for tests
+(deterministic, no network/cost); `select_provider()` maps
+`AI_PROVIDER` centrally (`mock` → mock, anything else → unavailable —
+a real provider plugs in here behind `AI_PROVIDER`/`AI_API_KEY`
+without touching callers). Request validation (1–2000 chars, own-plan
+context only, 20/hour/user); provider faults → honest 503 (never a
+crash, never a fabricated fallback); keys never in responses/logs/
+repo; uncertainty + number-free emergency footers in EVERY answer; no
+safety verdicts about people/places/events, ever.
+
+### 18.9 Security, privacy, validation, rate limiting, access control
+
+- Social gate unchanged on all outward actions (meetup/party/invite/
+  AI); plain login for own-data reads and safety-adjacent lists;
+  owner-only moderation; host-only management with wrong-party 404s.
+- Blocks enforced on discovery, reads, invites, joins, and accepts via
+  the shared Phase 8 rule object (no drift).
+- Exact venue only for host + approved of private events (serializer
+  flag; no raw-row path); guest lists carry display names only;
+  reports stay identity-free; AI context is own-data only.
+- Strict schemas (`extra="forbid"`) everywhere incl. blank-title
+  rejection (Pydantic after-validators don't re-validate — the bug
+  found and fixed mid-phase); naive/inverted datetimes 422; capacity
+  floor 409; terminal locks 409; rate limits 20/hr creates, 30/hr
+  joins, 20/hr AI chats (shared in-process mechanism, documented
+  caveat); UNIQUE indexes as race-proof backstops (memberships,
+  invitations, notification keys) + PG row locks for capacity.
+
+### 18.10 Tests added, commands, actual results (nothing fabricated)
+
+**66 new tests** (61 offline + 5 real-PostgreSQL), totals now **472**:
+
+| Suite | Before | After | What was added |
+|---|---|---|---|
+| `tests/test_meetups.py` (new) | — | 17 | create/read/validation/gates, discovery filters + party exclusion, open/approval joins, capacity 409, DB race proof, host-only powers, leave/rejoin/remove, cancel freeze + notify, capacity floor, bulletins tiers, blocked-host exclusion, create 429 |
+| `tests/test_parties.py` (new) | — | 13 | forced-private + invisibility, immutability, outsider 404s, invite→accept with venue gating, recipient validation, duplicate 409 + DB race proof, decline→reinvite same row, revoke, full-party 409-keeps-pending, blocked 404, cancelled freeze, invitee-only answers |
+| `tests/test_moderation.py` (new) | — | 8 | moderation lifecycle + audit stamps + identity-free, owner gate, rejected hidden, resolved filter, SOS acknowledge lifecycle, honest contact attempts, idempotent retry, SOS privacy |
+| `tests/test_notifications.py` (new) | — | 7 | empty inbox + gates, read/retry states, cross-user 404s, share lifecycle, expiry/plan validation, partner-visible share, stranger/expiry/revoke exclusion |
+| `tests/test_ai.py` (new) | — | 6 | unavailable-by-default + footers, mock-with-context, foreign-plan 404, validation/gates, policy-ON 403, rate-limit 429 |
+| `tests/test_check_ins.py` | 21 | 22 | overdue read-time listing (backdated fixture) |
+| `tests/test_models.py` | 28 | 34 | EXPECTED_TABLES +6; event FK/CHECK/UNIQUE metadata; enum contracts |
+| `tests/test_migrations.py` | 20 | 23 | EXPECTED_TABLES +6; upgrade/guard/roundtrip for the new revision |
+| `tests/test_postgres_integration.py` | 37 | 42 | membership/invitation/idempotency UNIQUEs, resolved CHECK, PG guard + roundtrip |
+| `tests/test_reports.py`, `test_sos_events.py` | 28, 24 | 28, 24 | pinned response shapes extended with additive fields (no new tests) |
+
+Actual results (2026-10-15, real output):
+
+```text
+ruff format: 107 files left unchanged          ruff check: All checks passed!
+pytest tests -q --ignore=tests\test_postgres_integration.py
+→ 430 passed in 163.81s                       (Phase 8 baseline 369 → +61)
+pytest tests\test_postgres_integration.py -q
+→ 42 passed in 123.88s                        (baseline 37 → +5)
+```
+
+Failures found and fixed honestly mid-phase (never skipped, none
+weakened): relationship ambiguity from the new `reviewed_by` FK (fixed
+with `foreign_keys` both sides); blank-title NULL slip-through
+(Pydantic after-validators aren't re-validated — dedicated rejecting
+validators); `TrustedContact.owner_id` misname (column is `user_id`);
+90-day boundary epsilon (timedelta compare, not `.days`); `NotificationRead`
+missing `from_attributes`; SQLite FK-constraint limitation (all report
+changes inside one batch block); old head-pinning tests repointed to
+the new head (established convention); PG-vs-SQLite downgrade
+transactional difference documented in-test. Pre-existing
+Starlette-422-deprecation warnings only.
+
+### 18.11 Live verification on `roamlary_dev` (real output, 2026-10-15)
+
+`alembic upgrade head` → `Running upgrade 7f3a9c1e5b42 -> b8e2f4a1c6d9`;
+`alembic current` → `b8e2f4a1c6d9 (head)`. Server restarted (old Phase 8
+process killed after a nested-quoting misfire left it bound; new
+Phases 9–13 uvicorn serving); `/api/v1/health` byte-identical;
+OpenAPI census **84 paths** (+35). A 30-check live script (two
+throwaway accounts, owner CLI, policy toggles) passed **30/30**:
+health · make-owner · policy OFF · meetup 201 → discovered → join
+requested → approved → bulletin posted/read · party forced private →
+absent from discovery → invite 201 → venue hidden pre-accept → accept
+→ venue visible · report filed → approved w/ audit stamp → resolved ·
+contact saved → SOS 201 → attempt `unavailable` → acknowledged →
+inbox lists it · share created · check-in created → overdue empty ·
+AI status unconfigured → unavailable answer (no fabrication) · policy
+ON. Two script-side bugs fixed during the run (90-day test date past
+the window — correct 422; cleanup missing `trusted_contacts`).
+Cleanup removed every `live-*` row (verified: 0 remain,
+`user@example.com` sole dev user, 0 rows in all 16 feature tables,
+policy ended `requires_verification=true`). Static UI at :3000 serves
+200 (frontend untouched).
+
+### 18.12 Known limitations, incomplete features, external dependencies
+
+- No group chat, trip events, message search/attachments (text + host
+  bulletins only); no SMS/email/push delivery (honest `unavailable`);
+  no live GPS (shares carry plan facts + check-in states); no
+  background jobs of any kind (expiry/overdue are read-time); no
+  moderation appeals (terminal states lock; new reports correct
+  mistakes); in-process limiters keep all prior caveats; AI has no
+  real provider (mock/unavailable only — needs `AI_PROVIDER` +
+  `AI_API_KEY` plus a provider implementation behind `select_provider`);
+  no client UI for any new route (Phase 14); capacity race protection
+  is a PG row lock + UNIQUE indexes (SQLite is single-writer).
+- External dependencies added: **none** (no new packages, no new
+  services, no provider accounts).
+
+### 18.13 Compatibility & regression review (Phases 0–8)
+
+Full offline suite (430) + PG suite (42) green with zero skips: SOS
+create/cancel/resolve contracts intact (shapes extended additively);
+report list/nearby/get intact (`resolved` opt-in filter added);
+check-in lifecycle intact (+overdue route declared before `/{id}` so
+no shadowing); auth/verification gates intact (one Phase 3-era test
+teardown already accounts for RESTRICT sessions — untouched this
+phase); travel/chat/block/session suites untouched and green;
+migration chain single + linear (9 revisions); downgrade guards of all
+prior phases re-verified through the new head (their tests repointed,
+their logic untouched).
+
+### 18.14 Final Git status, commit/push status
+
+Branch `backend`, HEAD `a0123dc` = `origin/backend` at implementation
+time. Per the owner's standing rule there were **no commits and no
+pushes** during implementation — the working tree carries the Phases
+9–13 change set as 22 modified + 24 untracked files (§16.9 lists them
+exactly). **After this report was written** (brief §11: report LAST),
+the owner authorized commit + push (“commit and push this code”):
+committed and pushed to `origin/backend` (verified HEAD = remote, tree
+clean); `main` and `frontend/` untouched throughout. The commit hash is
+recorded in the §16 settled annotation that follows the push, following
+the same pattern as items 6–8.
 
 ---
 

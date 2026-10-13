@@ -30,6 +30,7 @@ plain user-submitted report (`pending`) from a moderated one
 """
 
 from datetime import UTC, datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
@@ -90,8 +91,9 @@ class ReportRead(BaseModel):
     """The public shape of a community safety report.
 
     NOTE THE ABSENCE OF `user_id`: the submitter's identity is never
-    exposed (reports are about places, not people). Timestamps are
-    returned as UTC.
+    exposed (reports are about places, not people). `reviewed_at` stamps
+    the moderation decision for auditability; the reviewer's identity
+    stays server-side. Timestamps are returned as UTC.
     """
 
     model_config = ConfigDict(from_attributes=True)
@@ -104,8 +106,22 @@ class ReportRead(BaseModel):
     longitude: float | None = None
     created_at: datetime
     updated_at: datetime
+    reviewed_at: datetime | None = None
 
-    @field_serializer("created_at", "updated_at")
-    def _serialize_utc(self, value: datetime) -> datetime:
+    @field_serializer("created_at", "updated_at", "reviewed_at")
+    def _serialize_utc(self, value: datetime | None) -> datetime | None:
         """Guarantee every timestamp leaves this API in UTC (see _to_utc)."""
         return _to_utc(value)
+
+
+class ReportModerate(BaseModel):
+    """Body for PATCH /reports/{report_id}/moderate (owner only).
+
+    Exactly one field: the target moderation state. `pending` is not an
+    allowed target (review never un-happens); transitions are validated
+    against the lifecycle in the endpoint.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal[ReportStatus.APPROVED, ReportStatus.REJECTED, ReportStatus.RESOLVED]

@@ -107,7 +107,9 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     trusted_contacts: Mapped[list[TrustedContact]] = relationship(back_populates="owner")
     check_ins: Mapped[list[CheckIn]] = relationship(back_populates="user")
     sos_events: Mapped[list[SosEvent]] = relationship(back_populates="user")
-    community_reports: Mapped[list[CommunityReport]] = relationship(back_populates="user")
+    community_reports: Mapped[list[CommunityReport]] = relationship(
+        back_populates="user", foreign_keys="CommunityReport.user_id"
+    )
     verification_requests: Mapped[list[IdentityVerification]] = relationship(
         back_populates="user", foreign_keys="IdentityVerification.user_id"
     )

@@ -75,4 +75,10 @@ class SosEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cancelled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Set when the owner acknowledges the incident (Phase 12: "someone
+    # responsible has seen this and is handling it"). Server clock, like
+    # every other transition stamp. acknowledged -> resolved/cancelled
+    # stays allowed; nothing else moves out of acknowledged.
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     user: Mapped[User] = relationship(back_populates="sos_events")

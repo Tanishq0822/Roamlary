@@ -56,6 +56,15 @@ class Settings(BaseSettings):
     # NOT implemented (out of scope for Phase 3).
     access_token_expire_minutes: int = 60
 
+    # AI travel companion (Phase 13). All EMPTY/neutral by default: with
+    # no provider configured the /ai/chat endpoint answers with an
+    # explicit "unavailable" message instead of fabricating content.
+    # `mock` is reserved for tests (deterministic, no network). Keys stay
+    # server-side (never in responses, logs, or the repo).
+    ai_provider: str = "none"
+    ai_api_key: str = ""
+    ai_timeout_seconds: int = 20
+
     @field_validator("cors_origins", mode="before")
     @classmethod
     def split_cors_origins(cls, value: object) -> object:

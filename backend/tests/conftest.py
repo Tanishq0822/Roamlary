@@ -386,3 +386,94 @@ def insert_raw_phase8_rows(engine) -> None:
             ),
             {"sid": sess_id, "uida": uid_a},
         )
+
+
+def insert_raw_phase912_rows(engine) -> None:
+    """Insert two users + one row in each Phases 9-12 table and a
+    `resolved` report, all with RAW SQL.
+
+    Same purpose as the other raw helpers: the combined downgrade guard
+    must be tested against rows no matter who wrote them. Works on a
+    schema at revision b8e2f4a1c6d9. Only NOT NULL columns and the
+    'Migration Probe' names are written; everything else takes column
+    defaults.
+    """
+    if engine.dialect.name == "postgresql":
+        ids = [uuid.uuid4() for _ in range(10)]
+    else:
+        ids = [str(uuid.uuid4()) for _ in range(10)]
+    uid_a, uid_b, meet_id, memb_id, inv_id, ann_id, notif_id, share_id, rep_id = ids[:9]
+    with engine.begin() as conn:
+        for uid in (uid_a, uid_b):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users "
+                    "(id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'Migration Probe', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+                ),
+                {"id": uid},
+            )
+        conn.execute(
+            sa.text(
+                "INSERT INTO meetups "
+                "(id, host_id, kind, title, category, start_at, end_at, capacity, "
+                "visibility, participation, status, created_at, updated_at) "
+                "VALUES (:mid, :uid, 'meetup', 'Probe Hike', 'hiking', "
+                "'2027-01-05T10:00:00+00:00', '2027-01-05T12:00:00+00:00', 10, "
+                "'public', 'approval', 'active', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"mid": meet_id, "uid": uid_a},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO meetup_memberships "
+                "(id, meetup_id, user_id, status, created_at, updated_at) "
+                "VALUES (:mbid, :mid, :uid, 'approved', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"mbid": memb_id, "mid": meet_id, "uid": uid_b},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO event_invitations "
+                "(id, meetup_id, inviter_id, invitee_id, status, created_at, updated_at) "
+                "VALUES (:iid, :mid, :uida, :uidb, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"iid": inv_id, "mid": meet_id, "uida": uid_a, "uidb": uid_b},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO meetup_announcements "
+                "(id, meetup_id, author_id, body, created_at, updated_at) "
+                "VALUES (:aid, :mid, :uid, 'hello', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"aid": ann_id, "mid": meet_id, "uid": uid_a},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO notifications "
+                "(id, user_id, kind, title, body, channel, status, attempts, "
+                "idempotency_key, created_at, updated_at) "
+                "VALUES (:nid, :uid, 'trip_shared', 'Probe', 'hello', 'in_app', "
+                "'delivered', 1, 'probe-key', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"nid": notif_id, "uid": uid_a},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO trip_shares "
+                "(id, owner_id, expires_at, created_at, updated_at) "
+                "VALUES (:sid, :uid, '2027-02-01T00:00:00+00:00', "
+                "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"sid": share_id, "uid": uid_a},
+        )
+        conn.execute(
+            sa.text(
+                "INSERT INTO community_reports "
+                "(id, user_id, category, description, latitude, longitude, status, "
+                "reviewed_by, reviewed_at, created_at, updated_at) "
+                "VALUES (:rid, :uid, 'other', 'probe', 1.0, 2.0, 'resolved', "
+                ":uid, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+            ),
+            {"rid": rep_id, "uid": uid_a},
+        )

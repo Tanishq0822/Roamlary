@@ -27,6 +27,7 @@ READ_FIELDS = {
     "updated_at",
     "cancelled_at",
     "resolved_at",
+    "acknowledged_at",
 }
 
 

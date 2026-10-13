@@ -24,6 +24,7 @@ READ_FIELDS = {
     "longitude",
     "created_at",
     "updated_at",
+    "reviewed_at",
 }
 
 ALL_CATEGORIES = [
