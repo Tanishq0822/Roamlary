@@ -119,6 +119,7 @@ class SosEventRead(BaseModel):
     updated_at: datetime
     cancelled_at: datetime | None = None
     resolved_at: datetime | None = None
+    acknowledged_at: datetime | None = None
 
     @field_serializer(
         "location_recorded_at",
@@ -126,6 +127,7 @@ class SosEventRead(BaseModel):
         "updated_at",
         "cancelled_at",
         "resolved_at",
+        "acknowledged_at",
     )
     def _serialize_utc(self, value: datetime | None) -> datetime | None:
         """Guarantee every timestamp leaves this API in UTC (see _to_utc)."""

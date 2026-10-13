@@ -147,6 +147,37 @@ def list_checkins(
 
 
 @router.get(
+    "/overdue",
+    response_model=list[CheckInRead],
+    summary="List my overdue check-ins (pending and past due)",
+)
+def list_overdue_checkins(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> list[CheckInRead]:
+    """My `pending` check-ins whose `due_at` has passed, oldest-due
+    first. Read-time evaluation ONLY (brief 12.D): no background job
+    exists, nothing auto-transitions rows, and this endpoint makes no
+    delivery or alerting claim - it simply surfaces what needs
+    attention. Rows without a `due_at` are never overdue."""
+    from datetime import UTC, datetime
+
+    now = datetime.now(UTC)
+    stmt = (
+        select(CheckIn)
+        .where(
+            CheckIn.user_id == current_user.id,
+            CheckIn.status == CheckInStatus.PENDING,
+            CheckIn.due_at.is_not(None),
+            CheckIn.due_at < now,
+        )
+        .order_by(CheckIn.due_at.asc(), CheckIn.id.asc())
+    )
+    checkins = db.scalars(stmt).all()
+    return [CheckInRead.model_validate(c) for c in checkins]
+
+
+@router.get(
     "/{checkin_id}",
     response_model=CheckInRead,
     summary="Return one of the authenticated user's check-ins",

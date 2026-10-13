@@ -12,12 +12,18 @@ from app.models import (
     CheckIn,
     CommunityReport,
     Conversation,
+    EventInvitation,
     IdentityVerification,
+    Meetup,
+    MeetupAnnouncement,
+    MeetupMembership,
+    Notification,
     SettingChange,
     SosEvent,
     TravelPartnerRequest,
     TravelPlan,
     TravelProfile,
+    TripShare,
     TrustedContact,
     User,
     UserBlock,
@@ -26,6 +32,14 @@ from app.models.enums import (
     BuddyRequestStatus,
     CheckInStatus,
     ConversationStatus,
+    InvitationStatus,
+    MeetupCategory,
+    MeetupKind,
+    MeetupStatus,
+    MeetupVisibility,
+    MembershipStatus,
+    NotificationStatus,
+    ParticipationPolicy,
     PlanVisibility,
     ReportCategory,
     ReportStatus,
@@ -52,6 +66,12 @@ EXPECTED_TABLES = {
     "conversations",
     "messages",
     "auth_sessions",
+    "meetups",
+    "meetup_memberships",
+    "event_invitations",
+    "meetup_announcements",
+    "notifications",
+    "trip_shares",
 }
 
 
@@ -190,6 +210,8 @@ def test_status_enums_match_the_contract() -> None:
     'cancelled' was added to CheckInStatus in Phase 4 (users must be
     able to abandon a check-in) and to SosStatus in Phase 5 (users must
     be able to retract an SOS); the rest are the Phase 2 design.
+    `resolved` was added to ReportStatus in Phase 11 (moderated reports
+    whose concern was handled).
     """
     assert {s.value for s in CheckInStatus} == {
         "pending",
@@ -205,7 +227,7 @@ def test_status_enums_match_the_contract() -> None:
         "false_alarm",
         "cancelled",
     }
-    assert {s.value for s in ReportStatus} == {"pending", "approved", "rejected"}
+    assert {s.value for s in ReportStatus} == {"pending", "approved", "rejected", "resolved"}
 
 
 def test_report_category_enum_matches_the_contract() -> None:
@@ -439,3 +461,123 @@ def test_canonical_pair_orders_and_rejects_self() -> None:
         pass
     else:
         raise AssertionError("expected ValueError for a self-pair")
+
+
+# ----------------------- Phases 9-12 event/notification/share metadata
+
+
+def test_event_tables_map_to_expected_classes() -> None:
+    assert Meetup.__tablename__ == "meetups"
+    assert MeetupMembership.__tablename__ == "meetup_memberships"
+    assert EventInvitation.__tablename__ == "event_invitations"
+    assert MeetupAnnouncement.__tablename__ == "meetup_announcements"
+    assert Notification.__tablename__ == "notifications"
+    assert TripShare.__tablename__ == "trip_shares"
+
+
+def test_event_foreign_keys_reference_parent_tables() -> None:
+    """Events reference hosts/users; memberships/invitations reference
+    events + users; announcements reference events; shares reference
+    owners (+ optional plans). All RESTRICT."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    for table_name, expected_parents in (
+        ("meetups", {"users"}),
+        ("meetup_memberships", {"meetups", "users"}),
+        ("event_invitations", {"meetups", "users"}),
+        ("meetup_announcements", {"meetups", "users"}),
+        ("notifications", {"users"}),
+        ("trip_shares", {"users", "travel_plans"}),
+    ):
+        parents = {fk["referred_table"] for fk in inspector.get_foreign_keys(table_name)}
+        assert expected_parents <= parents, table_name
+    engine.dispose()
+
+
+def test_event_check_constraints_exist() -> None:
+    """Kind/status/visibility/participation/category/capacity/date
+    CHECKs on meetups; status sets on memberships/invitations/
+    notifications."""
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    inspector = inspect(engine)
+    meetup_names = {c["name"] for c in inspector.get_check_constraints("meetups")}
+    assert {
+        "ck_meetups_kind_valid",
+        "ck_meetups_status_valid",
+        "ck_meetups_visibility_valid",
+        "ck_meetups_participation_valid",
+        "ck_meetups_end_after_start",
+        "ck_meetups_category_valid",
+        "ck_meetups_capacity_range",
+    } <= meetup_names
+    membership_names = {c["name"] for c in inspector.get_check_constraints("meetup_memberships")}
+    assert "ck_meetup_memberships_status_valid" in membership_names
+    invitation_names = {c["name"] for c in inspector.get_check_constraints("event_invitations")}
+    assert "ck_event_invitations_status_valid" in invitation_names
+    notification_names = {c["name"] for c in inspector.get_check_constraints("notifications")}
+    assert "ck_notifications_status_valid" in notification_names
+    engine.dispose()
+
+
+def test_event_uniqueness_structures_exist() -> None:
+    """One membership per (meetup, user), one invitation per
+    (meetup, invitee), one notification per idempotency key."""
+    memberships = Base.metadata.tables["meetup_memberships"]
+    assert any(
+        getattr(c, "name", None) == "uq_meetup_memberships_pair" for c in memberships.constraints
+    )
+    invitations = Base.metadata.tables["event_invitations"]
+    assert any(
+        getattr(c, "name", None) == "uq_event_invitations_pair" for c in invitations.constraints
+    )
+    notifications = Base.metadata.tables["notifications"]
+    assert any(
+        getattr(c, "name", None) == "uq_notifications_idempotency_key"
+        for c in notifications.constraints
+    )
+
+
+def test_report_status_includes_resolved() -> None:
+    """Phase 11 moderation state holds exactly the four documented values."""
+    assert {s.value for s in ReportStatus} == {"pending", "approved", "rejected", "resolved"}
+
+
+def test_event_enums_match_the_contract() -> None:
+    """Phase 9-12 closed sets hold exactly the documented values."""
+    assert {c.value for c in MeetupCategory} == {
+        "hiking",
+        "food",
+        "culture",
+        "adventure",
+        "leisure",
+        "nightlife",
+        "other",
+    }
+    assert {k.value for k in MeetupKind} == {"meetup", "house_party"}
+    assert {s.value for s in MeetupStatus} == {"active", "cancelled", "completed"}
+    assert {v.value for v in MeetupVisibility} == {"public", "private"}
+    assert {p.value for p in ParticipationPolicy} == {"open", "approval"}
+    assert {s.value for s in MembershipStatus} == {
+        "requested",
+        "approved",
+        "declined",
+        "removed",
+        "left",
+    }
+    assert {s.value for s in InvitationStatus} == {
+        "pending",
+        "accepted",
+        "declined",
+        "revoked",
+        "expired",
+    }
+    assert {s.value for s in NotificationStatus} == {
+        "queued",
+        "attempted",
+        "delivered",
+        "failed",
+        "unavailable",
+        "unknown",
+    }

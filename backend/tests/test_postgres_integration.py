@@ -31,6 +31,7 @@ from app.models import TravelPlan, TravelProfile, TrustedContact, User
 from app.models.enums import CheckInStatus
 from tests.conftest import (
     insert_raw_phase8_rows,
+    insert_raw_phase912_rows,
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
@@ -1026,7 +1027,7 @@ def test_pg_phase7_downgrade_upgrade_roundtrip(pg_engine) -> None:
     )
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "7f3a9c1e5b42"
+    assert version == "b8e2f4a1c6d9"
 
 
 # ----------------------- Phase 8 chat/block/session surface on PostgreSQL
@@ -1201,7 +1202,12 @@ def test_pg_phase8_downgrade_refuses_when_phase8_data_exists(pg_engine) -> None:
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
         body = conn.execute(sa.text("SELECT body FROM messages")).scalar_one()
-    assert version == "7f3a9c1e5b42"
+    # PostgreSQL runs the whole downgrade command in ONE transaction, so
+    # the refusal rolls back the already-passed Phases 9-12 step too and
+    # the version stays at head (on SQLite each step commits separately,
+    # so the version rests at 7f3a9c1e5b42 there - same refusal, same
+    # intact data, different stamp).
+    assert version == "b8e2f4a1c6d9"
     assert body == "hello"
 
 
@@ -1238,4 +1244,202 @@ def test_pg_phase8_downgrade_upgrade_roundtrip(pg_engine) -> None:
     )
     with pg_engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "b8e2f4a1c6d9"
+
+
+# ----------------------- Phases 9-12 surface on PostgreSQL
+
+
+def test_phases912_membership_and_invitation_unique_on_pg(pg_engine) -> None:
+    """Duplicate memberships and invitations fail at the database on
+    PostgreSQL (the race-proof layer behind the 409s)."""
+    with pg_engine.begin() as conn:
+        host_id, guest_id = uuid.uuid4(), uuid.uuid4()
+        for uid in (host_id, guest_id):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'PG Event', now(), now())"
+                ),
+                {"id": uid},
+            )
+        meet_id = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO meetups (id, host_id, kind, title, category, start_at, end_at, "
+                "capacity, visibility, participation, status, created_at, updated_at) "
+                "VALUES (:mid, :host, 'house_party', 'PG Party', 'food', now() + interval '1 day', "
+                "now() + interval '2 days', 8, 'private', 'approval', 'active', now(), now())"
+            ),
+            {"mid": meet_id, "host": host_id},
+        )
+        memb_base = (
+            "INSERT INTO meetup_memberships (id, meetup_id, user_id, status, "
+            "created_at, updated_at) "
+            "VALUES (:mbid, :mid, :uid, 'approved', now(), now())"
+        )
+        conn.execute(sa.text(memb_base), {"mbid": uuid.uuid4(), "mid": meet_id, "uid": guest_id})
+        with pytest.raises(IntegrityError):
+            conn.execute(
+                sa.text(memb_base), {"mbid": uuid.uuid4(), "mid": meet_id, "uid": guest_id}
+            )
+        conn.rollback()
+    with pg_engine.begin() as conn:
+        host_id, guest_id = uuid.uuid4(), uuid.uuid4()
+        for uid in (host_id, guest_id):
+            conn.execute(
+                sa.text(
+                    "INSERT INTO users (id, display_name, created_at, updated_at) "
+                    "VALUES (:id, 'PG Event', now(), now())"
+                ),
+                {"id": uid},
+            )
+        meet_id = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO meetups (id, host_id, kind, title, category, start_at, end_at, "
+                "capacity, visibility, participation, status, created_at, updated_at) "
+                "VALUES (:mid, :host, 'house_party', 'PG Party', 'food', now() + interval '1 day', "
+                "now() + interval '2 days', 8, 'private', 'approval', 'active', now(), now())"
+            ),
+            {"mid": meet_id, "host": host_id},
+        )
+        inv_base = (
+            "INSERT INTO event_invitations (id, meetup_id, inviter_id, invitee_id, status, "
+            "created_at, updated_at) "
+            "VALUES (:iid, :mid, :host, :guest, 'pending', now(), now())"
+        )
+        conn.execute(
+            sa.text(inv_base),
+            {"iid": uuid.uuid4(), "mid": meet_id, "host": host_id, "guest": guest_id},
+        )
+        with pytest.raises(IntegrityError):
+            conn.execute(
+                sa.text(inv_base),
+                {"iid": uuid.uuid4(), "mid": meet_id, "host": host_id, "guest": guest_id},
+            )
+        conn.rollback()
+
+
+def test_phases912_notification_idempotency_unique_on_pg(pg_engine) -> None:
+    """Two rows with one idempotency key cannot exist on PostgreSQL."""
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Notify', now(), now())"
+            ),
+            {"id": uid},
+        )
+        base = (
+            "INSERT INTO notifications (id, user_id, kind, title, body, channel, status, attempts, "
+            "idempotency_key, created_at, updated_at) "
+            "VALUES (:nid, :uid, 'trip_shared', 'T', 'B', 'in_app', 'delivered', 1, 'same-key', "
+            "now(), now())"
+        )
+        conn.execute(sa.text(base), {"nid": uuid.uuid4(), "uid": uid})
+        with pytest.raises(IntegrityError):
+            conn.execute(sa.text(base), {"nid": uuid.uuid4(), "uid": uid})
+        conn.rollback()
+
+
+def test_phases912_resolved_check_enforced_on_pg(pg_engine) -> None:
+    """The widened report status CHECK accepts `resolved` and still
+    rejects out-of-set values on PostgreSQL."""
+    with pg_engine.begin() as conn:
+        uid = uuid.uuid4()
+        conn.execute(
+            sa.text(
+                "INSERT INTO users (id, display_name, created_at, updated_at) "
+                "VALUES (:id, 'PG Report', now(), now())"
+            ),
+            {"id": uid},
+        )
+        base = (
+            "INSERT INTO community_reports (id, user_id, category, description, latitude, "
+            "longitude, status, created_at, updated_at) "
+            "VALUES (:rid, :uid, 'other', 'probe', 1.0, 2.0, :status, now(), now())"
+        )
+        conn.execute(sa.text(base), {"rid": uuid.uuid4(), "uid": uid, "status": "resolved"})
+        with pytest.raises(IntegrityError):
+            conn.execute(sa.text(base), {"rid": uuid.uuid4(), "uid": uid, "status": "archived"})
+        conn.rollback()
+
+
+def test_pg_phases912_downgrade_refuses_when_data_exists(pg_engine) -> None:
+    """DATA-DEPENDENT DOWNGRADE on real PostgreSQL: event/notification/
+    share rows (and `resolved` reports) make the rollback REFUSE."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_phase912_rows(pg_engine)
+
+    downgrade = _run_alembic_on_pg(["downgrade", "7f3a9c1e5b42"])
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while Phases 9-12 data exists, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(pg_engine)
+    assert {
+        "meetups",
+        "meetup_memberships",
+        "event_invitations",
+        "meetup_announcements",
+        "notifications",
+        "trip_shares",
+    } <= set(inspector.get_table_names())
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(sa.text("SELECT status FROM community_reports")).scalar_one()
+    assert version == "b8e2f4a1c6d9"
+    assert status_value == "resolved"
+
+
+def test_pg_phases912_downgrade_upgrade_roundtrip(pg_engine) -> None:
+    """Normal path on REAL PostgreSQL: clean state downgrades (tables/
+    columns removed, CHECK narrowed); upgrading restores everything."""
+    _reset_for_alembic(pg_engine)
+    upgrade = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    insert_raw_user_and_checkin(pg_engine, "pending")  # unrelated row survives
+
+    downgrade = _run_alembic_on_pg(["downgrade", "7f3a9c1e5b42"])
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(pg_engine)
+    names = set(inspector.get_table_names())
+    for table in (
+        "meetups",
+        "meetup_memberships",
+        "event_invitations",
+        "meetup_announcements",
+        "notifications",
+        "trip_shares",
+    ):
+        assert table not in names
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
     assert version == "7f3a9c1e5b42"
+
+    upgrade_again = _run_alembic_on_pg(["upgrade", "head"])
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(pg_engine)
+    assert {
+        "meetups",
+        "meetup_memberships",
+        "event_invitations",
+        "meetup_announcements",
+        "notifications",
+        "trip_shares",
+    } <= set(inspector.get_table_names())
+    with pg_engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "b8e2f4a1c6d9"

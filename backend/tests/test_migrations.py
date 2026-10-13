@@ -16,6 +16,7 @@ import sqlalchemy as sa
 
 from tests.conftest import (
     insert_raw_phase8_rows,
+    insert_raw_phase912_rows,
     insert_raw_user_and_checkin,
     insert_raw_user_and_report,
     insert_raw_user_and_sos,
@@ -40,6 +41,12 @@ EXPECTED_TABLES = {
     "conversations",
     "messages",
     "auth_sessions",
+    "meetups",
+    "meetup_memberships",
+    "event_invitations",
+    "meetup_announcements",
+    "notifications",
+    "trip_shares",
 }
 
 
@@ -546,7 +553,7 @@ def test_phase7_upgrade_creates_the_three_travel_tables(tmp_path) -> None:
                 "AND name LIKE 'uq_travel_partner_requests_pending%'"
             )
         ).scalars()
-    assert version == "7f3a9c1e5b42"
+    assert version == "b8e2f4a1c6d9"
     assert set(index_names) == {
         "uq_travel_partner_requests_pending_pair_ab",
         "uq_travel_partner_requests_pending_pair_ba",
@@ -641,7 +648,7 @@ def test_phase7_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> 
     assert tables == EXPECTED_TABLES
     with engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-    assert version == "7f3a9c1e5b42"
+    assert version == "b8e2f4a1c6d9"
     engine.dispose()
 
 
@@ -671,7 +678,7 @@ def test_phase8_upgrade_creates_the_four_new_tables(tmp_path) -> None:
                 "AND name = 'uq_travel_partner_requests_pending_canonical_pair'"
             )
         ).scalars()
-    assert version == "7f3a9c1e5b42"
+    assert version == "b8e2f4a1c6d9"
     assert token_version == []  # no users yet; the column itself exists
     assert {"pair_low_id", "pair_high_id"} <= pair_cols
     assert list(canonical) == ["uq_travel_partner_requests_pending_canonical_pair"]
@@ -719,9 +726,11 @@ def test_phase8_pair_backfill_orders_preexisting_travel_rows(tmp_path) -> None:
 
 
 def test_phase8_downgrade_refuses_when_phase8_data_exists(tmp_path) -> None:
-    """DATA-DEPENDENT DOWNGRADE (regression): any block, conversation,
-    message, or session row must make the Phase 8 downgrade REFUSE
-    cleanly, before any schema change."""
+    """DATA-DEPENDENT DOWNGRADE (regression): Phase 8 rows make the
+    rollback REFUSE cleanly. (A later Phases 9-12 migration exists now:
+    its step downgrades first while no Phases 9-12 rows exist, and only
+    then does the guarded Phase 8 step refuse - the Phase 8 schema and
+    all records are left exactly as they were.)"""
     db_file = tmp_path / "migration_phase8_guard.db"
     url = f"sqlite:///{db_file}"
 
@@ -786,5 +795,122 @@ def test_phase8_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> 
     assert tables == EXPECTED_TABLES
     with engine.connect() as conn:
         version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "b8e2f4a1c6d9"
+    engine.dispose()
+
+
+# ----------------------- Phases 9-12 migration tests
+
+
+def test_phases912_upgrade_creates_tables_and_widens_report_check(tmp_path) -> None:
+    """Upgrading to head creates the six event/notification/share tables,
+    adds the review/acknowledgement columns, and widens the report status
+    CHECK with `resolved`."""
+    db_file = tmp_path / "migration_phases912_tables.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    tables = set(sa.inspect(engine).get_table_names()) - {"alembic_version"}
+    assert tables == EXPECTED_TABLES
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        report_ddl = conn.execute(
+            sa.text("SELECT sql FROM sqlite_master WHERE type='table' AND name='community_reports'")
+        ).scalar_one()
+        report_cols = {c["name"] for c in sa.inspect(engine).get_columns("community_reports")}
+        sos_cols = {c["name"] for c in sa.inspect(engine).get_columns("sos_events")}
+    assert version == "b8e2f4a1c6d9"
+    assert "'resolved'" in report_ddl  # CHECK widened (batch path on SQLite)
+    assert {"reviewed_by", "reviewed_at"} <= report_cols
+    assert "acknowledged_at" in sos_cols
+    engine.dispose()
+
+
+def test_phases912_downgrade_refuses_when_data_exists(tmp_path) -> None:
+    """DATA-DEPENDENT DOWNGRADE (regression): any event/invitation/
+    notification/share row - or any `resolved` report - makes the
+    downgrade REFUSE cleanly, before any schema change."""
+    db_file = tmp_path / "migration_phases912_guard.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_phase912_rows(engine)
+
+    downgrade = _run_alembic(["downgrade", "7f3a9c1e5b42"], url)
+    assert downgrade.returncode != 0, (
+        "downgrade must be REFUSED while Phases 9-12 data exists, "
+        f"but it succeeded:\n{downgrade.stdout}\n{downgrade.stderr}"
+    )
+    output = downgrade.stdout + downgrade.stderr
+    assert "Refusing to downgrade" in output
+    assert "data-handling decision" in output
+
+    inspector = sa.inspect(engine)
+    names = {t for t in inspector.get_table_names() if t != "alembic_version"}
+    assert {
+        "meetups",
+        "meetup_memberships",
+        "event_invitations",
+        "meetup_announcements",
+        "notifications",
+        "trip_shares",
+    } <= names
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        status_value = conn.execute(sa.text("SELECT status FROM community_reports")).scalar_one()
+    assert version == "b8e2f4a1c6d9"  # still at the Phases 9-12 revision
+    assert status_value == "resolved"  # the moderated report is untouched
+    engine.dispose()
+
+
+def test_phases912_downgrade_upgrade_roundtrip_when_database_is_clean(tmp_path) -> None:
+    """NORMAL PATH: with no Phases 9-12 rows the downgrade succeeds
+    (tables/columns removed, CHECK narrowed); upgrading again restores
+    the exact schema."""
+    db_file = tmp_path / "migration_phases912_roundtrip.db"
+    url = f"sqlite:///{db_file}"
+
+    upgrade = _run_alembic(["upgrade", "head"], url)
+    assert upgrade.returncode == 0, f"stdout={upgrade.stdout}\nstderr={upgrade.stderr}"
+
+    engine = sa.create_engine(url)
+    insert_raw_user_and_checkin(engine, "pending")  # unrelated row survives
+
+    downgrade = _run_alembic(["downgrade", "7f3a9c1e5b42"], url)
+    assert downgrade.returncode == 0, f"stdout={downgrade.stdout}\nstderr={downgrade.stderr}"
+    inspector = sa.inspect(engine)
+    names = set(inspector.get_table_names())
+    for table in (
+        "meetups",
+        "meetup_memberships",
+        "event_invitations",
+        "meetup_announcements",
+        "notifications",
+        "trip_shares",
+    ):
+        assert table not in names
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+        report_cols = {c["name"] for c in inspector.get_columns("community_reports")}
+        sos_cols = {c["name"] for c in inspector.get_columns("sos_events")}
     assert version == "7f3a9c1e5b42"
+    assert "reviewed_by" not in report_cols
+    assert "acknowledged_at" not in sos_cols
+
+    upgrade_again = _run_alembic(["upgrade", "head"], url)
+    assert upgrade_again.returncode == 0, (
+        f"stdout={upgrade_again.stdout}\nstderr={upgrade_again.stderr}"
+    )
+    inspector = sa.inspect(engine)
+    tables = set(inspector.get_table_names()) - {"alembic_version"}
+    assert tables == EXPECTED_TABLES
+    with engine.connect() as conn:
+        version = conn.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+    assert version == "b8e2f4a1c6d9"
     engine.dispose()
