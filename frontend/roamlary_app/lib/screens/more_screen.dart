@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../core/app_theme.dart';
 import '../state/app_state.dart';
+import 'blocked_users_screen.dart';
 import 'contacts_screen.dart';
 import 'meetups_screen.dart';
 import 'notifications_screen.dart';
@@ -120,6 +121,13 @@ class MoreScreen extends StatelessWidget {
                 title: 'Notifications',
                 subtitle: 'Delivery log for every alert we sent',
                 onTap: () => _push(context, const NotificationsScreen()),
+              ),
+              _Tile(
+                icon: Icons.block_outlined,
+                selectedIcon: Icons.block,
+                title: 'Blocked users',
+                subtitle: 'Review and unblock people you muted',
+                onTap: () => _push(context, const BlockedUsersScreen()),
               ),
               _Tile(
                 icon: Icons.verified_user_outlined,

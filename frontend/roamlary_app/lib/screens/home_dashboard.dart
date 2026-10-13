@@ -97,7 +97,14 @@ class _HomeDashboardState extends State<HomeDashboard> {
     );
   }
 
-  void _refresh() => setState(() => _future = _load());
+  // NOTE: block body, not `=>`. An arrow closure here would *return*
+  // `_load()`'s Future to setState(), which Flutter rejects ("setState()
+  // callback argument returned a Future").
+  void _refresh() {
+    setState(() {
+      _future = _load();
+    });
+  }
 
   Future<void> _openChatHub() async {
     await Navigator.of(context).push(
@@ -1045,21 +1052,104 @@ class _AddConnectionSectionState extends State<_AddConnectionSection> {
   List<DiscoveryCandidate>? _filtered;
   bool _filteredLoading = false;
 
+  /// Chat requests sent in this session.
+  ///
+  /// The backend's `existing_request` is derived only from TRAVEL-PARTNER
+  /// (buddy) requests (`_request_states` in discovery.py never queries
+  /// `conversations`), so a chat request sent from this card can never flip
+  /// that field. We remember it here so the button flips to "Request sent"
+  /// immediately instead of silently reverting on refresh.
+  final Set<String> _sentChatTo = {};
+
+  /// Users that answered 409 "already have an accepted conversation".
+  final Set<String> _alreadyConnected = {};
+
+  /// Users blocked this session — hidden from the rail immediately.
+  final Set<String> _blocked = {};
+
+  /// Local override for one candidate, or null when the server value stands.
+  String? localStateFor(DiscoveryCandidate c) {
+    if (_alreadyConnected.contains(c.userId)) return 'accepted';
+    if (_sentChatTo.contains(c.userId)) return 'pending_sent';
+    return null;
+  }
+
+  Future<void> _block(DiscoveryCandidate c) async {
+    if (_busy) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Block ${c.displayName}?'),
+        content: const Text(
+            'They will no longer appear in your suggestions and cannot '
+            'contact you. You can undo this from More → Blocked users.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      await context.read<AppState>().repo.blockUser(c.userId);
+      if (!mounted) return;
+      setState(() => _blocked.add(c.userId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${c.displayName} has been blocked.')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Drops blocked users from a candidate list.
+  List<DiscoveryCandidate> _visible(List<DiscoveryCandidate> items) =>
+      _blocked.isEmpty
+          ? items
+          : items.where((c) => !_blocked.contains(c.userId)).toList();
+
   Future<void> _connect(DiscoveryCandidate c) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       await context.read<AppState>().repo.sendChatRequest(recipientId: c.userId);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Request sent to ${c.displayName}')),
-        );
-        widget.onChanged();
-      }
+      if (!mounted) return;
+      setState(() => _sentChatTo.add(c.userId));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Request sent to ${c.displayName}')),
+      );
+      // Refresh the chat badge on the header — but never re-fetch this
+      // rail, since that would wipe the local state above.
+      widget.onChanged();
     } catch (e) {
-      if (mounted) {
+      if (!mounted) return;
+      final message = '$e';
+      if (message.contains('409') || message.toLowerCase().contains('already')) {
+        // Already connected (or a request is already pending) — reflect it
+        // rather than showing a raw HTTP error.
+        setState(() => _alreadyConnected.add(c.userId));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text('You and ${c.displayName} are already '
+                  'connected.')),
+        );
+      } else {
         ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('$e')));
+            .showSnackBar(SnackBar(content: Text(message)));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1111,9 +1201,9 @@ class _AddConnectionSectionState extends State<_AddConnectionSection> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final filterActive = _filter != null && !_filter!.isEmpty;
-    final shown = filterActive
+    final shown = _visible(filterActive
         ? (_filtered ?? const <DiscoveryCandidate>[])
-        : widget.candidates;
+        : widget.candidates);
 
     return SectionCard(
       title: 'Add connection',
@@ -1181,7 +1271,9 @@ class _AddConnectionSectionState extends State<_AddConnectionSection> {
                 itemBuilder: (context, i) => _CandidateCard(
                   candidate: shown[i],
                   busy: _busy,
+                  localState: localStateFor(shown[i]),
                   onConnect: () => _connect(shown[i]),
+                  onBlock: () => _block(shown[i]),
                 ),
               ),
             ),
@@ -1196,18 +1288,29 @@ class _CandidateCard extends StatelessWidget {
     required this.candidate,
     required this.busy,
     required this.onConnect,
+    this.onBlock,
+    this.localState,
   });
 
   final DiscoveryCandidate candidate;
   final bool busy;
   final VoidCallback onConnect;
+  final VoidCallback? onBlock;
+
+  /// Session-local override of [DiscoveryCandidate.existingRequest] — the
+  /// backend derives that field only from buddy requests, so chat requests
+  /// need remembering client-side (see localStateFor above).
+  final String? localState;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final sent = candidate.existingRequest == 'pending_sent';
-    final received = candidate.existingRequest == 'pending_received';
-    final accepted = candidate.existingRequest == 'accepted';
+    // Local session state wins: it reflects chat requests the server does
+    // not fold into this field.
+    final state = localState ?? candidate.existingRequest;
+    final sent = state == 'pending_sent';
+    final received = state == 'pending_received';
+    final accepted = state == 'accepted';
 
     return Container(
       width: 220,
@@ -1253,6 +1356,27 @@ class _CandidateCard extends StatelessWidget {
                 ),
               ),
               _ScoreBadge(score: candidate.compatibilityScore),
+              if (onBlock != null)
+                PopupMenuButton<String>(
+                  tooltip: 'More',
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.more_vert, size: 18),
+                  onSelected: (v) {
+                    if (v == 'block') onBlock!();
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'block',
+                      child: Row(
+                        children: [
+                          Icon(Icons.block, size: 18, color: AppTheme.danger),
+                          SizedBox(width: 10),
+                          Text('Block user'),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
             ],
           ),
           const SizedBox(height: 8),
@@ -1286,8 +1410,11 @@ class _CandidateCard extends StatelessWidget {
                       )
                     : FilledButton.icon(
                         onPressed: busy || sent ? null : onConnect,
-                        icon: const Icon(Icons.person_add_alt, size: 18),
-                        label: Text(sent ? 'Requested' : 'Connect'),
+                        icon: Icon(
+                          sent ? Icons.check : Icons.person_add_alt,
+                          size: 18,
+                        ),
+                        label: Text(sent ? 'Request sent' : 'Connect'),
                       ),
           ),
         ],
